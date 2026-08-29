@@ -1,0 +1,150 @@
+'use client';
+
+import { adminFetch, ADMIN_API_BASE_URL, type ApiResult } from '@/lib/admin-api-client';
+import { getSession } from '@/lib/auth-storage';
+
+/* --------------------------------- Tema --------------------------------- */
+
+export interface Theme {
+  primary_color: string;
+  secondary_color: string;
+  accent_color: string;
+  text_color: string;
+  bg_color: string;
+  font_family: string;
+  free_shipping_threshold_cents: number | null;
+  whatsapp_number: string | null;
+  top_bar_message: string | null;
+  top_bar_enabled: boolean;
+  logo_url?: string | null;
+  logo_mobile_url?: string | null;
+  favicon_url?: string | null;
+}
+
+export type ThemeImageKind = 'logo' | 'logo_mobile' | 'favicon';
+
+/* ------------------------------- Settings ------------------------------- */
+
+export interface StoreSettings {
+  store_name: string;
+  legal_name: string | null;
+  cnpj: string | null;
+  address_json: Record<string, string> | null;
+  social_json: Record<string, string> | null;
+  contact_phone: string | null;
+  contact_whatsapp: string | null;
+  payment_flags_json: string[] | null;
+  free_shipping_threshold_cents: number | null;
+}
+
+/* -------------------------------- Pages -------------------------------- */
+
+export interface ContentPage {
+  id: string;
+  title: string;
+  slug: string;
+  body: string;
+  is_published: boolean;
+  seo_title: string | null;
+  seo_description: string | null;
+}
+
+export interface ContentPageInput {
+  title: string;
+  slug?: string;
+  body: string;
+  is_published: boolean;
+  seo_title?: string | null;
+  seo_description?: string | null;
+}
+
+/* ------------------------------- Banners ------------------------------- */
+
+export interface Banner {
+  id: string;
+  slot: string;
+  title: string | null;
+  link_url: string | null;
+  alt: string | null;
+  position: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  is_active: boolean;
+  image_desktop_url: string | null;
+  image_mobile_url: string | null;
+}
+
+export interface BannerInput {
+  slot: string;
+  title?: string | null;
+  link_url?: string | null;
+  alt?: string | null;
+  position: number;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  is_active: boolean;
+}
+
+async function uploadMultipart<T>(path: string, form: FormData): Promise<ApiResult<T>> {
+  const session = getSession();
+  try {
+    const res = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+      method: 'POST',
+      headers: session ? { authorization: `Bearer ${session.accessToken}` } : undefined,
+      body: form,
+    });
+    const text = await res.text();
+    const parsed: unknown = text ? JSON.parse(text) : null;
+    if (!res.ok) {
+      const env = (parsed ?? {}) as { error?: { message?: string }; detail?: string };
+      return {
+        ok: false,
+        error: {
+          code: 'upload_error',
+          message: env.error?.message ?? env.detail ?? 'Falha no upload',
+          status: res.status,
+        },
+      };
+    }
+    return { ok: true, data: parsed as T, status: res.status };
+  } catch (err) {
+    return {
+      ok: false,
+      error: { code: 'network_error', message: err instanceof Error ? err.message : 'Falha de rede', status: 0 },
+    };
+  }
+}
+
+export const appearanceApi = {
+  getTheme: () => adminFetch<Theme>('/api/admin/theme'),
+  putTheme: (body: Partial<Theme>) => adminFetch<Theme>('/api/admin/theme', { method: 'PUT', body }),
+  uploadThemeImage: (kind: ThemeImageKind, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return uploadMultipart<Theme>(`/api/admin/theme/image/${kind}`, form);
+  },
+
+  getSettings: () => adminFetch<StoreSettings>('/api/admin/settings'),
+  putSettings: (body: Partial<StoreSettings>) =>
+    adminFetch<StoreSettings>('/api/admin/settings', { method: 'PUT', body }),
+
+  listPages: () => adminFetch<ContentPage[]>('/api/admin/theme/pages'),
+  createPage: (body: ContentPageInput) =>
+    adminFetch<ContentPage>('/api/admin/theme/pages', { method: 'POST', body }),
+  updatePage: (id: string, body: Partial<ContentPageInput>) =>
+    adminFetch<ContentPage>(`/api/admin/theme/pages/${id}`, { method: 'PATCH', body }),
+  deletePage: (id: string) => adminFetch<void>(`/api/admin/theme/pages/${id}`, { method: 'DELETE' }),
+
+  listBanners: () => adminFetch<Banner[]>('/api/admin/banners'),
+  createBanner: (body: BannerInput) => adminFetch<Banner>('/api/admin/banners', { method: 'POST', body }),
+  updateBanner: (id: string, body: Partial<BannerInput>) =>
+    adminFetch<Banner>(`/api/admin/banners/${id}`, { method: 'PATCH', body }),
+  deleteBanner: (id: string) => adminFetch<void>(`/api/admin/banners/${id}`, { method: 'DELETE' }),
+};
+
+/** Upload de imagem de banner com querystring `mobile`. */
+export function uploadBannerImage(id: string, file: File, mobile: boolean): Promise<ApiResult<Banner>> {
+  const form = new FormData();
+  form.append('file', file);
+  return uploadMultipart<Banner>(`/api/admin/banners/${id}/image?mobile=${mobile ? 'true' : 'false'}`, form);
+}
