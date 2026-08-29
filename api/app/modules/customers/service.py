@@ -153,3 +153,64 @@ async def _clear_default(db: AsyncSession, user: User) -> None:
 async def merge_guest_cart(db: AsyncSession, payload: dict) -> None:
     """Placeholder — implementado na Fase 4 (subscriber de `customer.logged_in`)."""
     _ = (db, payload)
+
+
+# --------------------------------------------------------------- wishlist
+async def _get_wishlist(db: AsyncSession, user: User):
+    from app.modules.customers.models import Wishlist
+
+    wl = await db.scalar(select(Wishlist).where(Wishlist.user_id == user.id))
+    if not wl:
+        wl = Wishlist(user_id=user.id)
+        db.add(wl)
+        await db.flush()
+    return wl
+
+
+async def list_wishlist(db: AsyncSession, user: User) -> list[dict]:
+    from sqlalchemy.orm import selectinload
+
+    from app.modules.customers.models import WishlistItem
+    from app.modules.products.models import Product
+    from app.modules.products.service import list_item
+
+    wl = await _get_wishlist(db, user)
+    rows = await db.scalars(
+        select(Product)
+        .join(WishlistItem, WishlistItem.product_id == Product.id)
+        .where(WishlistItem.wishlist_id == wl.id)
+        .options(selectinload(Product.variants), selectinload(Product.images))
+    )
+    return [list_item(p) for p in rows]
+
+
+async def add_to_wishlist(db: AsyncSession, user: User, product_id: str) -> None:
+    from app.modules.customers.models import WishlistItem
+    from app.modules.products.models import Product
+
+    wl = await _get_wishlist(db, user)
+    pid = uuid.UUID(product_id)
+    if not await db.get(Product, pid):
+        raise NotFoundError("Produto não encontrado.")
+    exists = await db.scalar(
+        select(WishlistItem).where(
+            WishlistItem.wishlist_id == wl.id, WishlistItem.product_id == pid
+        )
+    )
+    if not exists:
+        from datetime import UTC, datetime
+
+        db.add(WishlistItem(wishlist_id=wl.id, product_id=pid, created_at=datetime.now(UTC)))
+
+
+async def remove_from_wishlist(db: AsyncSession, user: User, product_id: str) -> None:
+    from app.modules.customers.models import WishlistItem
+
+    wl = await _get_wishlist(db, user)
+    item = await db.scalar(
+        select(WishlistItem).where(
+            WishlistItem.wishlist_id == wl.id, WishlistItem.product_id == uuid.UUID(product_id)
+        )
+    )
+    if item:
+        await db.delete(item)

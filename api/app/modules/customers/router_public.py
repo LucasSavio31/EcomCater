@@ -97,3 +97,20 @@ async def update_address(address_id: str, body: AddressIn, db: DbDep, customer: 
 @router.delete("/me/addresses/{address_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_address(address_id: str, db: DbDep, customer: CurrentCustomer):
     await service.delete_address(db, customer, address_id)
+
+
+# --------------------------------------------------------------- wishlist
+@router.get("/me/wishlist")
+async def get_wishlist(db: DbDep, customer: CurrentCustomer) -> list[dict]:
+    return await service.list_wishlist(db, customer)
+
+
+@router.post("/me/wishlist/{product_id}", status_code=status.HTTP_201_CREATED)
+async def add_wishlist(product_id: str, db: DbDep, customer: CurrentCustomer) -> dict:
+    await service.add_to_wishlist(db, customer, product_id)
+    return {"ok": True}
+
+
+@router.delete("/me/wishlist/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_wishlist(product_id: str, db: DbDep, customer: CurrentCustomer) -> None:
+    await service.remove_from_wishlist(db, customer, product_id)

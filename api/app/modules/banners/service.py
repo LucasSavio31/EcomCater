@@ -1,0 +1,98 @@
+"""Regra de negócio do módulo `banners`."""
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime
+
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.errors import NotFoundError, ValidationError
+from app.modules.banners.models import Banner
+from app.shared.images import process_image
+from app.shared.storage import storage
+
+
+def _uuid(v: str | uuid.UUID) -> uuid.UUID:
+    if isinstance(v, uuid.UUID):
+        return v
+    try:
+        return uuid.UUID(v)
+    except ValueError as exc:
+        raise ValidationError("id inválido") from exc
+
+
+def _out(b: Banner) -> dict:
+    return {
+        "id": str(b.id),
+        "slot": b.slot,
+        "title": b.title,
+        "image_desktop_url": storage.url(b.image_desktop_key) if b.image_desktop_key else None,
+        "image_mobile_url": storage.url(b.image_mobile_key) if b.image_mobile_key else None,
+        "link_url": b.link_url,
+        "alt": b.alt,
+        "position": b.position,
+        "starts_at": b.starts_at,
+        "ends_at": b.ends_at,
+        "is_active": b.is_active,
+    }
+
+
+async def list_public(db: AsyncSession, slot: str | None = None) -> list[dict]:
+    now = datetime.now(UTC)
+    stmt = select(Banner).where(
+        Banner.is_active.is_(True),
+        or_(Banner.starts_at.is_(None), Banner.starts_at <= now),
+        or_(Banner.ends_at.is_(None), Banner.ends_at >= now),
+    )
+    if slot:
+        stmt = stmt.where(Banner.slot == slot)
+    rows = await db.scalars(stmt.order_by(Banner.slot, Banner.position))
+    return [_out(b) for b in rows]
+
+
+async def list_admin(db: AsyncSession) -> list[dict]:
+    rows = await db.scalars(select(Banner).order_by(Banner.slot, Banner.position))
+    return [_out(b) for b in rows]
+
+
+async def create(db: AsyncSession, data: dict) -> Banner:
+    b = Banner(**{k: v for k, v in data.items() if k in _FIELDS})
+    db.add(b)
+    await db.flush()
+    return b
+
+
+async def update(db: AsyncSession, banner_id: str, data: dict) -> Banner:
+    b = await db.get(Banner, _uuid(banner_id))
+    if not b:
+        raise NotFoundError("Banner não encontrado.")
+    for k, v in data.items():
+        if k in _FIELDS and v is not None:
+            setattr(b, k, v)
+    return b
+
+
+async def delete(db: AsyncSession, banner_id: str) -> None:
+    b = await db.get(Banner, _uuid(banner_id))
+    if not b:
+        raise NotFoundError("Banner não encontrado.")
+    for key in (b.image_desktop_key, b.image_mobile_key):
+        if key:
+            storage.delete(key)
+    await db.delete(b)
+
+
+async def set_image(db: AsyncSession, banner_id: str, raw: bytes, filename: str, *, mobile: bool = False) -> Banner:
+    b = await db.get(Banner, _uuid(banner_id))
+    if not b:
+        raise NotFoundError("Banner não encontrado.")
+    processed = process_image(raw, filename, prefix="banners")
+    if mobile:
+        b.image_mobile_key = processed.zoom_key
+    else:
+        b.image_desktop_key = processed.zoom_key
+    return b
+
+
+_FIELDS = {"slot", "title", "link_url", "alt", "position", "starts_at", "ends_at", "is_active"}

@@ -12,9 +12,11 @@ from app.core.module_registry import all_specs
 from app.core.security import hash_password
 from app.models import (
     AdminUser,
+    Banner,
     Menu,
     MenuItem,
     ModuleRow,
+    Page,
     SmtpSettings,
     StoreSettings,
     ThemeSettings,
@@ -100,10 +102,44 @@ async def seed_menus(db: AsyncSession) -> None:
     logger.info("menus header/footer básicos criados")
 
 
+async def seed_content(db: AsyncSession) -> None:
+    now = datetime.now(UTC)
+    if not await db.scalar(select(Page).limit(1)):
+        for slug, title in [
+            ("quem-somos", "Quem Somos"),
+            ("politica-de-privacidade", "Política de Privacidade"),
+            ("politica-de-vendas", "Política de Vendas"),
+            ("trocas-e-devolucoes", "Trocas e Devoluções"),
+            ("como-comprar", "Como Comprar"),
+            ("entregas", "Entregas"),
+            ("fale-conosco", "Fale Conosco"),
+        ]:
+            db.add(
+                Page(
+                    slug=slug,
+                    title=title,
+                    body=f"<h1>{title}</h1><p>Conteúdo a configurar no admin.</p>",
+                    is_published=True,
+                    updated_at=now,
+                )
+            )
+        logger.info("páginas institucionais criadas")
+    if not await db.scalar(select(Banner).limit(1)):
+        db.add_all(
+            [
+                Banner(slot="hero", title="Nova Coleção", link_url="/categoria/feminino", position=0, is_active=True),
+                Banner(slot="showcase", title="Mais Vendidos", link_url="/categoria/feminino", position=0, is_active=True),
+                Banner(slot="showcase", title="Acessórios", link_url="/categoria/acessorios", position=1, is_active=True),
+            ]
+        )
+        logger.info("banners de exemplo criados")
+
+
 async def run_all(db: AsyncSession) -> None:
     await seed_admin(db)
     await seed_singletons(db)
     await seed_modules(db)
     await seed_menus(db)
+    await seed_content(db)
     await db.commit()
     logger.info("seed concluído.")
