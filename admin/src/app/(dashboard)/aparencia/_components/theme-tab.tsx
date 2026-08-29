@@ -9,6 +9,7 @@ import { AsyncBoundary } from '@/components/async-boundary';
 import { useResource } from '@/lib/use-resource';
 import { centsToInput, inputToCents } from '@/lib/format';
 import { appearanceApi, type Theme, type ThemeImageKind } from '@/modules/appearance/api';
+import { revalidateStore } from '@/lib/revalidate-store';
 
 type ColorField = { key: keyof Theme; label: string };
 
@@ -87,7 +88,8 @@ export function ThemeTab() {
       toast.error(result.error.message);
       return;
     }
-    toast.success('Tema salvo. A loja aplica após a revalidação.');
+    await revalidateStore('theme');
+    toast.success('Tema salvo e aplicado na loja.');
     setData(result.data);
     setDraft(null);
   }
@@ -95,6 +97,7 @@ export function ThemeTab() {
   async function upload(kind: ThemeImageKind, file: File): Promise<void> {
     const result = await appearanceApi.uploadThemeImage(kind, file);
     if (!result.ok) throw new Error(result.error.message);
+    await revalidateStore('theme');
     setData(result.data);
     setDraft(null);
     toast.success('Imagem atualizada.');
