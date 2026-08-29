@@ -48,7 +48,10 @@ async def _touch_redis(token: str, cart_id: uuid.UUID) -> None:
 
 async def _load(db: AsyncSession, cart_id: uuid.UUID) -> Cart | None:
     return await db.scalar(
-        select(Cart).where(Cart.id == cart_id).options(selectinload(Cart.items))
+        select(Cart)
+        .where(Cart.id == cart_id)
+        .options(selectinload(Cart.items))
+        .execution_options(populate_existing=True)  # relê `items` mesmo se já em cache
     )
 
 
@@ -80,7 +83,13 @@ async def get_or_create(
         await db.flush()
 
     cart.expires_at = datetime.now(UTC) + timedelta(days=CART_TTL_DAYS)
+    await db.flush()
     await _touch_redis(cart.session_token, cart.id)
+
+    # garante `items` carregado — acessá-lo sem eager-load quebra no async
+    # (`MissingGreenlet`), e o carrinho recém-criado não passou pelo selectinload.
+    if "items" not in cart.__dict__:
+        cart = await _load(db, cart.id) or cart
     return cart
 
 
