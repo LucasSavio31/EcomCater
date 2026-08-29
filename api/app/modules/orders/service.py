@@ -153,19 +153,19 @@ async def create_from_cart(
         if c:
             order.coupon_code = c.code
 
+    from app.modules.products.models import ProductImage
+
     for item in cart.items:
         v = variants[item.variant_id]
         product = await db.get(Product, v.product_id)
         v.stock_qty -= item.quantity  # baixa de estoque
-        img_key = None
-        imgs = sorted(
-            (await db.scalar(
-                select(Product).where(Product.id == v.product_id).options(selectinload(Product.images))
-            )).images,
-            key=lambda x: (not x.is_primary, x.position),
+        primary_img = await db.scalar(
+            select(ProductImage)
+            .where(ProductImage.product_id == v.product_id)
+            .order_by(ProductImage.is_primary.desc(), ProductImage.position)
+            .limit(1)
         )
-        if imgs:
-            img_key = imgs[0].medium_key
+        img_key = primary_img.medium_key if primary_img else None
         db.add(
             OrderItem(
                 order_id=order.id,

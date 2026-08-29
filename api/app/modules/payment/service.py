@@ -132,6 +132,8 @@ def _parse_dt(v: str | None):
 async def _apply_status(db: AsyncSession, order: Order, payment: Payment, normalized: str, *, source: str) -> None:
     action = _ORDER_ACTION.get(normalized)
     if normalized == "paid":
+        if payment.status == "paid" and order.payment_status == "paid":
+            return  # idempotente: cobrança instantânea + webhook não devem duplicar
         payment.status = "paid"
         if not payment.paid_at:
             payment.paid_at = datetime.now(UTC)
