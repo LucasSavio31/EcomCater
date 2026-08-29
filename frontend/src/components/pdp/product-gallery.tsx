@@ -49,36 +49,9 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
   };
 
   return (
-    <div className="flex flex-col gap-3 md:flex-row md:gap-4">
-      {/* Thumbnails (desktop) */}
-      {images.length > 1 && (
-        <ul className="hidden shrink-0 flex-col gap-2 md:flex" aria-label="Miniaturas do produto">
-          {images.map((image, i) => {
-            const thumb = resolveMediaUrl(image.thumb_url);
-            return (
-              <li key={image.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setZoom(false);
-                    setIndex(i);
-                  }}
-                  aria-label={`Ver imagem ${i + 1}`}
-                  aria-current={i === safeIndex ? 'true' : undefined}
-                  className={`relative block h-16 w-16 overflow-hidden rounded-card border ${
-                    i === safeIndex ? 'border-primary' : 'border-surface-border'
-                  }`}
-                >
-                  {thumb && <Image src={thumb} alt="" fill sizes="64px" className="object-cover" />}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
+    <div className="flex flex-col gap-3">
       {/* Imagem principal (desktop) */}
-      <div className="relative hidden flex-1 md:block">
+      <div className="relative hidden md:block">
         <div
           className="relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-card border border-surface-border bg-bg-subtle"
           onMouseEnter={() => setZoom(true)}
@@ -128,6 +101,36 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
           </>
         )}
       </div>
+
+      {/* Thumbnails (desktop) — faixa horizontal abaixo da imagem, como na catlifestyle */}
+      {images.length > 1 && (
+        <ul
+          className="hidden gap-2 overflow-x-auto md:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-label="Miniaturas do produto"
+        >
+          {images.map((image, i) => {
+            const thumb = resolveMediaUrl(image.thumb_url);
+            return (
+              <li key={image.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setZoom(false);
+                    setIndex(i);
+                  }}
+                  aria-label={`Ver imagem ${i + 1}`}
+                  aria-current={i === safeIndex ? 'true' : undefined}
+                  className={`relative block h-16 w-16 shrink-0 overflow-hidden rounded-card border-2 ${
+                    i === safeIndex ? 'border-primary' : 'border-surface-border'
+                  }`}
+                >
+                  {thumb && <Image src={thumb} alt="" fill sizes="64px" className="object-cover" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       {/* Carrossel (mobile) */}
       <div

@@ -73,7 +73,7 @@ export default async function ProdutoPage({ params }: PageProps) {
       ? [
           {
             id: 'descricao',
-            title: 'Descrição',
+            title: 'Sobre o produto',
             content: (
               <div
                 className="prose-sm max-w-none text-sm text-text-muted [&_a]:text-primary [&_a]:underline"
@@ -163,29 +163,29 @@ export default async function ProdutoPage({ params }: PageProps) {
 
       <Breadcrumbs items={crumbs} />
 
-      <div className="grid gap-6 lg:grid-cols-2 lg:gap-10">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-12">
         <ProductGallery images={product.images} productName={product.name} />
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           {product.brand && (
-            <span className="text-xs uppercase tracking-wide text-text-muted">{product.brand}</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+              {product.brand}
+            </span>
           )}
-          <h1 className="text-xl font-bold sm:text-2xl">{product.name}</h1>
-          {product.sku_root && (
-            <span className="text-xs text-text-muted">Ref: {product.sku_root}</span>
-          )}
-
-          <Stars value={product.rating_avg} count={product.rating_count} size="md" />
+          <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{product.name}</h1>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <Stars value={product.rating_avg} count={product.rating_count} size="md" />
+            {product.sku_root && (
+              <span className="text-xs text-text-muted">Referência: {product.sku_root}</span>
+            )}
+          </div>
 
           <PdpBuyBox product={product} />
 
-          <ShippingCalculator product={product} />
-
-          <p id="guia-de-medidas" className="text-sm">
-            <a href="#specs" className="text-primary underline">
-              Consultar guia de medidas
-            </a>
-          </p>
+          <div className="rounded-card border border-surface-border p-4">
+            <p className="mb-2 text-sm font-semibold">Calcular frete e prazo</p>
+            <ShippingCalculator product={product} />
+          </div>
         </div>
       </div>
 

@@ -56,6 +56,8 @@ export function PdpBuyBox({ product }: PdpBuyBoxProps) {
   const compareAt = selectedVariant?.compare_at_price_cents ?? product.compare_at_price_cents;
   const pixCents = applyPixDiscount(priceCents, product.pix_discount_pct);
   const parcela = installmentsText(priceCents, product.installments_max);
+  const onSale = !!compareAt && compareAt > priceCents;
+  const discountPct = onSale ? Math.round((1 - priceCents / (compareAt as number)) * 100) : 0;
 
   /** Produto simples: usa a variante única. Com opções: a combinação escolhida. */
   const soloVariant = !hasVariants ? (activeVariants[0] ?? null) : null;
@@ -97,29 +99,43 @@ export function PdpBuyBox({ product }: PdpBuyBoxProps) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {/* Preço */}
-      <div className="flex flex-col gap-1">
-        {compareAt && compareAt > priceCents && (
-          <span className="text-sm text-text-muted line-through">{formatBRL(compareAt)}</span>
+      <div className="flex flex-col gap-1.5">
+        {onSale && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-text-muted line-through">{formatBRL(compareAt as number)}</span>
+            <span className="rounded-[4px] bg-accent px-1.5 py-0.5 text-xs font-bold text-white">
+              -{discountPct}%
+            </span>
+          </div>
         )}
-        <span className="text-2xl font-semibold sm:text-3xl">{formatBRL(priceCents)}</span>
-        {parcela && <span className="text-sm text-text-muted">{parcela}</span>}
+        <span className="text-3xl font-bold leading-tight sm:text-4xl">{formatBRL(priceCents)}</span>
         {product.pix_discount_pct ? (
-          <span className="mt-1 inline-flex w-fit items-center gap-2 rounded-card bg-success/10 px-2 py-1 text-sm font-medium text-success">
-            {Math.round(product.pix_discount_pct)}% NO PIX
-            <span className="text-text-muted">{formatBRL(pixCents)}</span>
-          </span>
+          <p className="text-sm text-text">
+            <span className="font-semibold text-success">
+              À vista no PIX {Math.round(product.pix_discount_pct)}% OFF
+            </span>{' '}
+            <span className="text-text-muted">— {formatBRL(pixCents)}</span>
+          </p>
         ) : null}
+        {parcela && <p className="text-sm text-text-muted">{parcela.replace(/^ou /, 'Ou ')}</p>}
       </div>
 
       {/* Seletor de variação */}
       {product.option_types.map((type) => (
         <fieldset key={type.id} className="flex flex-col gap-2">
-          <legend className="text-sm font-medium">
-            {type.name}
+          <legend className="mb-1 flex w-full items-center justify-between text-sm font-semibold">
+            <span>
+              {type.name}
+              {selected[type.id] && (
+                <span className="ml-1 font-normal text-text-muted">
+                  · {type.values.find((v) => v.id === selected[type.id])?.value}
+                </span>
+              )}
+            </span>
             {type.is_size && (
-              <a href="#guia-de-medidas" className="ml-2 text-xs font-normal text-primary underline">
+              <a href="#specs" className="text-xs font-normal text-primary underline">
                 Guia de medidas
               </a>
             )}
@@ -138,10 +154,10 @@ export function PdpBuyBox({ product }: PdpBuyBoxProps) {
                   onClick={() =>
                     setSelected((prev) => ({ ...prev, [type.id]: value.id }))
                   }
-                  className={`relative min-h-touch min-w-touch rounded-card border px-3 text-sm transition ${
+                  className={`relative flex h-11 min-w-[3rem] items-center justify-center rounded-card border px-3 text-sm font-medium transition ${
                     isSelected
-                      ? 'border-primary bg-primary text-primary-fg'
-                      : 'border-surface-border bg-surface hover:border-primary'
+                      ? 'border-btn bg-btn text-btn-fg'
+                      : 'border-surface-border bg-surface hover:border-btn'
                   } ${!available ? 'text-text-muted' : ''}`}
                 >
                   <span className={!available ? 'line-through decoration-2' : ''}>{value.value}</span>
@@ -159,52 +175,68 @@ export function PdpBuyBox({ product }: PdpBuyBoxProps) {
         <p className="text-sm font-medium text-danger">Combinação esgotada.</p>
       )}
 
-      {/* Quantidade + comprar */}
-      <div className="flex items-stretch gap-2">
-        <div className="flex items-center rounded-card border border-surface-border">
+      {/* Quantidade + adicionar ao carrinho */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-stretch gap-2">
+          <div className="flex items-center rounded-card border border-surface-border">
+            <button
+              type="button"
+              onClick={() => setQty((q) => Math.max(1, q - 1))}
+              aria-label="Diminuir quantidade"
+              className="flex h-12 w-11 items-center justify-center text-lg"
+            >
+              −
+            </button>
+            <span className="w-8 text-center text-sm font-medium" aria-live="polite">
+              {qty}
+            </span>
+            <button
+              type="button"
+              onClick={() => setQty((q) => Math.min(99, q + 1))}
+              aria-label="Aumentar quantidade"
+              className="flex h-12 w-11 items-center justify-center text-lg"
+            >
+              +
+            </button>
+          </div>
+          <Button
+            block
+            size="lg"
+            onClick={() => void onBuy()}
+            loading={busy}
+            disabled={!canBuy}
+            className="flex-1 text-sm font-semibold uppercase tracking-wide"
+          >
+            {added ? 'Adicionado ✓' : 'Adicionar ao carrinho'}
+          </Button>
           <button
             type="button"
-            onClick={() => setQty((q) => Math.max(1, q - 1))}
-            aria-label="Diminuir quantidade"
-            className="min-h-touch min-w-touch px-3 text-lg"
+            onClick={() => {
+              if (!isWished(product.id)) {
+                track('add_to_wishlist', {
+                  value: priceCents / 100,
+                  items: [{ ...baseTrackItem(), price: priceCents / 100 }],
+                });
+              }
+              toggleWish(product.id);
+            }}
+            aria-pressed={isWished(product.id)}
+            aria-label={isWished(product.id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+            className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-card border ${
+              isWished(product.id)
+                ? 'border-accent text-accent'
+                : 'border-surface-border text-text-muted hover:text-text'
+            }`}
           >
-            −
-          </button>
-          <span className="w-8 text-center text-sm" aria-live="polite">
-            {qty}
-          </span>
-          <button
-            type="button"
-            onClick={() => setQty((q) => Math.min(99, q + 1))}
-            aria-label="Aumentar quantidade"
-            className="min-h-touch min-w-touch px-3 text-lg"
-          >
-            +
+            <HeartIcon className="h-5 w-5" />
           </button>
         </div>
-        <Button block onClick={() => void onBuy()} loading={busy} disabled={!canBuy} className="flex-1">
-          {added ? 'Adicionado ✓' : 'COMPRAR'}
-        </Button>
         <button
           type="button"
-          onClick={() => {
-            if (!isWished(product.id)) {
-              track('add_to_wishlist', {
-                value: priceCents / 100,
-                items: [{ ...baseTrackItem(), price: priceCents / 100 }],
-              });
-            }
-            toggleWish(product.id);
-          }}
-          aria-pressed={isWished(product.id)}
-          aria-label={isWished(product.id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-          className={`inline-flex min-h-touch min-w-touch items-center justify-center rounded-card border ${
-            isWished(product.id)
-              ? 'border-accent text-accent'
-              : 'border-surface-border text-text-muted hover:text-text'
-          }`}
+          onClick={() => router.push('/minha-conta')}
+          className="w-fit text-xs font-medium text-primary underline"
         >
-          <HeartIcon className="h-5 w-5" />
+          Cadastre-se e ganhe 10% OFF na primeira compra
         </button>
       </div>
 
