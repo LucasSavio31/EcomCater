@@ -21,6 +21,21 @@ class ThemeSettings(Base):
     accent_color: Mapped[str] = mapped_column(String(9), default="#DC2626")
     text_color: Mapped[str] = mapped_column(String(9), default="#111827")
     bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF")
+
+    # botões (estilo Customizer do WordPress / WooCommerce)
+    button_bg_color: Mapped[str] = mapped_column(String(9), default="#111111")
+    button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF")
+    button_hover_color: Mapped[str] = mapped_column(String(9), default="#DC2626")
+
+    # menu superior (header)
+    header_bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF")
+    header_text_color: Mapped[str] = mapped_column(String(9), default="#111827")
+    header_max_width_px: Mapped[int] = mapped_column(Integer, default=1280)
+
+    # menu inferior (footer / rodapé)
+    footer_bg_color: Mapped[str] = mapped_column(String(9), default="#111827")
+    footer_text_color: Mapped[str] = mapped_column(String(9), default="#E5E7EB")
+
     logo_key: Mapped[str | None] = mapped_column(String(300))
     logo_mobile_key: Mapped[str | None] = mapped_column(String(300))
     favicon_key: Mapped[str | None] = mapped_column(String(300))

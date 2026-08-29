@@ -1,6 +1,7 @@
 """Regra de negócio do módulo `theme` — tema visual (singleton) + páginas."""
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import UTC, datetime
 
@@ -15,6 +16,9 @@ from app.shared.storage import storage
 
 _THEME_FIELDS = {
     "primary_color", "secondary_color", "accent_color", "text_color", "bg_color",
+    "button_bg_color", "button_text_color", "button_hover_color",
+    "header_bg_color", "header_text_color", "header_max_width_px",
+    "footer_bg_color", "footer_text_color",
     "font_family", "free_shipping_threshold_cents", "whatsapp_number",
     "top_bar_message", "top_bar_enabled",
 }
@@ -38,11 +42,20 @@ async def get_theme(db: AsyncSession) -> ThemeSettings:
     return row
 
 
+_COLOR_FIELDS = {f for f in _THEME_FIELDS if f.endswith("_color")}
+_HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+
+
 async def update_theme(db: AsyncSession, data: dict) -> ThemeSettings:
     row = await get_theme(db)
     for k, v in data.items():
-        if k in _THEME_FIELDS and v is not None:
-            setattr(row, k, v)
+        if k not in _THEME_FIELDS or v is None:
+            continue
+        if k in _COLOR_FIELDS and not _HEX_RE.match(str(v)):
+            raise ValidationError(f"Cor inválida em '{k}': use formato hexadecimal (#RRGGBB).")
+        if k == "header_max_width_px":
+            v = max(640, min(2560, int(v)))
+        setattr(row, k, v)
     row.updated_at = datetime.now(UTC)
     await db.flush()
     return row
