@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Button, Card, Spinner } from '@ecom/ui';
 import { useCart } from '@/modules/cart/cart-context';
+import { track, cartToTrackItems } from '@/modules/analytics';
 import type { CartItem } from '@/modules/cart/types';
 import { resolveMediaUrl } from '@/lib/media';
 import { formatBRL } from '@/lib/format';
@@ -17,6 +18,16 @@ import { OrderTotals } from './order-totals';
 export function CartView() {
   const router = useRouter();
   const { cart, loading } = useCart();
+  const viewTracked = useRef(false);
+
+  useEffect(() => {
+    if (viewTracked.current || loading || cart.items.length === 0) return;
+    viewTracked.current = true;
+    track('view_cart', {
+      value: cart.totals.items_total_cents / 100,
+      items: cartToTrackItems(cart.items),
+    });
+  }, [loading, cart]);
 
   if (loading) {
     return (

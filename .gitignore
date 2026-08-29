@@ -31,6 +31,7 @@ Thumbs.db
 
 # Media / uploads (dev local)
 /data/
+api/.data/
 media/
 !api/app/**/media/
 

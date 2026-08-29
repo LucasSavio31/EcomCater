@@ -8,6 +8,7 @@ import { useCart } from '@/modules/cart/cart-context';
 import { applyPixDiscount, formatBRL, installmentsText } from '@/lib/format';
 import { HeartIcon } from '@/components/icons';
 import { useWishlist } from '@/modules/wishlist/use-wishlist';
+import { track, type TrackItem } from '@/modules/analytics';
 
 interface PdpBuyBoxProps {
   product: ProductDetail;
@@ -76,9 +77,24 @@ export function PdpBuyBox({ product }: PdpBuyBoxProps) {
       setError(res.error ?? 'Não foi possível adicionar ao carrinho.');
       return;
     }
+    track('add_to_cart', {
+      value: (priceCents / 100) * qty,
+      items: [{ ...baseTrackItem(), price: priceCents / 100, quantity: qty }],
+    });
     setAdded(true);
     window.setTimeout(() => setAdded(false), 2500);
   };
+
+  function baseTrackItem(): TrackItem {
+    return {
+      id: selectedVariant?.sku ?? product.sku_root ?? product.id,
+      name: product.name,
+      price: priceCents / 100,
+      brand: product.brand ?? undefined,
+      category: product.category?.name ?? undefined,
+      variant: selectedVariant?.option_labels?.join(' / ') || undefined,
+    };
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -171,7 +187,15 @@ export function PdpBuyBox({ product }: PdpBuyBoxProps) {
         </Button>
         <button
           type="button"
-          onClick={() => toggleWish(product.id)}
+          onClick={() => {
+            if (!isWished(product.id)) {
+              track('add_to_wishlist', {
+                value: priceCents / 100,
+                items: [{ ...baseTrackItem(), price: priceCents / 100 }],
+              });
+            }
+            toggleWish(product.id);
+          }}
           aria-pressed={isWished(product.id)}
           aria-label={isWished(product.id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
           className={`inline-flex min-h-touch min-w-touch items-center justify-center rounded-card border ${

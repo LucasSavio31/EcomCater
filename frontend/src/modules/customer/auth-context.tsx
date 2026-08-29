@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 import { customerApi } from './api';
 import type { Customer } from './types';
 import { getCustomerSession, setCustomerSession } from '@/lib/customer-auth-storage';
+import { identify } from '@/modules/analytics';
 
 interface AuthState {
   customer: Customer | null;

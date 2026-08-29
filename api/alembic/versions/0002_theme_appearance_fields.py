@@ -3,6 +3,10 @@
 Revision ID: 0002_theme_appearance
 Revises: 0001_initial
 Create Date: 2026-08-29
+
+Idempotente: só adiciona a coluna que ainda não existir. Assim a migration
+funciona tanto num banco antigo (criado antes destes campos) quanto num banco
+novo, onde a `0001` já cria o schema atual inteiro via `Base.metadata`.
 """
 from __future__ import annotations
 
@@ -24,26 +28,35 @@ _COLUMNS = [
     ("header_text_color", sa.String(9), "#111827"),
     ("footer_bg_color", sa.String(9), "#111827"),
     ("footer_text_color", sa.String(9), "#E5E7EB"),
+    ("header_max_width_px", sa.Integer(), "1280"),
 ]
 
 
+def _existing_columns() -> set[str]:
+    insp = sa.inspect(op.get_bind())
+    if "theme_settings" not in insp.get_table_names():
+        return set()
+    return {c["name"] for c in insp.get_columns("theme_settings")}
+
+
 def upgrade() -> None:
+    have = _existing_columns()
+    added: list[str] = []
     for name, type_, default in _COLUMNS:
+        if name in have:
+            continue
         op.add_column(
             "theme_settings",
             sa.Column(name, type_, nullable=False, server_default=default),
         )
-    op.add_column(
-        "theme_settings",
-        sa.Column("header_max_width_px", sa.Integer(), nullable=False, server_default="1280"),
-    )
-    # remove os server_default (o app cuida dos defaults daqui pra frente)
-    for name, _, _ in _COLUMNS:
+        added.append(name)
+    # o app cuida dos defaults daqui pra frente
+    for name in added:
         op.alter_column("theme_settings", name, server_default=None)
-    op.alter_column("theme_settings", "header_max_width_px", server_default=None)
 
 
 def downgrade() -> None:
+    have = _existing_columns()
     for name, _, _ in _COLUMNS:
-        op.drop_column("theme_settings", name)
-    op.drop_column("theme_settings", "header_max_width_px")
+        if name in have:
+            op.drop_column("theme_settings", name)

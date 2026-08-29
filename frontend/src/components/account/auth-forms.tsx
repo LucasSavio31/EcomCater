@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button, Card, Input } from '@ecom/ui';
 import { useAuth } from '@/modules/customer/auth-context';
 import { useCart } from '@/modules/cart/cart-context';
+import { track } from '@/modules/analytics';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -41,6 +42,7 @@ export function AuthForms({ onDone }: { onDone?: () => void }) {
       setError(res.error ?? 'Não foi possível continuar.');
       return;
     }
+    if (mode === 'register') track('sign_up', {});
     await refreshCart();
     onDone?.();
   }

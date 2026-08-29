@@ -1,7 +1,11 @@
 import type { Metadata, Viewport } from 'next';
+import { Suspense } from 'react';
 import './globals.css';
 import { getTheme, ThemeStyle } from '@/modules/theme';
 import { getMenu } from '@/modules/menus/api';
+import { getAnalyticsConfig } from '@/modules/analytics/get-config';
+import { AnalyticsHeadScripts, AnalyticsBodyNoScript } from '@/modules/analytics/scripts';
+import { AnalyticsRouteTracker } from '@/modules/analytics/route-tracker';
 import { ServiceWorker } from '@/components/service-worker';
 import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
@@ -30,10 +34,11 @@ export const viewport: Viewport = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const [theme, headerMenu, footerMenu] = await Promise.all([
+  const [theme, headerMenu, footerMenu, analytics] = await Promise.all([
     getTheme(),
     getMenu('header'),
     getMenu('footer'),
+    getAnalyticsConfig(),
   ]);
 
   const orgLd = jsonLdScript([organizationJsonLd({ logoUrl: theme.logo_url ?? undefined }), webSiteJsonLd()]);
@@ -41,6 +46,13 @@ export default async function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="min-h-dvh bg-bg text-text">
+        {/* Tags de marketing (GTM / GA4 / Google Ads / Meta Pixel) o mais alto possível. */}
+        <AnalyticsHeadScripts config={analytics} />
+        <AnalyticsBodyNoScript config={analytics} />
+        <Suspense fallback={null}>
+          <AnalyticsRouteTracker />
+        </Suspense>
+
         {/* CSS vars do tema — antes do primeiro paint (sem FOUC). */}
         <ThemeStyle theme={theme} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: orgLd }} />

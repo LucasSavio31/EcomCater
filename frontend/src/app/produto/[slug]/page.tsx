@@ -12,6 +12,7 @@ import { PdpBuyBox } from '@/components/pdp/pdp-buy-box';
 import { ShippingCalculator } from '@/components/pdp/shipping-calculator';
 import { ReviewForm } from '@/components/pdp/review-form';
 import { FreeShippingProgress } from '@/components/layout/free-shipping-progress';
+import { TrackOnMount } from '@/components/analytics/track-on-mount';
 import {
   breadcrumbJsonLd,
   buildMetadata,
@@ -114,6 +115,20 @@ export default async function ProdutoPage({ params }: PageProps) {
 
   return (
     <div className="flex flex-col gap-8">
+      <TrackOnMount
+        event="view_item"
+        dedupeKey={product.slug}
+        value={product.price_cents / 100}
+        items={[
+          {
+            id: product.sku_root ?? product.id,
+            name: product.name,
+            price: product.price_cents / 100,
+            brand: product.brand ?? undefined,
+            category: product.category?.name ?? undefined,
+          },
+        ]}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

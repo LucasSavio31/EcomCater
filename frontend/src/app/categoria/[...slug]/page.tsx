@@ -8,6 +8,7 @@ import { Pagination } from '@/components/catalog/pagination';
 import { PlpSort } from '@/components/catalog/plp-sort';
 import { PlpFilters, PlpFiltersDrawer } from '@/components/catalog/plp-filters';
 import { buildMetadata, breadcrumbJsonLd, jsonLdScript } from '@/lib/seo';
+import { TrackOnMount } from '@/components/analytics/track-on-mount';
 
 export const dynamic = 'force-dynamic';
 
@@ -116,6 +117,16 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
 
   return (
     <div className="flex flex-col gap-4">
+      <TrackOnMount
+        event="view_item_list"
+        dedupeKey={`${title}:${result.page}`}
+        itemListName={title}
+        items={result.items.slice(0, 20).map((p) => ({
+          id: p.slug,
+          name: p.name,
+          price: p.price_cents / 100,
+        }))}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

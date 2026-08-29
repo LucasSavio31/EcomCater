@@ -5,6 +5,7 @@ import { searchProducts } from '@/modules/catalog/api';
 import { resolveMediaUrl } from '@/lib/media';
 import { formatBRL } from '@/lib/format';
 import { buildMetadata } from '@/lib/seo';
+import { TrackOnMount } from '@/components/analytics/track-on-mount';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +37,18 @@ export default async function BuscaPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      {q && (
+        <TrackOnMount
+          event="search"
+          dedupeKey={`search:${q}`}
+          searchTerm={q}
+          items={products.slice(0, 10).map((p) => ({
+            id: p.id,
+            name: p.name,
+            price: typeof p.price_cents === 'number' ? p.price_cents / 100 : 0,
+          }))}
+        />
+      )}
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-bold sm:text-2xl">
           {q ? <>Resultados para “{q}”</> : 'Buscar produtos'}

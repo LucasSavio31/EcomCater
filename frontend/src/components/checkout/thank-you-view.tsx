@@ -7,6 +7,26 @@ import { Button, Card, Spinner } from '@ecom/ui';
 import { checkoutApi } from '@/modules/checkout/api';
 import type { ChargeResult, Order } from '@/modules/checkout/types';
 import { formatBRL } from '@/lib/format';
+import { track, orderToTrackItems } from '@/modules/analytics';
+
+/** Dispara `purchase` uma única vez por pedido (sobrevive a refresh via sessionStorage). */
+function trackPurchaseOnce(order: Order): void {
+  const key = `ecom:purchase-tracked:${order.number}`;
+  try {
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, '1');
+  } catch {
+    /* sem sessionStorage: ainda dispara, só não deduplica em refresh */
+  }
+  track('purchase', {
+    transaction_id: order.number,
+    value: order.grand_total_cents / 100,
+    shipping: order.shipping_cents / 100,
+    coupon: order.coupon_code ?? undefined,
+    event_id: `purchase.${order.number}`,
+    items: orderToTrackItems(order.items),
+  });
+}
 
 const PAYMENT_LABEL: Record<string, { text: string; tone: string }> = {
   paid: { text: 'Pagamento confirmado', tone: 'text-success' },
@@ -48,8 +68,10 @@ export function ThankYouView() {
       checkoutApi.getOrder(number, email),
       checkoutApi.paymentStatus(number),
     ]);
-    if (ordRes.ok) setOrder(ordRes.data);
-    else setNotFound(true);
+    if (ordRes.ok) {
+      setOrder(ordRes.data);
+      trackPurchaseOnce(ordRes.data);
+    } else setNotFound(true);
     if (statusRes.ok) setPaymentStatus(statusRes.data.payment_status);
     else if (ordRes.ok) setPaymentStatus(ordRes.data.payment_status);
     setLoading(false);

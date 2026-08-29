@@ -11,6 +11,7 @@ import { ShippingPicker } from '@/components/cart/shipping-picker';
 import { OrderTotals } from '@/components/cart/order-totals';
 import { formatBRL } from '@/lib/format';
 import { lookupCep } from '@/lib/viacep';
+import { track, cartToTrackItems } from '@/modules/analytics';
 
 type Method = 'pix' | 'credit_card' | 'boleto';
 
@@ -76,6 +77,32 @@ export function CheckoutView() {
     });
   }, []);
 
+  // begin_checkout — uma vez, quando o carrinho carrega com itens
+  const beginTracked = useRef(false);
+  useEffect(() => {
+    if (beginTracked.current || loading || cart.items.length === 0) return;
+    beginTracked.current = true;
+    track('begin_checkout', {
+      value: cart.totals.items_total_cents / 100,
+      coupon: cart.coupon_code ?? undefined,
+      items: cartToTrackItems(cart.items),
+    });
+  }, [loading, cart]);
+
+  // add_shipping_info — quando o cliente escolhe uma opção de frete
+  const shipTracked = useRef<string | null>(null);
+  useEffect(() => {
+    const sel = cart.selected_shipping;
+    if (!sel || shipTracked.current === sel.id) return;
+    shipTracked.current = sel.id;
+    track('add_shipping_info', {
+      value: cart.totals.items_total_cents / 100,
+      shipping: cart.totals.shipping_cents / 100,
+      method: `${sel.carrier} ${sel.service}`,
+      items: cartToTrackItems(cart.items),
+    });
+  }, [cart]);
+
   const setField = (k: keyof AddressForm, v: string) => setAddr((p) => ({ ...p, [k]: v }));
 
   async function onCepBlur() {
@@ -138,6 +165,13 @@ export function CheckoutView() {
     if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
+
+    track('add_payment_info', {
+      value: cart.totals.grand_total_cents / 100,
+      coupon: cart.coupon_code ?? undefined,
+      method,
+      items: cartToTrackItems(cart.items),
+    });
 
     const payload: CheckoutPayload = {
       email: email.trim(),

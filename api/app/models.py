@@ -69,4 +69,7 @@ from app.modules.theme.models import Page, ThemeSettings  # noqa: F401
 # --- newsletter ---
 from app.modules.newsletter.models import NewsletterSubscriber  # noqa: F401
 
+# --- analytics ---
+from app.modules.analytics.models import AnalyticsSettings  # noqa: F401
+
 __all__ = ["Base"]
