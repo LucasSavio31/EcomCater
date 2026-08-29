@@ -34,3 +34,15 @@ async def charge(
 @router.get("/status/{order_number}", response_model=PaymentStatusOut)
 async def status(order_number: str, db: DbDep):
     return await service.get_status(db, order_number)
+
+
+@router.get("/methods")
+async def methods(db: DbDep) -> dict:
+    """Métodos de pagamento habilitados — consumido pelo checkout da loja."""
+    cfg = await service.load_config(db)
+    return {
+        "credit_card": cfg.methods.credit_card,
+        "pix": cfg.methods.pix,
+        "boleto": cfg.methods.boleto,
+        "max_installments": cfg.max_installments,
+    }
