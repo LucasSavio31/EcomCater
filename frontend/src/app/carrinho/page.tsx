@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { UnderConstruction } from '@/components/under-construction';
+import { CartView } from '@/components/cart/cart-view';
 import { buildMetadata } from '@/lib/seo';
 
 export const metadata: Metadata = buildMetadata({
@@ -9,5 +9,10 @@ export const metadata: Metadata = buildMetadata({
 });
 
 export default function CarrinhoPage() {
-  return <UnderConstruction title="Carrinho" phase="Fase 4" />;
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-xl font-semibold sm:text-2xl">Meu carrinho</h1>
+      <CartView />
+    </div>
+  );
 }

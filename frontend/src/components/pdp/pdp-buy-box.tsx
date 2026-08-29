@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@ecom/ui';
 import type { ProductDetail, ProductVariant } from '@/modules/catalog/types';
 import { useCart } from '@/modules/cart/cart-context';
@@ -13,11 +14,14 @@ interface PdpBuyBoxProps {
 }
 
 export function PdpBuyBox({ product }: PdpBuyBoxProps) {
+  const router = useRouter();
   const { addItem } = useCart();
   const { has: isWished, toggle: toggleWish } = useWishlist();
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const hasVariants = product.option_types.length > 0 && product.variants.length > 0;
 
@@ -52,13 +56,26 @@ export function PdpBuyBox({ product }: PdpBuyBoxProps) {
   const pixCents = applyPixDiscount(priceCents, product.pix_discount_pct);
   const parcela = installmentsText(priceCents, product.installments_max);
 
-  const needsSelection = hasVariants && !selectedVariant;
-  const outOfStock = hasVariants ? !!selectedVariant && !selectedVariant.in_stock : false;
-  const canBuy = !needsSelection && !outOfStock;
+  /** Produto simples: usa a variante única. Com opções: a combinação escolhida. */
+  const soloVariant = !hasVariants ? (activeVariants[0] ?? null) : null;
+  const buyVariant = selectedVariant ?? soloVariant;
 
-  const onBuy = () => {
-    if (!canBuy) return;
-    addItem({ priceCents, quantity: qty });
+  const needsSelection = hasVariants && !selectedVariant;
+  const outOfStock = hasVariants
+    ? !!selectedVariant && !selectedVariant.in_stock
+    : !soloVariant || !soloVariant.in_stock;
+  const canBuy = !needsSelection && !outOfStock && !!buyVariant && !busy;
+
+  const onBuy = async () => {
+    if (!canBuy || !buyVariant) return;
+    setBusy(true);
+    setError(null);
+    const res = await addItem(buyVariant.id, qty);
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error ?? 'Não foi possível adicionar ao carrinho.');
+      return;
+    }
     setAdded(true);
     window.setTimeout(() => setAdded(false), 2500);
   };
@@ -149,7 +166,7 @@ export function PdpBuyBox({ product }: PdpBuyBoxProps) {
             +
           </button>
         </div>
-        <Button block onClick={onBuy} disabled={!canBuy} className="flex-1">
+        <Button block onClick={() => void onBuy()} loading={busy} disabled={!canBuy} className="flex-1">
           {added ? 'Adicionado ✓' : 'COMPRAR'}
         </Button>
         <button
@@ -167,10 +184,25 @@ export function PdpBuyBox({ product }: PdpBuyBoxProps) {
         </button>
       </div>
 
-      {added && (
-        <p className="text-sm text-success" role="status">
-          Produto adicionado ao carrinho (a finalização entra na próxima fase).
+      {error && (
+        <p className="text-sm text-danger" role="alert">
+          {error}
         </p>
+      )}
+
+      {added && (
+        <div className="flex flex-wrap items-center gap-3 rounded-card bg-success/10 px-3 py-2 text-sm">
+          <span className="font-medium text-success" role="status">
+            Produto adicionado ao carrinho.
+          </span>
+          <button
+            type="button"
+            onClick={() => router.push('/carrinho')}
+            className="font-medium text-primary underline"
+          >
+            Ir para o carrinho
+          </button>
+        </div>
       )}
     </div>
   );

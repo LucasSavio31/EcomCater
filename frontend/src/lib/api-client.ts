@@ -32,6 +32,8 @@ export interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
   query?: Record<string, string | number | boolean | undefined | null>;
   /** Opções de cache do Next (App Router). */
   next?: { tags?: string[]; revalidate?: number | false };
+  /** `include` para enviar/receber cookies (carrinho de convidado via `cart_token`). */
+  credentials?: RequestCredentials;
 }
 
 function buildUrl(path: string, query?: ApiRequestOptions['query']): string {
@@ -53,7 +55,7 @@ export async function apiFetch<T>(
   path: string,
   options: ApiRequestOptions = {},
 ): Promise<ApiResult<T>> {
-  const { body, token, query, next, headers, ...rest } = options;
+  const { body, token, query, next, headers, credentials, ...rest } = options;
 
   const finalHeaders = new Headers(headers);
   let finalBody: BodyInit | undefined;
@@ -74,6 +76,7 @@ export async function apiFetch<T>(
       ...rest,
       headers: finalHeaders,
       body: finalBody,
+      ...(credentials ? { credentials } : {}),
       ...(next ? { next } : {}),
     });
   } catch (cause) {
