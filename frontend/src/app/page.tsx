@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { getBanners } from '@/modules/banners/api';
 import { getFeaturedProducts, getCategoryTree, getProducts } from '@/modules/catalog/api';
+import { getTheme } from '@/modules/theme';
 import { BannerGrid } from '@/components/layout/banner-grid';
+import { HeroBanner } from '@/components/layout/hero-banner';
 import { ProductGrid } from '@/components/catalog/product-grid';
 import { SizeShortcuts, type SizeShortcut } from '@/components/catalog/size-shortcuts';
 import { NewsletterForm } from '@/components/layout/newsletter-form';
@@ -28,21 +30,25 @@ async function homeSizeShortcuts(): Promise<SizeShortcut[]> {
 }
 
 export default async function HomePage() {
-  const [hero, showcase, featured, shortcuts] = await Promise.all([
+  const [hero, showcase, featured, shortcuts, theme] = await Promise.all([
     getBanners('hero'),
     getBanners('showcase'),
     getFeaturedProducts(12),
     homeSizeShortcuts(),
+    getTheme(),
   ]);
 
+  const showHero = theme.hero_enabled && hero.length > 0;
   const nothing = hero.length === 0 && showcase.length === 0 && featured.length === 0;
 
   return (
     <div className="flex flex-col gap-10">
-      {hero.length > 0 && (
-        <section aria-label="Destaques">
-          <BannerGrid banners={hero.slice(0, 4)} variant="hero" priority />
-        </section>
+      {showHero && (
+        <HeroBanner
+          banners={hero}
+          mode={theme.hero_mode}
+          autoplaySeconds={theme.hero_autoplay_seconds}
+        />
       )}
 
       <SizeShortcuts shortcuts={shortcuts} heading="Compre por numeração" />

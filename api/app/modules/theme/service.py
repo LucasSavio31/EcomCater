@@ -21,12 +21,46 @@ _THEME_FIELDS = {
     "footer_bg_color", "footer_text_color",
     "font_family", "free_shipping_threshold_cents", "whatsapp_number",
     "top_bar_message", "top_bar_enabled",
+    "hero_enabled", "hero_mode", "hero_autoplay_seconds",
+    "footer_seals_enabled", "footer_seals_json",
+}
+
+_BOOL_FIELDS = {"top_bar_enabled", "hero_enabled", "footer_seals_enabled"}
+
+
+_DEFAULT_SEALS = {
+    "payment": {
+        "title": "Formas de Pagamento",
+        "text": "",
+        "badges": ["Pix", "Boleto", "Visa", "Mastercard", "Amex", "Elo", "Hipercard"],
+    },
+    "shipping": {"title": "Formas de Entrega", "text": "", "badges": ["Correios"]},
+    "security": {
+        "title": "Loja Segura",
+        "text": "Site 100% seguro, com criptografia e certificado SSL.",
+        "badges": ["SSL"],
+    },
 }
 
 
+def _seals_out(row: ThemeSettings) -> dict:
+    stored = row.footer_seals_json or {}
+    result: dict = {}
+    for col, default in _DEFAULT_SEALS.items():
+        block = stored.get(col) if isinstance(stored.get(col), dict) else {}
+        result[col] = {
+            "title": block.get("title") or default["title"],
+            "text": block.get("text") if block.get("text") is not None else default["text"],
+            "badges": block["badges"] if isinstance(block.get("badges"), list) else default["badges"],
+        }
+    return result
+
+
 def theme_out(row: ThemeSettings) -> dict:
+    fields = {f: getattr(row, f) for f in _THEME_FIELDS}
+    fields["footer_seals_json"] = _seals_out(row)
     return {
-        **{f: getattr(row, f) for f in _THEME_FIELDS},
+        **fields,
         "logo_url": storage.url(row.logo_key) if row.logo_key else None,
         "logo_mobile_url": storage.url(row.logo_mobile_key) if row.logo_mobile_key else None,
         "favicon_url": storage.url(row.favicon_key) if row.favicon_key else None,
@@ -49,16 +83,45 @@ _HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
 async def update_theme(db: AsyncSession, data: dict) -> ThemeSettings:
     row = await get_theme(db)
     for k, v in data.items():
-        if k not in _THEME_FIELDS or v is None:
+        if k not in _THEME_FIELDS:
+            continue
+        if v is None and k not in _BOOL_FIELDS:
             continue
         if k in _COLOR_FIELDS and not _HEX_RE.match(str(v)):
             raise ValidationError(f"Cor inválida em '{k}': use formato hexadecimal (#RRGGBB).")
         if k == "header_max_width_px":
             v = max(640, min(2560, int(v)))
+        if k == "hero_mode":
+            v = "static" if str(v) == "static" else "carousel"
+        if k == "hero_autoplay_seconds":
+            v = max(0, min(30, int(v)))
+        if k in _BOOL_FIELDS:
+            v = bool(v)
+        if k == "footer_seals_json":
+            v = _clean_seals(v)
         setattr(row, k, v)
     row.updated_at = datetime.now(UTC)
     await db.flush()
     return row
+
+
+_SEAL_COLUMNS = ("payment", "shipping", "security")
+
+
+def _clean_seals(raw: object) -> dict:
+    """Normaliza {payment|shipping|security: {title, text?, badges: [str]}}."""
+    src = raw if isinstance(raw, dict) else {}
+    out: dict = {}
+    for col in _SEAL_COLUMNS:
+        block = src.get(col) if isinstance(src.get(col), dict) else {}
+        badges = block.get("badges")
+        badges = [str(b).strip() for b in badges if str(b).strip()][:20] if isinstance(badges, list) else []
+        out[col] = {
+            "title": str(block.get("title") or "").strip()[:60],
+            "text": str(block.get("text") or "").strip()[:240],
+            "badges": badges,
+        }
+    return out
 
 
 async def set_theme_image(db: AsyncSession, kind: str, raw: bytes, filename: str) -> ThemeSettings:

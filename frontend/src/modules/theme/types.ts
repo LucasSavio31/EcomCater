@@ -25,8 +25,41 @@ export interface ThemeSettings {
   whatsapp_number?: string | null;
   top_bar_message?: string | null;
   top_bar_enabled: boolean;
+  /** Banner principal (hero) da home. */
+  hero_enabled: boolean;
+  hero_mode: 'carousel' | 'static';
+  hero_autoplay_seconds: number;
+  /** Selos do rodapé. */
+  footer_seals_enabled: boolean;
+  footer_seals_json: FooterSeals;
   updated_at?: string | null;
 }
+
+export interface FooterSealColumn {
+  title: string;
+  text: string;
+  badges: string[];
+}
+
+export interface FooterSeals {
+  payment: FooterSealColumn;
+  shipping: FooterSealColumn;
+  security: FooterSealColumn;
+}
+
+const DEFAULT_SEALS: FooterSeals = {
+  payment: {
+    title: 'Formas de Pagamento',
+    text: '',
+    badges: ['Pix', 'Boleto', 'Visa', 'Mastercard', 'Amex', 'Elo', 'Hipercard'],
+  },
+  shipping: { title: 'Formas de Entrega', text: '', badges: ['Correios'] },
+  security: {
+    title: 'Loja Segura',
+    text: 'Site 100% seguro, com criptografia e certificado SSL.',
+    badges: ['SSL'],
+  },
+};
 
 /** Paleta neutra — usada quando a API está fora do ar (build, incidente). */
 export const NEUTRAL_THEME: ThemeSettings = {
@@ -47,4 +80,9 @@ export const NEUTRAL_THEME: ThemeSettings = {
   logo_url: null,
   top_bar_enabled: false,
   top_bar_message: null,
+  hero_enabled: true,
+  hero_mode: 'carousel',
+  hero_autoplay_seconds: 5,
+  footer_seals_enabled: true,
+  footer_seals_json: DEFAULT_SEALS,
 };

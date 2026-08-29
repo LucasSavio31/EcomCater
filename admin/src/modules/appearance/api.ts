@@ -27,9 +27,27 @@ export interface Theme {
   whatsapp_number: string | null;
   top_bar_message: string | null;
   top_bar_enabled: boolean;
+  /** Banner principal (hero) */
+  hero_enabled: boolean;
+  hero_mode: 'carousel' | 'static';
+  hero_autoplay_seconds: number;
+  /** Selos do rodapé */
+  footer_seals_enabled: boolean;
+  footer_seals_json: FooterSeals;
   logo_url?: string | null;
   logo_mobile_url?: string | null;
   favicon_url?: string | null;
+}
+
+export interface FooterSealColumn {
+  title: string;
+  text: string;
+  badges: string[];
+}
+export interface FooterSeals {
+  payment: FooterSealColumn;
+  shipping: FooterSealColumn;
+  security: FooterSealColumn;
 }
 
 export type ThemeImageKind = 'logo' | 'logo_mobile' | 'favicon';

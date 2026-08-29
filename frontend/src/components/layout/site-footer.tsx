@@ -5,7 +5,7 @@ import type { Menu } from '@/modules/menus/types';
 import { resolveMediaUrl } from '@/lib/media';
 import { WhatsappIcon } from '@/components/icons';
 import { NewsletterForm } from './newsletter-form';
-import { PaymentFlags } from './payment-flags';
+import { FooterSealsBar } from './footer-seals';
 import { SocialIcons, type SocialLink } from './social-icons';
 
 interface SiteFooterProps {
@@ -94,15 +94,12 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
           ))}
         </div>
 
-        {/* Pagamento */}
-        <div className="mt-8 flex flex-col gap-3 border-t border-footer-fg/15 pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-footer-fg/70">
-              Formas de pagamento
-            </p>
-            <PaymentFlags />
+        {/* Selos: pagamento / entrega / loja segura */}
+        {theme.footer_seals_enabled && (
+          <div className="mt-8">
+            <FooterSealsBar seals={theme.footer_seals_json} />
           </div>
-        </div>
+        )}
 
         {/* Legal */}
         <div className="mt-6 border-t border-footer-fg/15 pt-6 text-xs text-footer-fg/70">

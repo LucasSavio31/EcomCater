@@ -3,7 +3,18 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, SmallInteger, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+    false,
+    true,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.models_base import Base, UUIDPKMixin
@@ -44,6 +55,16 @@ class ThemeSettings(Base):
     whatsapp_number: Mapped[str | None] = mapped_column(String(32))
     top_bar_message: Mapped[str | None] = mapped_column(String(240))
     top_bar_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Banner principal (hero) da home
+    hero_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    hero_mode: Mapped[str] = mapped_column(String(12), default="carousel", server_default="carousel", nullable=False)  # carousel | static
+    hero_autoplay_seconds: Mapped[int] = mapped_column(Integer, default=5, server_default="5", nullable=False)
+
+    # Selos do rodapé (Formas de Pagamento / Entrega / Loja Segura)
+    footer_seals_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    footer_seals_json: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}", nullable=False)
+
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
