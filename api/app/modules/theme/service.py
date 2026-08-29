@@ -23,9 +23,12 @@ _THEME_FIELDS = {
     "top_bar_message", "top_bar_enabled",
     "hero_enabled", "hero_mode", "hero_autoplay_seconds",
     "footer_seals_enabled", "footer_seals_json",
+    "cart_redirect_after_add",
 }
 
-_BOOL_FIELDS = {"top_bar_enabled", "hero_enabled", "footer_seals_enabled"}
+_BOOL_FIELDS = {
+    "top_bar_enabled", "hero_enabled", "footer_seals_enabled", "cart_redirect_after_add",
+}
 
 
 _DEFAULT_SEALS = {
@@ -48,10 +51,18 @@ def _seals_out(row: ThemeSettings) -> dict:
     result: dict = {}
     for col, default in _DEFAULT_SEALS.items():
         block = stored.get(col) if isinstance(stored.get(col), dict) else {}
+        images = block.get("images") if isinstance(block.get("images"), list) else []
+        images = [str(k) for k in images if k][:3]
+        # com imagens enviadas os badges de texto default são descartados
+        has_images = len(images) > 0
         result[col] = {
             "title": block.get("title") or default["title"],
             "text": block.get("text") if block.get("text") is not None else default["text"],
-            "badges": block["badges"] if isinstance(block.get("badges"), list) else default["badges"],
+            "badges": block["badges"]
+            if isinstance(block.get("badges"), list)
+            else ([] if has_images else default["badges"]),
+            "images": images,
+            "image_urls": [storage.url(k) for k in images],
         }
     return result
 
@@ -109,19 +120,59 @@ _SEAL_COLUMNS = ("payment", "shipping", "security")
 
 
 def _clean_seals(raw: object) -> dict:
-    """Normaliza {payment|shipping|security: {title, text?, badges: [str]}}."""
+    """Normaliza {payment|shipping|security: {title, text?, badges:[str], images:[key]}}."""
     src = raw if isinstance(raw, dict) else {}
     out: dict = {}
     for col in _SEAL_COLUMNS:
         block = src.get(col) if isinstance(src.get(col), dict) else {}
         badges = block.get("badges")
         badges = [str(b).strip() for b in badges if str(b).strip()][:20] if isinstance(badges, list) else []
+        images = block.get("images")
+        images = [str(k).strip() for k in images if str(k).strip()][:3] if isinstance(images, list) else []
         out[col] = {
             "title": str(block.get("title") or "").strip()[:60],
             "text": str(block.get("text") or "").strip()[:240],
             "badges": badges,
+            "images": images,
         }
     return out
+
+
+async def set_seal_image(
+    db: AsyncSession, column: str, index: int, raw: bytes, filename: str
+) -> ThemeSettings:
+    if column not in _SEAL_COLUMNS:
+        raise ValidationError("Coluna de selo inválida.")
+    if index not in (0, 1, 2):
+        raise ValidationError("Posição de selo inválida (0 a 2).")
+    row = await get_theme(db)
+    seals = _clean_seals(row.footer_seals_json)
+    processed = process_image(raw, filename, prefix="theme/seals")
+    images = list(seals[column]["images"])
+    if index < len(images):
+        images[index] = processed.medium_key
+    else:
+        images.append(processed.medium_key)
+    seals[column]["images"] = images[:3]
+    row.footer_seals_json = seals  # reatribui p/ o SQLAlchemy detectar a mudança
+    row.updated_at = datetime.now(UTC)
+    await db.flush()
+    return row
+
+
+async def remove_seal_image(db: AsyncSession, column: str, index: int) -> ThemeSettings:
+    if column not in _SEAL_COLUMNS:
+        raise ValidationError("Coluna de selo inválida.")
+    row = await get_theme(db)
+    seals = _clean_seals(row.footer_seals_json)
+    images = list(seals[column]["images"])
+    if 0 <= index < len(images):
+        images.pop(index)
+    seals[column]["images"] = images
+    row.footer_seals_json = seals
+    row.updated_at = datetime.now(UTC)
+    await db.flush()
+    return row
 
 
 async def set_theme_image(db: AsyncSession, kind: str, raw: bytes, filename: str) -> ThemeSettings:

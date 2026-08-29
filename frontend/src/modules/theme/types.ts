@@ -32,6 +32,8 @@ export interface ThemeSettings {
   /** Selos do rodapé. */
   footer_seals_enabled: boolean;
   footer_seals_json: FooterSeals;
+  /** Após adicionar ao carrinho: true = vai para /carrinho, false = fica na PDP. */
+  cart_redirect_after_add: boolean;
   updated_at?: string | null;
 }
 
@@ -39,6 +41,10 @@ export interface FooterSealColumn {
   title: string;
   text: string;
   badges: string[];
+  /** chaves das imagens enviadas no admin */
+  images: string[];
+  /** URLs prontas das imagens enviadas */
+  image_urls: string[];
 }
 
 export interface FooterSeals {
@@ -47,18 +53,18 @@ export interface FooterSeals {
   security: FooterSealColumn;
 }
 
+const emptyCol = (title: string, badges: string[], text = ''): FooterSealColumn => ({
+  title,
+  text,
+  badges,
+  images: [],
+  image_urls: [],
+});
+
 const DEFAULT_SEALS: FooterSeals = {
-  payment: {
-    title: 'Formas de Pagamento',
-    text: '',
-    badges: ['Pix', 'Boleto', 'Visa', 'Mastercard', 'Amex', 'Elo', 'Hipercard'],
-  },
-  shipping: { title: 'Formas de Entrega', text: '', badges: ['Correios'] },
-  security: {
-    title: 'Loja Segura',
-    text: 'Site 100% seguro, com criptografia e certificado SSL.',
-    badges: ['SSL'],
-  },
+  payment: emptyCol('Formas de Pagamento', ['Pix', 'Boleto', 'Visa', 'Mastercard', 'Amex', 'Elo', 'Hipercard']),
+  shipping: emptyCol('Formas de Entrega', ['Correios']),
+  security: emptyCol('Loja Segura', ['SSL'], 'Site 100% seguro, com criptografia e certificado SSL.'),
 };
 
 /** Paleta neutra — usada quando a API está fora do ar (build, incidente). */
@@ -85,4 +91,5 @@ export const NEUTRAL_THEME: ThemeSettings = {
   hero_autoplay_seconds: 5,
   footer_seals_enabled: true,
   footer_seals_json: DEFAULT_SEALS,
+  cart_redirect_after_add: false,
 };

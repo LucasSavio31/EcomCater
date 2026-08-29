@@ -34,6 +34,8 @@ export interface Theme {
   /** Selos do rodapé */
   footer_seals_enabled: boolean;
   footer_seals_json: FooterSeals;
+  /** Após adicionar ao carrinho: ir para /carrinho (true) ou ficar na PDP (false) */
+  cart_redirect_after_add: boolean;
   logo_url?: string | null;
   logo_mobile_url?: string | null;
   favicon_url?: string | null;
@@ -43,7 +45,11 @@ export interface FooterSealColumn {
   title: string;
   text: string;
   badges: string[];
+  images: string[];
+  image_urls: string[];
 }
+
+export type SealColumn = 'payment' | 'shipping' | 'security';
 export interface FooterSeals {
   payment: FooterSealColumn;
   shipping: FooterSealColumn;
@@ -152,6 +158,13 @@ export const appearanceApi = {
     form.append('file', file);
     return uploadMultipart<Theme>(`/api/admin/theme/image/${kind}`, form);
   },
+  uploadSealImage: (column: SealColumn, index: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return uploadMultipart<Theme>(`/api/admin/theme/seal-image/${column}/${index}`, form);
+  },
+  removeSealImage: (column: SealColumn, index: number) =>
+    adminFetch<Theme>(`/api/admin/theme/seal-image/${column}/${index}`, { method: 'DELETE' }),
 
   getSettings: () => adminFetch<StoreSettings>('/api/admin/settings'),
   putSettings: (body: Partial<StoreSettings>) =>

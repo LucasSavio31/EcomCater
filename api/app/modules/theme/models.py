@@ -65,6 +65,11 @@ class ThemeSettings(Base):
     footer_seals_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     footer_seals_json: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}", nullable=False)
 
+    # Comportamento: ir para /carrinho após adicionar (senão fica na PDP)
+    cart_redirect_after_add: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

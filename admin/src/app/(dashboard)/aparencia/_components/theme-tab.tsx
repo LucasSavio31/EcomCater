@@ -49,21 +49,6 @@ export function ThemeTab() {
     setDraft({ ...theme, [k]: v });
   };
 
-  const setSeal = (
-    col: 'payment' | 'shipping' | 'security',
-    field: 'title' | 'text' | 'badges',
-    value: string | string[],
-  ): void => {
-    if (!theme) return;
-    setDraft({
-      ...theme,
-      footer_seals_json: {
-        ...theme.footer_seals_json,
-        [col]: { ...theme.footer_seals_json[col], [field]: value },
-      },
-    });
-  };
-
   function ColorRow({ f }: { f: ColorField }) {
     if (!theme) return null;
     const raw = String(theme[f.key] ?? '#000000');
@@ -213,6 +198,16 @@ export function ThemeTab() {
             </Card>
 
             <Card variant="outline" className="flex flex-col gap-4">
+              <h2 className="text-lg font-semibold">Comportamento da loja</h2>
+              <Checkbox
+                label="Ir para o carrinho logo após adicionar um produto"
+                hint="Desligado: o cliente permanece na página do produto (com a confirmação)."
+                checked={theme.cart_redirect_after_add}
+                onChange={(v) => set('cart_redirect_after_add', v)}
+              />
+            </Card>
+
+            <Card variant="outline" className="flex flex-col gap-4">
               <h2 className="text-lg font-semibold">Banner principal (Hero)</h2>
               <Checkbox
                 label="Exibir o banner principal na home"
@@ -253,52 +248,6 @@ export function ThemeTab() {
                 As imagens do banner são cadastradas na aba <strong>Banners</strong> (slot “hero”).
                 No modo estático a loja mostra só a primeira.
               </p>
-            </Card>
-
-            <Card variant="outline" className="flex flex-col gap-4">
-              <h2 className="text-lg font-semibold">Selos do rodapé</h2>
-              <Checkbox
-                label="Exibir os selos no rodapé"
-                checked={theme.footer_seals_enabled}
-                onChange={(v) => set('footer_seals_enabled', v)}
-              />
-              {(['payment', 'shipping', 'security'] as const).map((col) => (
-                <div key={col} className="flex flex-col gap-2 rounded-card border border-surface-border p-3">
-                  <Input
-                    label={
-                      col === 'payment'
-                        ? 'Coluna 1 — título'
-                        : col === 'shipping'
-                          ? 'Coluna 2 — título'
-                          : 'Coluna 3 — título'
-                    }
-                    value={theme.footer_seals_json[col].title}
-                    onChange={(e) => setSeal(col, 'title', e.target.value)}
-                  />
-                  <label className="flex flex-col gap-1 text-sm font-medium">
-                    Selos (um por linha — nome da bandeira ou URL de imagem)
-                    <textarea
-                      rows={4}
-                      className="rounded-card border border-surface-border bg-surface p-2 text-sm"
-                      value={theme.footer_seals_json[col].badges.join('\n')}
-                      onChange={(e) =>
-                        setSeal(
-                          col,
-                          'badges',
-                          e.target.value.split('\n').map((s) => s.trim()).filter(Boolean),
-                        )
-                      }
-                    />
-                  </label>
-                  {col === 'security' && (
-                    <Input
-                      label="Texto de segurança"
-                      value={theme.footer_seals_json.security.text}
-                      onChange={(e) => setSeal('security', 'text', e.target.value)}
-                    />
-                  )}
-                </div>
-              ))}
             </Card>
 
             <Card variant="outline" className="flex flex-col gap-4">

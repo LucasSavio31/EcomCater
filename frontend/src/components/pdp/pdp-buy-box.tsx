@@ -12,9 +12,11 @@ import { track, type TrackItem } from '@/modules/analytics';
 
 interface PdpBuyBoxProps {
   product: ProductDetail;
+  /** Após adicionar ao carrinho, ir direto para /carrinho. */
+  redirectAfterAdd?: boolean;
 }
 
-export function PdpBuyBox({ product }: PdpBuyBoxProps) {
+export function PdpBuyBox({ product, redirectAfterAdd = false }: PdpBuyBoxProps) {
   const router = useRouter();
   const { addItem } = useCart();
   const { has: isWished, toggle: toggleWish } = useWishlist();
@@ -83,6 +85,10 @@ export function PdpBuyBox({ product }: PdpBuyBoxProps) {
       value: (priceCents / 100) * qty,
       items: [{ ...baseTrackItem(), price: priceCents / 100, quantity: qty }],
     });
+    if (redirectAfterAdd) {
+      router.push('/carrinho');
+      return;
+    }
     setAdded(true);
     window.setTimeout(() => setAdded(false), 2500);
   };

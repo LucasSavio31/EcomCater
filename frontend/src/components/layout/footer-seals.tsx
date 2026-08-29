@@ -1,16 +1,17 @@
+import { resolveMediaUrl } from '@/lib/media';
 import type { FooterSeals } from '@/modules/theme';
 
 /**
  * Selos do rodapé: Formas de Pagamento / Formas de Entrega / Loja Segura.
- * Cada "badge" é um nome conhecido (vira um chip estilizado) ou uma URL de
- * imagem (vira um `<img>`). Editável no admin (Aparência › Selos do rodapé).
+ * Se a coluna tem imagens enviadas no admin (menu "Selos do rodapé"), mostra
+ * elas; senão cai nos badges de texto/URL.
  */
 export function FooterSealsBar({ seals }: { seals: FooterSeals }) {
   const columns = [
     { key: 'payment', ...seals.payment },
     { key: 'shipping', ...seals.shipping },
     { key: 'security', ...seals.security },
-  ].filter((c) => c.badges.length > 0 || c.text);
+  ].filter((c) => c.image_urls.length > 0 || c.badges.length > 0 || c.text);
 
   if (columns.length === 0) return null;
 
@@ -21,15 +22,32 @@ export function FooterSealsBar({ seals }: { seals: FooterSeals }) {
           <p className="text-xs font-semibold uppercase tracking-wide text-footer-fg/80">
             {col.title}
           </p>
-          {col.badges.length > 0 && (
-            <ul className="flex flex-wrap items-center gap-1.5">
-              {col.badges.map((badge) => (
-                <li key={badge}>
-                  <Badge value={badge} />
-                </li>
-              ))}
+
+          {col.image_urls.length > 0 ? (
+            <ul className="flex flex-wrap items-center gap-2">
+              {col.image_urls.map((url, i) => {
+                const src = resolveMediaUrl(url);
+                if (!src) return null;
+                return (
+                  <li key={i}>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- selo enviado no admin */}
+                    <img src={src} alt="" loading="lazy" className="h-8 w-auto rounded bg-white object-contain px-1" />
+                  </li>
+                );
+              })}
             </ul>
+          ) : (
+            col.badges.length > 0 && (
+              <ul className="flex flex-wrap items-center gap-1.5">
+                {col.badges.map((badge) => (
+                  <li key={badge}>
+                    <Badge value={badge} />
+                  </li>
+                ))}
+              </ul>
+            )
           )}
+
           {col.text && <p className="text-xs text-footer-fg/70">{col.text}</p>}
         </div>
       ))}

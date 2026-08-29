@@ -37,6 +37,25 @@ async def upload_theme_image(
     return service.theme_out(row)
 
 
+@router.post("/seal-image/{column}/{index}")
+async def upload_seal_image(
+    column: str,
+    index: int,
+    db: DbDep,
+    _: EditorDep,
+    file: Annotated[UploadFile, File()],
+) -> dict:
+    raw = await file.read()
+    row = await service.set_seal_image(db, column, index, raw, file.filename or "selo.png")
+    return service.theme_out(row)
+
+
+@router.delete("/seal-image/{column}/{index}")
+async def delete_seal_image(column: str, index: int, db: DbDep, _: EditorDep) -> dict:
+    row = await service.remove_seal_image(db, column, index)
+    return service.theme_out(row)
+
+
 @router.get("/pages")
 async def list_pages(db: DbDep, _: AdminDep) -> list[dict]:
     return [service.page_out(p) for p in await service.list_pages(db)]

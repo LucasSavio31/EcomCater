@@ -36,6 +36,8 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/pedidos', label: 'Pedidos', icon: '🧾' },
       { href: '/clientes', label: 'Clientes', icon: '👥' },
       { href: '/promocoes', label: 'Promoções', icon: '🏷️' },
+      { href: '/pagamento', label: 'Pagamento', icon: '💳' },
+      { href: '/frete', label: 'Frete', icon: '🚚' },
     ],
   },
   {
@@ -46,6 +48,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Loja',
     items: [
       { href: '/aparencia', label: 'Aparência', icon: '🎨' },
+      { href: '/selos-rodape', label: 'Selos do rodapé', icon: '🛡️' },
       { href: '/menus', label: 'Menus', icon: '📑' },
     ],
   },
