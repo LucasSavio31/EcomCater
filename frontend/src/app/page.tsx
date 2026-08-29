@@ -1,59 +1,87 @@
 import type { Metadata } from 'next';
-import { Card } from '@ecom/ui';
-import { getTheme } from '@/modules/theme';
+import { getBanners } from '@/modules/banners/api';
+import { getFeaturedProducts, getCategoryTree, getProducts } from '@/modules/catalog/api';
+import { BannerGrid } from '@/components/layout/banner-grid';
+import { ProductGrid } from '@/components/catalog/product-grid';
+import { SizeShortcuts, type SizeShortcut } from '@/components/catalog/size-shortcuts';
+import { NewsletterForm } from '@/components/layout/newsletter-form';
 import { buildMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = buildMetadata({
-  description: 'Loja no ar — fundação da Fase 1.',
-  path: '/',
-});
+export function generateMetadata(): Metadata {
+  return buildMetadata({
+    description: 'Novidades, ofertas e os produtos mais buscados da loja.',
+    path: '/',
+  });
+}
+
+async function homeSizeShortcuts(): Promise<SizeShortcut[]> {
+  const tree = await getCategoryTree();
+  const root = tree.find((c) => c.product_count > 0) ?? tree[0];
+  if (!root) return [];
+  const page = await getProducts({ category: root.path, page_size: 1 });
+  return page.facets.sizes
+    .filter((s) => s.count > 0)
+    .slice(0, 12)
+    .map((s) => ({ label: s.value, url: `/categoria/${root.path}?size=${encodeURIComponent(s.value)}` }));
+}
 
 export default async function HomePage() {
-  const theme = await getTheme();
+  const [hero, showcase, featured, shortcuts] = await Promise.all([
+    getBanners('hero'),
+    getBanners('showcase'),
+    getFeaturedProducts(12),
+    homeSizeShortcuts(),
+  ]);
 
-  const swatches: Array<{ label: string; value: string; varName: string }> = [
-    { label: 'Primária', value: theme.primary_color, varName: '--color-primary' },
-    { label: 'Secundária', value: theme.secondary_color, varName: '--color-secondary' },
-    { label: 'Destaque', value: theme.accent_color, varName: '--color-accent' },
-    { label: 'Texto', value: theme.text_color, varName: '--color-text' },
-    { label: 'Fundo', value: theme.bg_color, varName: '--color-bg' },
-  ];
+  const nothing = hero.length === 0 && showcase.length === 0 && featured.length === 0;
 
   return (
-    <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-2">
-        <span className="inline-flex w-fit items-center rounded-card bg-accent px-3 py-1 text-sm font-medium text-accent-fg">
-          Loja no ar
-        </span>
-        <h1 className="text-2xl font-bold sm:text-3xl">Fundação — Fase 1</h1>
-        <p className="max-w-prose text-text-muted">
-          Este é um placeholder. O tema abaixo vem de <code>GET /api/theme</code> e é
-          injetado como CSS variables no SSR (sem rebuild). A vitrine real entra na Fase 3.
-        </p>
-      </section>
+    <div className="flex flex-col gap-10">
+      {hero.length > 0 && (
+        <section aria-label="Destaques">
+          <BannerGrid banners={hero.slice(0, 4)} variant="hero" priority />
+        </section>
+      )}
 
-      <section aria-labelledby="tema-titulo" className="flex flex-col gap-3">
-        <h2 id="tema-titulo" className="text-lg font-semibold">
-          Tema aplicado (prova do SSR)
+      <SizeShortcuts shortcuts={shortcuts} heading="Compre por numeração" />
+
+      {featured.length > 0 && (
+        <section aria-labelledby="vitrine-title" className="flex flex-col gap-4">
+          <h2 id="vitrine-title" className="text-lg font-semibold sm:text-xl">
+            Mais buscados
+          </h2>
+          <ProductGrid products={featured} priorityCount={4} />
+        </section>
+      )}
+
+      {showcase.length > 0 && (
+        <section aria-label="Coleções">
+          <BannerGrid banners={showcase.slice(0, 4)} variant="showcase" />
+        </section>
+      )}
+
+      {nothing && (
+        <section className="rounded-card border border-dashed border-surface-border p-10 text-center">
+          <h1 className="text-xl font-semibold">Loja no ar</h1>
+          <p className="mt-1 text-sm text-text-muted">
+            O catálogo aparece aqui assim que houver produtos e banners cadastrados.
+          </p>
+        </section>
+      )}
+
+      <section
+        aria-labelledby="newsletter-home-title"
+        className="rounded-card border border-surface-border bg-bg-subtle p-6"
+      >
+        <h2 id="newsletter-home-title" className="text-lg font-semibold">
+          Fique por dentro
         </h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {swatches.map((s) => (
-            <Card key={s.varName} variant="outline" className="flex flex-col gap-2">
-              <span
-                className="h-16 w-full rounded-card border border-surface-border"
-                style={{ backgroundColor: `var(${s.varName})` }}
-                aria-hidden="true"
-              />
-              <span className="text-sm font-medium">{s.label}</span>
-              <code className="text-xs text-text-muted">{s.value}</code>
-            </Card>
-          ))}
-        </div>
-        <p className="text-sm text-text-muted">
-          Fonte: <span style={{ fontFamily: 'var(--font-family)' }}>{theme.font_family}</span>
+        <p className="mb-3 text-sm text-text-muted">
+          Cadastre seu e-mail e receba novidades e ofertas em primeira mão.
         </p>
+        <NewsletterForm />
       </section>
     </div>
   );
