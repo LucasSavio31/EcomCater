@@ -7,10 +7,16 @@ import type { FooterSeals } from '@/modules/theme';
  * elas; senão cai nos badges de texto/URL.
  */
 export function FooterSealsBar({ seals }: { seals: FooterSeals }) {
+  const norm = (c: Partial<FooterSeals['payment']> | undefined) => ({
+    title: c?.title ?? '',
+    text: c?.text ?? '',
+    badges: c?.badges ?? [],
+    image_urls: c?.image_urls ?? [],
+  });
   const columns = [
-    { key: 'payment', ...seals.payment },
-    { key: 'shipping', ...seals.shipping },
-    { key: 'security', ...seals.security },
+    { key: 'payment', ...norm(seals?.payment) },
+    { key: 'shipping', ...norm(seals?.shipping) },
+    { key: 'security', ...norm(seals?.security) },
   ].filter((c) => c.image_urls.length > 0 || c.badges.length > 0 || c.text);
 
   if (columns.length === 0) return null;
