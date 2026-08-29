@@ -162,6 +162,8 @@ function MenuEditor({
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<MenuItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropHint, setDropHint] = useState<{ id: string; mode: 'before' | 'child' } | null>(null);
 
   const flat = useMemo(() => (data ? buildFlat(data) : []), [data]);
   const open = editing !== null || creating !== null;
@@ -202,6 +204,66 @@ function MenuEditor({
     const result = await menusApi.reorderItems(
       ordered.map((n, position) => ({ id: n.id, position, parent_id: n.parent_id })),
     );
+    if (!result.ok) {
+      toast.error(result.error.message);
+      return;
+    }
+    refresh();
+  }
+
+  /** Reordena/aninha por arrastar-e-soltar. `mode` 'child' aninha em `targetId`;
+   * 'before' insere como irmão logo antes de `targetId`. */
+  async function dndReorder(sourceId: string, targetId: string, mode: 'before' | 'child'): Promise<void> {
+    if (!data || sourceId === targetId) return;
+    const byId = new Map(data.map((i) => [i.id, i]));
+    // impede soltar dentro da própria subárvore
+    const isDescendant = (candidate: string): boolean => {
+      let cur = byId.get(candidate)?.parent_id ?? null;
+      while (cur) {
+        if (cur === sourceId) return true;
+        cur = byId.get(cur)?.parent_id ?? null;
+      }
+      return false;
+    };
+    if (targetId === sourceId || isDescendant(targetId)) return;
+
+    const target = byId.get(targetId);
+    if (!target) return;
+    const newParent = mode === 'child' ? targetId : target.parent_id;
+
+    // reconstrói a lista de filhos de cada pai, movendo o item
+    const children = new Map<string | null, MenuItem[]>();
+    for (const it of data) {
+      const key = it.id === sourceId ? '__moved__' : it.parent_id;
+      if (key === '__moved__') continue;
+      const arr = children.get(key) ?? [];
+      arr.push(it);
+      children.set(key, arr);
+    }
+    for (const arr of children.values()) arr.sort((a, b) => a.position - b.position);
+
+    const moved = byId.get(sourceId)!;
+    const destArr = children.get(newParent) ?? [];
+    if (mode === 'child') {
+      destArr.push(moved);
+    } else {
+      const idx = destArr.findIndex((c) => c.id === targetId);
+      destArr.splice(idx < 0 ? destArr.length : idx, 0, moved);
+    }
+    children.set(newParent, destArr);
+
+    // emite a lista completa com posições recalculadas e parent atualizado
+    const payload: Array<{ id: string; position: number; parent_id: string | null }> = [];
+    for (const [parent, arr] of children.entries()) {
+      arr.forEach((it, position) => {
+        payload.push({
+          id: it.id,
+          position,
+          parent_id: it.id === sourceId ? newParent : parent,
+        });
+      });
+    }
+    const result = await menusApi.reorderItems(payload);
     if (!result.ok) {
       toast.error(result.error.message);
       return;
@@ -269,6 +331,11 @@ function MenuEditor({
             Adicionar item
           </Button>
         </div>
+        <p className="text-xs text-text-muted">
+          Arraste um item para reordenar. Solte <strong>sobre</strong> outro item para transformá-lo em
+          subitem; solte na <strong>metade de cima</strong> para inseri-lo antes. As setas ↑ ↓ fazem o
+          mesmo pelo teclado.
+        </p>
 
         <AsyncBoundary
           loading={loading}
@@ -278,54 +345,88 @@ function MenuEditor({
           emptyMessage="Nenhum item no menu."
         >
           <ul className="flex flex-col gap-1">
-            {flat.map((row) => (
-              <li
-                key={row.item.id}
-                className="flex items-center gap-1 rounded-card px-2 py-1.5 text-sm hover:bg-bg-subtle"
-                style={{ paddingLeft: `${row.depth * 1.25 + 0.5}rem` }}
-              >
-                <button type="button" className="flex-1 truncate text-left" onClick={() => setEditing(row.item)}>
-                  {row.item.label}
-                  <span className="ml-2 text-xs text-text-muted">{row.item.link_type}</span>
-                  {row.item.is_megamenu && <Badge tone="accent" className="ml-1">mega</Badge>}
-                  {row.item.highlight && <Badge tone="warning" className="ml-1">destaque</Badge>}
-                </button>
-                <button
-                  type="button"
-                  aria-label="Mover para cima"
-                  disabled={row.index === 0}
-                  className="min-h-touch w-6 text-text-muted disabled:opacity-30"
-                  onClick={() => void reorder(row, -1)}
+            {flat.map((row) => {
+              const hint = dropHint?.id === row.item.id ? dropHint.mode : null;
+              return (
+                <li
+                  key={row.item.id}
+                  draggable
+                  onDragStart={(e) => {
+                    setDragId(row.item.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragEnd={() => {
+                    setDragId(null);
+                    setDropHint(null);
+                  }}
+                  onDragOver={(e) => {
+                    if (!dragId || dragId === row.item.id) return;
+                    e.preventDefault();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const mode = e.clientY - rect.top < rect.height / 2 ? 'before' : 'child';
+                    setDropHint({ id: row.item.id, mode });
+                  }}
+                  onDragLeave={() => setDropHint((h) => (h?.id === row.item.id ? null : h))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragId && dropHint?.id === row.item.id) {
+                      void dndReorder(dragId, row.item.id, dropHint.mode);
+                    }
+                    setDragId(null);
+                    setDropHint(null);
+                  }}
+                  className={[
+                    'flex items-center gap-1 rounded-card px-2 py-1.5 text-sm hover:bg-bg-subtle',
+                    dragId === row.item.id ? 'opacity-40' : '',
+                    hint === 'before' ? 'border-t-2 border-accent' : '',
+                    hint === 'child' ? 'ring-2 ring-accent ring-inset bg-bg-subtle' : '',
+                  ].join(' ')}
+                  style={{ marginLeft: `${row.depth * 1.25}rem` }}
                 >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  aria-label="Mover para baixo"
-                  disabled={row.index === row.siblings.length - 1}
-                  className="min-h-touch w-6 text-text-muted disabled:opacity-30"
-                  onClick={() => void reorder(row, 1)}
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  aria-label="Adicionar subitem"
-                  className="min-h-touch w-6 text-text-muted"
-                  onClick={() => setCreating({ parentId: row.item.id })}
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  aria-label="Remover"
-                  className="min-h-touch w-6 text-text-muted hover:text-danger"
-                  onClick={() => setDeleteTarget(row.item)}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
+                  <span aria-hidden className="cursor-grab select-none px-1 text-text-muted">⠿</span>
+                  <button type="button" className="flex-1 truncate text-left" onClick={() => setEditing(row.item)}>
+                    {row.item.label}
+                    <span className="ml-2 text-xs text-text-muted">{row.item.link_type}</span>
+                    {row.item.is_megamenu && <Badge tone="accent" className="ml-1">mega</Badge>}
+                    {row.item.highlight && <Badge tone="warning" className="ml-1">destaque</Badge>}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Mover para cima"
+                    disabled={row.index === 0}
+                    className="min-h-touch w-6 text-text-muted disabled:opacity-30"
+                    onClick={() => void reorder(row, -1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Mover para baixo"
+                    disabled={row.index === row.siblings.length - 1}
+                    className="min-h-touch w-6 text-text-muted disabled:opacity-30"
+                    onClick={() => void reorder(row, 1)}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Adicionar subitem"
+                    className="min-h-touch w-6 text-text-muted"
+                    onClick={() => setCreating({ parentId: row.item.id })}
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Remover"
+                    className="min-h-touch w-6 text-text-muted hover:text-danger"
+                    onClick={() => setDeleteTarget(row.item)}
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </AsyncBoundary>
       </Card>

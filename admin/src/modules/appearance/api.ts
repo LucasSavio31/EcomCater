@@ -11,6 +11,17 @@ export interface Theme {
   accent_color: string;
   text_color: string;
   bg_color: string;
+  /** Botões (estilo Customizer do WordPress / WooCommerce) */
+  button_bg_color: string;
+  button_text_color: string;
+  button_hover_color: string;
+  /** Menu superior (header) */
+  header_bg_color: string;
+  header_text_color: string;
+  header_max_width_px: number;
+  /** Menu inferior (rodapé) */
+  footer_bg_color: string;
+  footer_text_color: string;
   font_family: string;
   free_shipping_threshold_cents: number | null;
   whatsapp_number: string | null;
