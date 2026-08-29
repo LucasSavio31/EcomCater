@@ -3,10 +3,17 @@
 Legenda: ✅ feito · 🟡 parcial · ⬜ pendente · ⚠️ precisa de ambiente (Docker/Postgres) para validar
 
 > **Importante:** todo o desenvolvimento foi feito em máquina sem Docker/Postgres.
-> A verificação estática (compilação, import da app, configuração de mappers,
-> geração do OpenAPI, build do frontend/admin) está ✅. A verificação **funcional
+> A verificação estática está ✅: `tsc --noEmit` + `next lint` + `next build`
+> limpos nos 3 workspaces (`frontend`, `admin`, `@ecom/ui`); no backend,
+> `compileall` + import da app + `configure_mappers()` + geração do OpenAPI
+> (98 rotas, 37 tabelas) + `pytest --collect-only`. A verificação **funcional
 > com banco** (migrations aplicando, `make test`, e2e, fluxo real de compra)
 > depende de você rodar `make up && make migrate && make seed && make test`.
+>
+> Frente de trabalho concluída nesta rodada: editor de aparência estilo
+> Customizer (cores de botão/header/footer + largura do header + DnD no menu) e
+> todo o frontend de carrinho/checkout/conta (Fases 4-6), antes distribuídos a
+> um agente que não chegou a produzir — foram feitos direto no `main`.
 
 ## Infra / fundação
 - ✅ Monorepo (npm workspaces), Docker Compose dev + prod (esqueleto), sem proxy no Docker
@@ -24,13 +31,20 @@ Legenda: ✅ feito · 🟡 parcial · ⬜ pendente · ⚠️ precisa de ambiente
 - ✅ Listagem por categoria (com descendentes) + filtros (preço/tamanho/estoque) + ordenação + facetas
 - ✅ Busca fuzzy `pg_trgm` (produtos + categorias) com payload de typeahead
 - ✅ Seed de catálogo (`make seed-catalog`): árvore + 24 produtos com variações e imagens geradas
-- 🟡 Admin UI de produtos/categorias — agente em execução
+- ✅ Admin UI de produtos/categorias (CRUDs completos, build verde)
 
 ## Vitrine (Fase 3)
 - ✅ Endpoints públicos: `/api/theme`, `/api/menus/{location}`, `/api/banners`, `/api/theme/pages/{slug}`, catálogo, busca
-- 🟡 Home, categoria/PLP, produto/PDP, busca instantânea, header (mega menu) / footer, SEO/JSON-LD, sitemap — agente em execução
+- ✅ Home, categoria/PLP, produto/PDP, busca instantânea, header (mega menu) / footer, SEO/JSON-LD, sitemap
 - ✅ Tema SSR sem FOUC (CSS vars injetadas no `<head>`), fallback quando API fora
 - ✅ PWA: manifest `standalone` + service worker de assets + ícones
+
+## Editor de aparência estilo Customizer (WooCommerce/WordPress)
+- ✅ Admin/Aparência: cores de botão (fundo/texto/hover), fundo+texto do menu superior, fundo+texto do rodapé, largura do menu superior em px (slider + campo)
+- ✅ Pré-visualização ao vivo (top bar + header com largura aplicada + botão com hover real + rodapé)
+- ✅ Menu com arrastar-e-soltar (soltar sobre = subitem; metade de cima = irmão antes; trava subárvore; setas ↑↓ mantidas p/ teclado)
+- ✅ Backend: 8 colunas novas em `theme_settings` + migration `0002` + validação de hex e clamp de largura (640–2560)
+- ✅ Loja consome as variáveis: `--color-btn-*`, `--color-header-*`, `--color-footer-*`, `--header-max-width` (fallback = paleta neutra); header/footer/`Button` aplicam
 
 ## Carrinho e frete (Fases 4-5)
 - ✅ Carrinho persistente convidado (cookie httpOnly + espelho Redis) / logado; snapshot de preço; validação de estoque; merge no login; `price_changed`
@@ -38,7 +52,8 @@ Legenda: ✅ feito · 🟡 parcial · ⬜ pendente · ⚠️ precisa de ambiente
 - ✅ Frete Melhor Envio: cotação (`/api/v2/me/shipment/calculate`, Bearer token) com cache Redis + auditoria; módulo toggsteável; config no admin
 - ✅ Webhook Melhor Envio → pedido POSTADO / EM TRÂNSITO / ENTREGUE
 - ✅ Totais: itens − desconto + frete + threshold de frete grátis, consistentes
-- 🟡 UI de carrinho, drawer, barra de frete grátis, campo de CEP/cupom — Fase 4 do frontend (depende da vitrine)
+- ✅ UI de carrinho (`/carrinho`): itens com stepper/remover, campo de cupom, CEP + opções de frete (Melhor Envio), resumo de valores, avisos de estoque/preço; badge do header e barra de frete grátis lendo o carrinho real
+- ✅ PDP adiciona a variante real ao carrinho (`POST /api/cart/items`) com link "ir para o carrinho"
 
 ## Checkout e pagamento (Fases 6-7)
 - ✅ Número de pedido `AAAA-000123` sob advisory lock; snapshot imutável de itens/endereço/frete/cupom
@@ -49,7 +64,8 @@ Legenda: ✅ feito · 🟡 parcial · ⬜ pendente · ⚠️ precisa de ambiente
 - ✅ Gateway `fake` para dev/testes sem credenciais
 - ✅ Reembolso no admin
 - ✅ E-mail transacional (SMTP config no banco, templates Jinja, `email_log`): pedido criado, pago, falhou, enviado, entregue
-- 🟡 UI do smart checkout single-page + página de obrigado + step de pagamento (PIX/cartão/boleto) — Fase 6-7 do frontend
+- ✅ UI do smart checkout single-page (`/checkout`): contato, endereço com autofill de CEP (ViaCEP), frete (Melhor Envio), pagamento PIX/cartão/boleto filtrado por `/api/payment/methods`, parcelas; cria pedido + charge
+- ✅ Página de obrigado (`/checkout/obrigado`): status do pedido/pagamento, PIX copia-e-cola / boleto, resumo e endereço, polling do pagamento (~2 min) com atualização automática
 
 ## Minha conta / conteúdo / admin (Fase 8)
 - ✅ Endereços do cliente (CRUD + padrão), perfil, troca de senha
@@ -57,7 +73,8 @@ Legenda: ✅ feito · 🟡 parcial · ⬜ pendente · ⚠️ precisa de ambiente
 - ✅ Menus (mega menu + atalhos de tamanho), banners, tema/aparência, páginas institucionais, newsletter — backend
 - ✅ Dashboard admin (pedidos hoje/pendentes, faturamento do mês, estoque baixo, recentes)
 - ✅ SMTP config + teste de envio; gestão de módulos; usuários admin com papéis
-- 🟡 Minha conta (páginas), todas as telas de CRUD do admin — agente em execução
+- ✅ Minha conta (`/minha-conta`): login/cadastro em aba única (funde carrinho de convidado ao entrar), painel com dados editáveis, `/minha-conta/pedidos` (status pagamento/envio + timeline), `/minha-conta/enderecos` (CRUD + autofill CEP); `authFetch` com refresh single-flight no 401
+- ✅ Telas de CRUD do admin (produtos, categorias, pedidos, promoções, menus, aparência, módulos, SMTP, usuários) — build verde
 
 ## Não funcionais (Fase 8) — pendentes de máquina com ambiente
 - ⚠️ Lighthouse mobile ≥ 90 (Performance/SEO/Acessibilidade) em home/PLP/PDP/carrinho/checkout
@@ -66,7 +83,7 @@ Legenda: ✅ feito · 🟡 parcial · ⬜ pendente · ⚠️ precisa de ambiente
 - ⚠️ E2E Playwright dos fluxos críticos (compra convidado PIX, logado cartão, boleto, falha+retry, reembolso, merge de carrinho, ciclo admin→loja, primeiro login, toggle de módulo, tema sem rebuild)
 - ✅ Rate limiting (login, registro, cupom, review, quote, charge, newsletter)
 - ✅ Secrets só via env; `.env.example` completo (Appmax, Melhor Envio, SMTP, JWT, storage, DB, Redis)
-- 🟡 Sanitização de HTML em `description` / `pages.body` (a fazer no hardening)
+- ✅ Sanitização de HTML (`nh3`) em `description` de produto / `pages.body`
 - 🟡 Cifragem em repouso dos segredos de provider em `modules.config_json` (TODO marcado; entra na Fase 9)
 - ✅ `docker-compose.prod.yml` permanece esqueleto; nada de VPS no caminho de dev
 
