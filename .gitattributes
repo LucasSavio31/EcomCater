@@ -1,0 +1,12 @@
+# Normaliza line endings — os containers rodam Linux; CRLF quebra scripts/Docker.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
