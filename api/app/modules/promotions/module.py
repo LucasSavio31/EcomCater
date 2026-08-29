@@ -1,21 +1,7 @@
-"""Registro do módulo `promotions` (toggleable; cupons; Fase 4)."""
-from fastapi import APIRouter
-
+"""Registro do módulo `promotions` (toggleable). Rotas públicas de cupom vivem
+em `cart` (`POST /api/cart/coupon`); aqui só o CRUD administrativo."""
 from app.core.module_registry import ModuleSpec, register
-
-public_router = APIRouter()
-admin_router = APIRouter()
-
-
-@public_router.get("/_ping")
-async def _ping() -> dict:
-    return {"module": "promotions", "scope": "public", "ok": True}
-
-
-@admin_router.get("/_ping")
-async def _ping_admin() -> dict:
-    return {"module": "promotions", "scope": "admin", "ok": True}
-
+from app.modules.promotions.router_admin import router as admin_router
 
 spec = register(
     ModuleSpec(
@@ -24,7 +10,6 @@ spec = register(
         kind="feature",
         toggleable=True,
         default_enabled=True,
-        public_router=public_router,
         admin_router=admin_router,
         tags=["promotions"],
     )

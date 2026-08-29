@@ -1,21 +1,7 @@
-"""Registro do módulo `orders` (rotas reais nas Fases 5-7)."""
-from fastapi import APIRouter
-
+"""Registro do módulo `orders`."""
 from app.core.module_registry import ModuleSpec, register
-
-public_router = APIRouter()
-admin_router = APIRouter()
-
-
-@public_router.get("/_ping")
-async def _ping() -> dict:
-    return {"module": "orders", "scope": "public", "ok": True}
-
-
-@admin_router.get("/_ping")
-async def _ping_admin() -> dict:
-    return {"module": "orders", "scope": "admin", "ok": True}
-
+from app.modules.orders.router_admin import router as admin_router
+from app.modules.orders.router_public import router as public_router
 
 spec = register(
     ModuleSpec(

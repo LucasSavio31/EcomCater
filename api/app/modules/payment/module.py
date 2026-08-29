@@ -1,22 +1,9 @@
-"""Registro do módulo `payment` (toggleable; provider real = Appmax; Fase 5)."""
-from fastapi import APIRouter
-
+"""Registro do módulo `payment` (toggleable; provider real = Appmax)."""
 from app.core.module_registry import ModuleSpec, register
-
-public_router = APIRouter()
-admin_router = APIRouter()
-webhook_router = APIRouter()
-
-
-@public_router.get("/_ping")
-async def _ping() -> dict:
-    return {"module": "payment", "scope": "public", "ok": True}
-
-
-@admin_router.get("/_ping")
-async def _ping_admin() -> dict:
-    return {"module": "payment", "scope": "admin", "ok": True}
-
+from app.modules.payment.config import PaymentConfig
+from app.modules.payment.router_admin import router as admin_router
+from app.modules.payment.router_public import router as public_router
+from app.modules.payment.webhooks import router as webhook_router
 
 spec = register(
     ModuleSpec(
@@ -25,11 +12,7 @@ spec = register(
         kind="feature",
         toggleable=True,
         default_enabled=True,
-        default_config={
-            "active_provider": "appmax",
-            "providers": {"appmax": {"enabled": True}},
-            "methods": {"credit_card": True, "pix": True, "boleto": True},
-        },
+        default_config=PaymentConfig().model_dump(),
         public_router=public_router,
         admin_router=admin_router,
         webhook_router=webhook_router,

@@ -1,0 +1,36 @@
+"""Rotas públicas do módulo `payment`."""
+from __future__ import annotations
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.core.ratelimit import rate_limit
+from app.modules.payment import service
+from app.modules.payment.schemas import ChargeIn, ChargeOut, PaymentStatusOut
+
+router = APIRouter()
+
+DbDep = Annotated[AsyncSession, Depends(get_db)]
+
+
+@router.post("/charge", response_model=ChargeOut)
+async def charge(
+    body: ChargeIn,
+    db: DbDep,
+    _rl: Annotated[None, Depends(rate_limit("20/minute", scope="pay-charge"))],
+):
+    payment = await service.create_charge(
+        db,
+        order_number=body.order_number,
+        method=body.method,
+        card=body.card.model_dump() if body.card else None,
+    )
+    return service.charge_out(payment, body.order_number)
+
+
+@router.get("/status/{order_number}", response_model=PaymentStatusOut)
+async def status(order_number: str, db: DbDep):
+    return await service.get_status(db, order_number)
