@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { UnderConstruction } from '@/components/under-construction';
+import { CheckoutView } from '@/components/checkout/checkout-view';
 import { buildMetadata } from '@/lib/seo';
 
 export const metadata: Metadata = buildMetadata({
@@ -9,5 +9,10 @@ export const metadata: Metadata = buildMetadata({
 });
 
 export default function CheckoutPage() {
-  return <UnderConstruction title="Checkout" phase="Fase 6" />;
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-xl font-semibold sm:text-2xl">Finalizar compra</h1>
+      <CheckoutView />
+    </div>
+  );
 }
