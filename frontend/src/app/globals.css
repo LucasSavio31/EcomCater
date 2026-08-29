@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Fallback dos tokens (paleta neutra). Fonte canônica:
+ * `packages/ui/src/tokens/base.css`. Inlinado aqui para o CSS da loja ser
+ * autossuficiente; o tema real do banco sobrescreve estas vars via <style>
+ * SSR no <head> (sem FOUC, sem rebuild).
+ */
+:root {
+  --color-primary: #111111;
+  --color-primary-fg: #ffffff;
+  --color-secondary: #4b5563;
+  --color-secondary-fg: #ffffff;
+  --color-accent: #dc2626;
+  --color-accent-fg: #ffffff;
+
+  --color-bg: #ffffff;
+  --color-bg-subtle: #f5f5f5;
+  --color-surface: #ffffff;
+  --color-border: #e5e7eb;
+
+  --color-text: #111827;
+  --color-text-muted: #6b7280;
+
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+
+  --font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --radius-card: 0.75rem;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Alvo de skip link: só visível ao receber foco. */
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  z-index: 100;
+}
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+}
