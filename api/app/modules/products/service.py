@@ -428,6 +428,10 @@ async def search(db: AsyncSession, q: str, limit: int = 8) -> list[dict]:
 
 # --------------------------------------------------------------------- CRUD admin
 async def create(db: AsyncSession, data: dict) -> Product:
+    from app.shared.sanitize import sanitize_html
+
+    if data.get("description"):
+        data["description"] = sanitize_html(data["description"])
     slug = await _unique_slug(db, data["name"])
     extra = data.pop("extra_category_ids", []) or []
     product = Product(slug=slug, **{k: v for k, v in data.items() if k != "extra_category_ids"})
@@ -452,6 +456,10 @@ async def get_admin(db: AsyncSession, product_id: str) -> Product:
 async def update(db: AsyncSession, product_id: str, data: dict) -> Product:
     from datetime import UTC, datetime
 
+    from app.shared.sanitize import sanitize_html
+
+    if data.get("description"):
+        data["description"] = sanitize_html(data["description"])
     product = await get_admin(db, product_id)
     if "name" in data and data["name"] and data["name"] != product.name:
         product.name = data["name"]

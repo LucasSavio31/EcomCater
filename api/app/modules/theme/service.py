@@ -83,13 +83,15 @@ async def list_pages(db: AsyncSession) -> list[Page]:
 
 
 async def create_page(db: AsyncSession, data: dict) -> Page:
+    from app.shared.sanitize import sanitize_html
+
     slug = data.get("slug") or make_slug(data["title"])
     if await db.scalar(select(Page).where(Page.slug == slug)):
         raise ConflictError("Já existe uma página com esse slug.")
     p = Page(
         slug=slug,
         title=data["title"],
-        body=data.get("body", ""),
+        body=sanitize_html(data.get("body", "")),
         is_published=data.get("is_published", True),
         seo_title=data.get("seo_title"),
         seo_description=data.get("seo_description"),
@@ -101,9 +103,13 @@ async def create_page(db: AsyncSession, data: dict) -> Page:
 
 
 async def update_page(db: AsyncSession, page_id: str, data: dict) -> Page:
+    from app.shared.sanitize import sanitize_html
+
     p = await db.get(Page, uuid.UUID(page_id))
     if not p:
         raise NotFoundError("Página não encontrada.")
+    if data.get("body") is not None:
+        data["body"] = sanitize_html(data["body"])
     for k in ("title", "body", "is_published", "seo_title", "seo_description", "slug"):
         if k in data and data[k] is not None:
             setattr(p, k, data[k])
