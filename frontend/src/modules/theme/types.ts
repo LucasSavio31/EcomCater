@@ -5,6 +5,17 @@ export interface ThemeSettings {
   accent_color: string;
   text_color: string;
   bg_color: string;
+  /** Botões (estilo Customizer do WooCommerce). */
+  button_bg_color: string;
+  button_text_color: string;
+  button_hover_color: string;
+  /** Menu superior (header). */
+  header_bg_color: string;
+  header_text_color: string;
+  header_max_width_px: number;
+  /** Rodapé (footer). */
+  footer_bg_color: string;
+  footer_text_color: string;
   font_family: string;
   logo_key?: string | null;
   logo_mobile_key?: string | null;
@@ -24,6 +35,14 @@ export const NEUTRAL_THEME: ThemeSettings = {
   accent_color: '#DC2626',
   text_color: '#111827',
   bg_color: '#FFFFFF',
+  button_bg_color: '#111111',
+  button_text_color: '#FFFFFF',
+  button_hover_color: '#DC2626',
+  header_bg_color: '#FFFFFF',
+  header_text_color: '#111827',
+  header_max_width_px: 1280,
+  footer_bg_color: '#111827',
+  footer_text_color: '#E5E7EB',
   font_family: 'Inter, system-ui, sans-serif',
   logo_url: null,
   top_bar_enabled: false,

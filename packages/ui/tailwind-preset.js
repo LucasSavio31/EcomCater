@@ -34,6 +34,19 @@ module.exports = {
           DEFAULT: 'var(--color-accent)',
           fg: 'var(--color-accent-fg)',
         },
+        btn: {
+          DEFAULT: 'var(--color-btn-bg)',
+          fg: 'var(--color-btn-fg)',
+          hover: 'var(--color-btn-hover)',
+        },
+        header: {
+          DEFAULT: 'var(--color-header-bg)',
+          fg: 'var(--color-header-fg)',
+        },
+        footer: {
+          DEFAULT: 'var(--color-footer-bg)',
+          fg: 'var(--color-footer-fg)',
+        },
         bg: {
           DEFAULT: 'var(--color-bg)',
           subtle: 'var(--color-bg-subtle)',
@@ -56,6 +69,10 @@ module.exports = {
       borderRadius: {
         // Cards e superfícies são sempre arredondados — nunca `rounded-none`.
         card: 'var(--radius-card)',
+      },
+      maxWidth: {
+        // Largura do menu superior / conteúdo, controlada no admin.
+        header: 'var(--header-max-width)',
       },
       minHeight: {
         touch: '44px',

@@ -9,6 +9,14 @@ export function themeToCssVars(theme: ThemeSettings): Record<string, string> {
     '--color-text': theme.text_color,
     '--color-bg': theme.bg_color,
     '--color-surface': theme.bg_color,
+    '--color-btn-bg': theme.button_bg_color,
+    '--color-btn-fg': theme.button_text_color,
+    '--color-btn-hover': theme.button_hover_color,
+    '--color-header-bg': theme.header_bg_color,
+    '--color-header-fg': theme.header_text_color,
+    '--color-footer-bg': theme.footer_bg_color,
+    '--color-footer-fg': theme.footer_text_color,
+    '--header-max-width': `${theme.header_max_width_px}px`,
     '--font-family': theme.font_family,
   };
 }

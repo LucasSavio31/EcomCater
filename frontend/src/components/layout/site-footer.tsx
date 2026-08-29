@@ -37,10 +37,10 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
   const year = new Date().getFullYear();
 
   return (
-    <footer className="mt-16 border-t border-surface-border bg-bg-subtle">
-      <div className="mx-auto max-w-6xl px-4 py-10">
+    <footer className="mt-16 border-t border-surface-border bg-footer text-footer-fg">
+      <div className="mx-auto max-w-header px-4 py-10">
         {/* Newsletter */}
-        <div className="mb-8 rounded-card border border-surface-border bg-surface p-5">
+        <div className="mb-8 rounded-card border border-surface-border bg-surface p-5 text-text">
           <h2 className="text-base font-semibold">Receba novidades e ofertas</h2>
           <p className="mb-3 text-sm text-text-muted">
             Cadastre seu e-mail e fique por dentro dos lançamentos.
@@ -65,7 +65,7 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
                 href={`https://wa.me/${waDigits}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text"
+                className="inline-flex items-center gap-2 text-sm text-footer-fg/70 hover:text-footer-fg"
               >
                 <WhatsappIcon className="h-5 w-5" />
                 {theme.whatsapp_number}
@@ -77,13 +77,13 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
           {/* Colunas de links */}
           {columns.slice(0, 3).map((col) => (
             <nav key={col.id} aria-label={col.label}>
-              <h2 className="mb-2 text-sm font-semibold text-text">{col.label}</h2>
+              <h2 className="mb-2 text-sm font-semibold text-footer-fg">{col.label}</h2>
               <ul className="flex flex-col gap-1.5">
                 {(col.children.length > 0 ? col.children : [col]).map((link) => (
                   <li key={link.id}>
                     <Link
                       href={link.url}
-                      className="text-sm text-text-muted hover:text-text hover:underline"
+                      className="text-sm text-footer-fg/70 hover:text-footer-fg hover:underline"
                     >
                       {link.label}
                     </Link>
@@ -95,9 +95,9 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
         </div>
 
         {/* Pagamento */}
-        <div className="mt-8 flex flex-col gap-3 border-t border-surface-border pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-8 flex flex-col gap-3 border-t border-footer-fg/15 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-footer-fg/70">
               Formas de pagamento
             </p>
             <PaymentFlags />
@@ -105,10 +105,10 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
         </div>
 
         {/* Legal */}
-        <div className="mt-6 border-t border-surface-border pt-6 text-xs text-text-muted">
+        <div className="mt-6 border-t border-footer-fg/15 pt-6 text-xs text-footer-fg/70">
           <p>
             {storeName} — CNPJ 00.000.000/0001-00. Endereço comercial disponível na página{' '}
-            <Link href="/pagina/fale-conosco" className="underline hover:text-text">
+            <Link href="/pagina/fale-conosco" className="underline hover:text-footer-fg">
               Fale conosco
             </Link>
             .

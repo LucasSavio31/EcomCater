@@ -51,7 +51,7 @@ export default async function RootLayout({
         <CartProvider>
           <SiteHeader theme={theme} menu={headerMenu} storeName={SITE_NAME} />
 
-          <main id="conteudo" className="mx-auto w-full max-w-6xl px-4 py-6 sm:py-8">
+          <main id="conteudo" className="mx-auto w-full max-w-header px-4 py-6 sm:py-8">
             {children}
           </main>
 

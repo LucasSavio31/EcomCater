@@ -54,11 +54,11 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
   const wa = whatsappHref(theme.whatsapp_number);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-surface-border bg-surface">
+    <header className="sticky top-0 z-40 border-b border-surface-border bg-header text-header-fg">
       {/* Barra utilitária */}
       {theme.top_bar_enabled && (
         <div className="bg-primary text-primary-fg">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-1.5 text-xs">
+          <div className="mx-auto flex max-w-header items-center justify-between gap-3 px-4 py-1.5 text-xs">
             <p className="truncate">
               {theme.top_bar_message ??
                 (theme.free_shipping_threshold_cents
@@ -81,7 +81,7 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
       )}
 
       {/* Barra principal */}
-      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+      <div className="mx-auto flex max-w-header items-center gap-3 px-4 py-3">
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
@@ -123,14 +123,14 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
             onClick={() => setSearchOpen((v) => !v)}
             aria-label="Buscar"
             aria-expanded={searchOpen}
-            className="min-h-touch min-w-touch rounded-card p-2 hover:bg-bg-subtle"
+            className="min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10"
           >
             <SearchIcon />
           </button>
           <Link
             href="/minha-conta/favoritos"
             aria-label="Favoritos"
-            className="hidden min-h-touch min-w-touch rounded-card p-2 hover:bg-bg-subtle sm:inline-flex"
+            className="hidden min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10 sm:inline-flex"
           >
             <HeartIcon />
           </Link>
@@ -140,7 +140,7 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Atendimento por WhatsApp"
-              className="hidden min-h-touch min-w-touch rounded-card p-2 hover:bg-bg-subtle sm:inline-flex"
+              className="hidden min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10 sm:inline-flex"
             >
               <HeadsetIcon />
             </a>
@@ -148,14 +148,14 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
           <Link
             href="/minha-conta"
             aria-label="Minha conta"
-            className="min-h-touch min-w-touch rounded-card p-2 hover:bg-bg-subtle"
+            className="min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10"
           >
             <UserIcon />
           </Link>
           <Link
             href="/carrinho"
             aria-label={`Carrinho${count > 0 ? ` (${count} itens)` : ''}`}
-            className="relative min-h-touch min-w-touch rounded-card p-2 hover:bg-bg-subtle"
+            className="relative min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10"
           >
             <BagIcon />
             {count > 0 && (
@@ -173,7 +173,7 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
       {/* Progresso frete grátis */}
       {theme.free_shipping_threshold_cents ? (
         <div className="border-t border-surface-border bg-bg-subtle">
-          <div className="mx-auto max-w-6xl px-4 py-1.5">
+          <div className="mx-auto max-w-header px-4 py-1.5">
             <FreeShippingProgress
               thresholdCents={theme.free_shipping_threshold_cents}
               variant="text"
@@ -216,8 +216,8 @@ function DesktopNavItem({ item, open, onOpen, onClose }: DesktopNavItemProps) {
       <li>
         <Link
           href={item.url}
-          className={`inline-flex min-h-touch items-center rounded-card px-3 text-sm font-medium hover:bg-bg-subtle ${
-            item.highlight ? 'text-accent' : 'text-text'
+          className={`inline-flex min-h-touch items-center rounded-card px-3 text-sm font-medium hover:bg-header-fg/10 ${
+            item.highlight ? 'text-accent' : ''
           }`}
         >
           {item.label}
@@ -240,8 +240,8 @@ function DesktopNavItem({ item, open, onOpen, onClose }: DesktopNavItemProps) {
         href={item.url}
         aria-expanded={open}
         aria-haspopup="true"
-        className={`inline-flex min-h-touch items-center gap-1 rounded-card px-3 text-sm font-medium hover:bg-bg-subtle ${
-          item.highlight ? 'text-accent' : 'text-text'
+        className={`inline-flex min-h-touch items-center gap-1 rounded-card px-3 text-sm font-medium hover:bg-header-fg/10 ${
+          item.highlight ? 'text-accent' : ''
         }`}
       >
         {item.label}
@@ -249,8 +249,8 @@ function DesktopNavItem({ item, open, onOpen, onClose }: DesktopNavItemProps) {
       </Link>
 
       {open && (
-        <div className="absolute inset-x-0 top-full z-30 border-t border-surface-border bg-surface shadow-lg">
-          <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 md:grid-cols-[1fr_auto]">
+        <div className="absolute inset-x-0 top-full z-30 border-t border-surface-border bg-surface text-text shadow-lg">
+          <div className="mx-auto grid max-w-header gap-6 px-4 py-6 md:grid-cols-[1fr_auto]">
             <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
               {item.children.map((col) => (
                 <div key={col.id}>
