@@ -1,0 +1,23 @@
+{
+  "name": "ecom",
+  "version": "0.1.0",
+  "private": true,
+  "description": "E-commerce single-tenant (loja + admin + design system compartilhado).",
+  "workspaces": [
+    "frontend",
+    "admin",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build --workspace=frontend && npm run build --workspace=admin",
+    "build:frontend": "npm run build --workspace=frontend",
+    "build:admin": "npm run build --workspace=admin",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:admin": "npm run dev --workspace=admin",
+    "lint": "npm run lint --workspace=frontend && npm run lint --workspace=admin",
+    "typecheck": "npm run typecheck --workspace=packages/ui && npm run typecheck --workspace=frontend && npm run typecheck --workspace=admin"
+  }
+}
