@@ -52,6 +52,9 @@ downgrade:
 seed:
 	$(COMPOSE) run --rm api python -m app.seed.run
 
+seed-catalog:
+	$(COMPOSE) run --rm api python -m app.seed.run --catalog
+
 api-sh:
 	$(COMPOSE) exec api bash
 

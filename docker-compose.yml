@@ -54,7 +54,8 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: .
+      dockerfile: frontend/Dockerfile
       target: prod
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
@@ -65,7 +66,8 @@ services:
 
   admin:
     build:
-      context: ./admin
+      context: .
+      dockerfile: admin/Dockerfile
       target: prod
       args:
         NEXT_PUBLIC_ADMIN_API_URL: ${NEXT_PUBLIC_ADMIN_API_URL}

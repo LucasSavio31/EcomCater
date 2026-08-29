@@ -41,5 +41,4 @@ class CouponOut(CouponBase):
     id: str
     used_count: int
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}

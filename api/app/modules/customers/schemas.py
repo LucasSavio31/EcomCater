@@ -34,8 +34,7 @@ class CustomerOut(BaseModel):
     phone: str | None = None
     cpf: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class CustomerUpdateIn(BaseModel):
@@ -62,5 +61,4 @@ class AddressIn(BaseModel):
 class AddressOut(AddressIn):
     id: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}

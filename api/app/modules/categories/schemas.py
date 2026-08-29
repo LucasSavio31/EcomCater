@@ -41,8 +41,7 @@ class CategoryOut(BaseModel):
     seo_title: str | None
     seo_description: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class CategoryNode(BaseModel):
