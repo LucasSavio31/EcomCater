@@ -6,6 +6,7 @@ import { ServiceWorker } from '@/components/service-worker';
 import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
 import { CartProvider } from '@/modules/cart/cart-context';
+import { AuthProvider } from '@/modules/customer/auth-context';
 import { SITE_NAME, SITE_URL, jsonLdScript, organizationJsonLd, webSiteJsonLd } from '@/lib/seo';
 
 export const metadata: Metadata = {
@@ -48,15 +49,17 @@ export default async function RootLayout({
           Pular para o conteúdo
         </a>
 
-        <CartProvider>
-          <SiteHeader theme={theme} menu={headerMenu} storeName={SITE_NAME} />
+        <AuthProvider>
+          <CartProvider>
+            <SiteHeader theme={theme} menu={headerMenu} storeName={SITE_NAME} />
 
-          <main id="conteudo" className="mx-auto w-full max-w-header px-4 py-6 sm:py-8">
-            {children}
-          </main>
+            <main id="conteudo" className="mx-auto w-full max-w-header px-4 py-6 sm:py-8">
+              {children}
+            </main>
 
-          <SiteFooter theme={theme} menu={footerMenu} storeName={SITE_NAME} />
-        </CartProvider>
+            <SiteFooter theme={theme} menu={footerMenu} storeName={SITE_NAME} />
+          </CartProvider>
+        </AuthProvider>
 
         <ServiceWorker />
       </body>
