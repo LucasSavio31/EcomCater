@@ -1,26 +1,7 @@
-"""Registro do módulo `products`.
-
-As rotas reais entram na Fase 2. Por ora cada router expõe só `/_ping` para
-sanidade. Os agents de execução substituem por `router_public.py` /
-`router_admin.py` dedicados (mantendo `service.py` como fonte única da verdade).
-"""
-from fastapi import APIRouter
-
+"""Registro do módulo `products` (catálogo)."""
 from app.core.module_registry import ModuleSpec, register
-
-public_router = APIRouter()
-admin_router = APIRouter()
-
-
-@public_router.get("/_ping")
-async def _ping() -> dict:
-    return {"module": "products", "scope": "public", "ok": True}
-
-
-@admin_router.get("/_ping")
-async def _ping_admin() -> dict:
-    return {"module": "products", "scope": "admin", "ok": True}
-
+from app.modules.products.router_admin import router as admin_router
+from app.modules.products.router_public import router as public_router
 
 spec = register(
     ModuleSpec(

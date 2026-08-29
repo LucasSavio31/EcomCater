@@ -36,3 +36,6 @@ media/
 
 # Docker
 docker-compose.local.yml
+
+# agent worktrees
+.claude/worktrees/

@@ -61,3 +61,34 @@ async def client(db) -> AsyncGenerator[AsyncClient, None]:
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def admin_token(client, db) -> str:
+    from app.core.security import hash_password
+    from app.modules.admin.models import AdminUser
+
+    db.add(
+        AdminUser(
+            email="root@test.local",
+            name="Root",
+            password_hash=hash_password("supersecret1"),
+            role="super_admin",
+            must_change_password=False,
+        )
+    )
+    await db.commit()
+    r = await client.post(
+        "/api/admin/auth/login",
+        json={"email": "root@test.local", "password": "supersecret1"},
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["access_token"]
+
+
+@pytest.fixture
+def auth_headers():
+    def _make(token: str) -> dict:
+        return {"Authorization": f"Bearer {token}"}
+
+    return _make
