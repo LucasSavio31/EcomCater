@@ -1,0 +1,67 @@
+"""Pipeline de imagem: converte todo upload para WebP e gera 3 tamanhos.
+
+Retorna as keys (thumb/medium/zoom) + metadados da imagem original.
+"""
+from __future__ import annotations
+
+import io
+import uuid
+from dataclasses import dataclass
+
+from PIL import Image, ImageOps
+
+from app.core.config import settings
+from app.shared.storage import storage
+
+
+@dataclass
+class ProcessedImage:
+    thumb_key: str
+    medium_key: str
+    zoom_key: str
+    original_filename: str
+    original_width: int
+    original_height: int
+
+
+def _resize_webp(img: Image.Image, max_side: int, quality: int) -> bytes:
+    im = img.copy()
+    im.thumbnail((max_side, max_side), Image.LANCZOS)
+    if im.mode not in ("RGB", "RGBA"):
+        im = im.convert("RGB")
+    buf = io.BytesIO()
+    im.save(buf, format="WEBP", quality=quality, method=6)
+    return buf.getvalue()
+
+
+def process_image(
+    raw: bytes,
+    original_filename: str,
+    *,
+    prefix: str = "products",
+) -> ProcessedImage:
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw)))
+    width, height = img.size
+    q = settings.image_webp_quality
+    folder = f"{prefix}/{uuid.uuid4().hex}"
+
+    variants = {
+        "thumb": settings.image_thumb_size,
+        "medium": settings.image_medium_size,
+        "zoom": settings.image_zoom_size,
+    }
+    keys: dict[str, str] = {}
+    for name, size in variants.items():
+        data = _resize_webp(img, size, q)
+        key = f"{folder}/{name}.webp"
+        storage.save(key, data, "image/webp")
+        keys[name] = key
+
+    return ProcessedImage(
+        thumb_key=keys["thumb"],
+        medium_key=keys["medium"],
+        zoom_key=keys["zoom"],
+        original_filename=original_filename,
+        original_width=width,
+        original_height=height,
+    )

@@ -1,0 +1,48 @@
+# ============================================================
+#  Override de DEV — carregado automaticamente por `docker compose up`.
+#  Hot reload, portas publicadas em 0.0.0.0 (só máquina local), mailpit.
+# ============================================================
+services:
+  api:
+    build:
+      target: dev
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      API_ENV: dev
+    volumes:
+      - ./api:/app
+      - media:/data/media
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      target: dev
+    command: ["npm", "run", "dev"]
+    volumes:
+      - ./frontend:/app
+      - ./packages:/packages
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "3000:3000"
+
+  admin:
+    build:
+      target: dev
+    command: ["npm", "run", "dev"]
+    volumes:
+      - ./admin:/app
+      - ./packages:/packages
+      - admin_node_modules:/app/node_modules
+    ports:
+      - "3001:3001"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"   # UI web do mailpit
+    networks: [internal]
+
+volumes:
+  frontend_node_modules:
+  admin_node_modules:

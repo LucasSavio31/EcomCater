@@ -1,0 +1,33 @@
+# ============================================================
+#  Override de PROD — ESQUELETO. Só entra em uso na Fase 9.
+#  Portas expostas apenas em 127.0.0.1 (loopback); o LiteSpeed
+#  no host faz o reverse proxy via vhosts. Cloudflare na borda (TLS).
+#  Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# ============================================================
+services:
+  api:
+    build:
+      target: prod
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  frontend:
+    build:
+      target: prod
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  admin:
+    build:
+      target: prod
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+
+  db:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped

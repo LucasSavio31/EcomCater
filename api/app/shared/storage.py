@@ -1,0 +1,59 @@
+"""Abstração de storage de mídia. Em dev: disco local em volume Docker.
+
+Guarde sempre a *key* (caminho relativo) no banco; a URL pública é derivada.
+"""
+from __future__ import annotations
+
+import os
+from abc import ABC, abstractmethod
+from pathlib import Path
+
+from app.core.config import settings
+
+
+class Storage(ABC):
+    @abstractmethod
+    def save(self, key: str, data: bytes, content_type: str = "image/webp") -> str: ...
+
+    @abstractmethod
+    def delete(self, key: str) -> None: ...
+
+    @abstractmethod
+    def url(self, key: str) -> str: ...
+
+
+class LocalStorage(Storage):
+    def __init__(self, root: str, base_url: str) -> None:
+        self.root = Path(root)
+        self.base_url = base_url.rstrip("/")
+        self.root.mkdir(parents=True, exist_ok=True)
+
+    def _path(self, key: str) -> Path:
+        p = (self.root / key).resolve()
+        if not str(p).startswith(str(self.root.resolve())):
+            raise ValueError("key fora do diretório de mídia")
+        return p
+
+    def save(self, key: str, data: bytes, content_type: str = "image/webp") -> str:
+        path = self._path(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return key
+
+    def delete(self, key: str) -> None:
+        try:
+            os.remove(self._path(key))
+        except FileNotFoundError:
+            pass
+
+    def url(self, key: str) -> str:
+        return f"{self.base_url}/{key.lstrip('/')}"
+
+
+def get_storage() -> Storage:
+    if settings.storage_backend == "local":
+        return LocalStorage(settings.storage_local_dir, settings.media_base_url)
+    raise NotImplementedError(f"storage backend '{settings.storage_backend}' não implementado")
+
+
+storage = get_storage()
