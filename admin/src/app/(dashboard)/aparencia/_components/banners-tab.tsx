@@ -158,6 +158,14 @@ export function BannersTab() {
                     )}
                   </div>
                   <p className="text-sm font-medium">{b.title ?? '(sem título)'}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge tone={b.image_desktop_url ?? b.image_url ? 'success' : 'neutral'}>
+                      PC {b.image_desktop_url ?? b.image_url ? '✓' : '—'}
+                    </Badge>
+                    <Badge tone={b.image_mobile_url ? 'success' : 'neutral'}>
+                      Mobile {b.image_mobile_url ? '✓' : '—'}
+                    </Badge>
+                  </div>
                   <p className="text-xs text-text-muted">
                     {formatDate(b.starts_at)} → {formatDate(b.ends_at)} · pos {b.position}
                   </p>
@@ -212,8 +220,19 @@ export function BannersTab() {
           </div>
           <Checkbox label="Ativo" checked={form.is_active} onChange={(v) => set('is_active', v)} />
 
+          <div className="flex flex-col gap-3 border-t border-surface-border pt-4">
+            <span className="text-sm font-medium text-text">
+              Imagens do banner — PC e Mobile
+            </span>
+            {!editing && (
+              <p className="text-xs text-text-muted">
+                Salve os dados primeiro; em seguida aparecem os dois envios (PC e Mobile)
+                aqui mesmo, sem sair desta tela.
+              </p>
+            )}
+          </div>
           {editing ? (
-            <div className="grid gap-4 border-t border-surface-border pt-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <ImageUploader
                 label="Imagem — PC (desktop)"
                 aspect="wide"
@@ -261,9 +280,7 @@ export function BannersTab() {
                 }
               />
             </div>
-          ) : (
-            <p className="text-sm text-text-muted">Salve o banner para enviar as imagens.</p>
-          )}
+          ) : null}
         </div>
       </Modal>
 
