@@ -4,8 +4,7 @@ import { getCategoryByPath, getCategoryTree, getProducts } from '@/modules/catal
 import { getTheme } from '@/modules/theme';
 import type { CategoryNode, ProductSort } from '@/modules/catalog/types';
 import { Breadcrumbs, type Crumb } from '@/components/catalog/breadcrumbs';
-import { ProductGrid } from '@/components/catalog/product-grid';
-import { Pagination } from '@/components/catalog/pagination';
+import { InfiniteProductGrid } from '@/components/catalog/infinite-product-grid';
 import { PlpSort } from '@/components/catalog/plp-sort';
 import { PlpFilters, PlpFiltersDrawer } from '@/components/catalog/plp-filters';
 import { buildMetadata, breadcrumbJsonLd, jsonLdScript } from '@/lib/seo';
@@ -132,18 +131,6 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
   const crumbs = findCrumbs(tree, path);
   const title = category?.name ?? path.split('/').pop()?.replace(/-/g, ' ') ?? 'Categoria';
 
-  const baseParams = new URLSearchParams();
-  if (search.sort !== 'relevancia') baseParams.set('sort', search.sort);
-  for (const size of search.sizes) baseParams.append('size', size);
-  if (search.price_min) baseParams.set('price_min', String(search.price_min));
-  if (search.price_max) baseParams.set('price_max', String(search.price_max));
-  const hrefForPage = (p: number) => {
-    const qs = new URLSearchParams(baseParams.toString());
-    if (p > 1) qs.set('page', String(p));
-    const str = qs.toString();
-    return str ? `/categoria/${path}?${str}` : `/categoria/${path}`;
-  };
-
   return (
     <div className="flex flex-col gap-4">
       <TrackOnMount
@@ -192,12 +179,17 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
 
         <div className="flex flex-col gap-4">
           <PlpSort total={result.total} />
-          <ProductGrid
-            products={result.items}
-            priorityCount={4}
-            emptyMessage="Nenhum produto encontrado com os filtros selecionados."
+          <InfiniteProductGrid
+            initial={result}
+            query={{
+              category: path,
+              sort: search.sort,
+              sizes: search.sizes,
+              price_min: search.price_min,
+              price_max: search.price_max,
+              page_size: 24,
+            }}
           />
-          <Pagination page={result.page} pages={result.pages} hrefForPage={hrefForPage} />
         </div>
       </div>
     </div>

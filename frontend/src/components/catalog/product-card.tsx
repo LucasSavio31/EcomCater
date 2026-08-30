@@ -28,9 +28,9 @@ export function ProductCard({ product, priority = false, className }: ProductCar
 
   return (
     <article
-      className={`group relative flex flex-col overflow-hidden rounded-card border border-surface-border bg-surface transition hover:shadow-sm ${className ?? ''}`}
+      className={`group relative flex flex-col overflow-hidden rounded-card bg-surface transition ${className ?? ''}`}
     >
-      <Link href={href} className="relative block aspect-[3/4] overflow-hidden bg-bg-subtle">
+      <Link href={href} className="relative block aspect-square overflow-hidden rounded-card bg-white">
         {primary ? (
           <>
             <Image
@@ -39,7 +39,7 @@ export function ProductCard({ product, priority = false, className }: ProductCar
               fill
               sizes={CARD_SIZES}
               priority={priority}
-              className={`object-cover transition-opacity duration-300 ${hover ? 'group-hover:opacity-0' : ''}`}
+              className={`object-contain transition-opacity duration-300 ${hover ? 'group-hover:opacity-0' : ''}`}
             />
             {hover && (
               <Image
@@ -48,7 +48,7 @@ export function ProductCard({ product, priority = false, className }: ProductCar
                 aria-hidden="true"
                 fill
                 sizes={CARD_SIZES}
-                className="object-cover opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                className="object-contain opacity-0 transition-opacity duration-300 group-hover:opacity-100"
               />
             )}
           </>
@@ -70,11 +70,8 @@ export function ProductCard({ product, priority = false, className }: ProductCar
         )}
       </Link>
 
-      <div className="flex flex-1 flex-col gap-1.5 p-3">
-        {product.brand && (
-          <span className="text-[11px] uppercase tracking-wide text-text-muted">{product.brand}</span>
-        )}
-        <h3 className="line-clamp-2 text-sm text-text">
+      <div className="flex flex-1 flex-col gap-1 p-3 pl-0">
+        <h3 className="line-clamp-2 text-sm font-bold uppercase leading-snug text-text">
           <Link href={href} className="hover:underline focus-visible:outline-none focus-visible:underline">
             {product.name}
           </Link>
@@ -83,7 +80,7 @@ export function ProductCard({ product, priority = false, className }: ProductCar
           <Stars value={product.rating_avg} count={product.rating_count} />
         )}
         <PriceBlock
-          className="mt-auto pt-1"
+          className="mt-auto pt-0.5"
           priceCents={product.price_cents}
           compareAtCents={product.compare_at_price_cents}
           installmentsMax={product.installments_max}

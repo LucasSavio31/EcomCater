@@ -472,13 +472,19 @@ async def edit_order(db: AsyncSession, number: str, data: dict) -> Order:
 
     if data.get("email"):
         order.email = str(data["email"]).strip()
+    if "cpf" in data:
+        digits = "".join(ch for ch in str(data["cpf"] or "") if ch.isdigit())
+        order.cpf = digits[:11] or None
     if data.get("customer_note") is not None:
         order.customer_note = str(data["customer_note"]).strip() or None
     if isinstance(data.get("shipping_address"), dict):
         addr = dict(order.shipping_address_json or {})
         for k in _ADDR_KEYS:
             if k in data["shipping_address"] and data["shipping_address"][k] is not None:
-                addr[k] = str(data["shipping_address"][k]).strip()
+                val = str(data["shipping_address"][k]).strip()
+                if k == "zip":
+                    val = "".join(ch for ch in val if ch.isdigit())[:8]
+                addr[k] = val
         order.shipping_address_json = addr
     if isinstance(data.get("shipping_service"), dict):
         svc = dict(order.shipping_service_json or {})

@@ -1,7 +1,7 @@
 """Cria um cliente de teste + 2 pedidos (1 pago, 1 pendente) para inspeção.
 
 Uso:  python -m app.seed.test_order
-Login do cliente:  cliente.teste@example.com  /  senha = CPF 12345678909
+Login do cliente:  cliente.teste@example.com  /  senha = CPF 37183917835
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("seed.test_order")
 
 EMAIL = "cliente.teste@example.com"
-CPF = "12345678909"
+CPF = "37183917835"
 ADDR = {
     "recipient_name": "Cliente Teste",
     "zip": "01001000",

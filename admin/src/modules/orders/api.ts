@@ -16,6 +16,7 @@ export interface OrderListQuery {
 
 export interface OrderEditPayload {
   email?: string;
+  cpf?: string | null;
   customer_note?: string | null;
   shipping_address?: Partial<OrderAddress>;
   shipping_service?: { tracking_code?: string };

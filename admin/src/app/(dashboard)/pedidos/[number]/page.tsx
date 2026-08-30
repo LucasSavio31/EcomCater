@@ -35,6 +35,22 @@ function formatCpf(cpf: string | null): string {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
+/** Máscara progressiva 000.000.000-00 */
+function maskCpf(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  let out = d.slice(0, 3);
+  if (d.length > 3) out += `.${d.slice(3, 6)}`;
+  if (d.length > 6) out += `.${d.slice(6, 9)}`;
+  if (d.length > 9) out += `-${d.slice(9, 11)}`;
+  return out;
+}
+
+/** Máscara progressiva 00000-000 */
+function maskCep(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 8);
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+}
+
 function VarField({
   label,
   value,
@@ -77,6 +93,7 @@ function VarField({
 function buildDraft(d: OrderDetail): OrderEditPayload {
   return {
     email: d.email,
+    cpf: d.cpf ?? '',
     shipping_address: { ...(d.shipping_address ?? {}) },
     shipping_service: { tracking_code: '' },
     items: d.items
@@ -168,6 +185,7 @@ export default function PedidoDetalhePage() {
     setBusy(true);
     const payload: OrderEditPayload = {
       email: edit.email,
+      cpf: (edit.cpf ?? '').replace(/\D/g, '') || null,
       shipping_address: edit.shipping_address,
       items: edit.items?.filter((i) => i.id),
     };
@@ -323,20 +341,38 @@ export default function PedidoDetalhePage() {
                   )}
                 </div>
 
-                <Input
-                  label="E-mail do cliente"
-                  disabled={!editMode}
-                  value={edit.email ?? ''}
-                  onChange={(e) => setEdit((s) => ({ ...s, email: e.target.value }))}
-                />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Input
+                    label="E-mail do cliente"
+                    disabled={!editMode}
+                    value={edit.email ?? ''}
+                    onChange={(e) => setEdit((s) => ({ ...s, email: e.target.value }))}
+                  />
+                  <Input
+                    label="CPF"
+                    disabled={!editMode}
+                    inputMode="numeric"
+                    placeholder="000.000.000-00"
+                    value={maskCpf(edit.cpf ?? '')}
+                    onChange={(e) => setEdit((s) => ({ ...s, cpf: maskCpf(e.target.value) }))}
+                  />
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {ADDR_FIELDS.map((f) => (
                     <Input
                       key={f.key}
                       label={f.label}
                       disabled={!editMode}
-                      value={(edit.shipping_address?.[f.key] as string) ?? ''}
-                      onChange={(e) => setAddr(f.key, e.target.value)}
+                      inputMode={f.key === 'zip' ? 'numeric' : undefined}
+                      placeholder={f.key === 'zip' ? '00000-000' : undefined}
+                      value={
+                        f.key === 'zip'
+                          ? maskCep((edit.shipping_address?.zip as string) ?? '')
+                          : ((edit.shipping_address?.[f.key] as string) ?? '')
+                      }
+                      onChange={(e) =>
+                        setAddr(f.key, f.key === 'zip' ? maskCep(e.target.value) : e.target.value)
+                      }
                     />
                   ))}
                 </div>

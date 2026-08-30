@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/page-header';
 import { DataTable, type Column } from '@/components/data-table';
 import { Select } from '@/components/form-controls';
 import { StatusBadge } from '@/components/status-badge';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useResource } from '@/lib/use-resource';
 import { useToast } from '@/components/toast';
 import { formatBRL } from '@/lib/format';
@@ -24,12 +25,45 @@ export default function ProdutosPage() {
   const [status, setStatus] = useState<ProductStatus | ''>('');
   const [page, setPage] = useState(1);
   const [dupId, setDupId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const fetcher = useCallback(
     () => productsApi.list({ q, status, page, page_size: PAGE_SIZE }),
     [q, status, page],
   );
   const { data, loading, error, reload } = useResource(fetcher, [q, status, page]);
+
+  const rows = useMemo(() => data?.items ?? [], [data]);
+  const allChecked = rows.length > 0 && rows.every((p) => selected.has(p.id));
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const toggleAll = () =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (allChecked) rows.forEach((p) => n.delete(p.id));
+      else rows.forEach((p) => n.add(p.id));
+      return n;
+    });
+
+  const bulkDelete = useCallback(async () => {
+    setBulkBusy(true);
+    const ids = [...selected];
+    const results = await Promise.all(ids.map((id) => productsApi.remove(id)));
+    setBulkBusy(false);
+    setConfirmBulk(false);
+    const failed = results.filter((r) => !r.ok).length;
+    setSelected(new Set());
+    if (failed) toast.error(`${failed} produto(s) não puderam ser excluídos.`);
+    else toast.success('Produto(s) excluído(s).');
+    reload();
+  }, [selected, reload, toast]);
 
   const duplicate = useCallback(
     async (id: string) => {
@@ -50,6 +84,29 @@ export default function ProdutosPage() {
 
   const columns: Array<Column<ProductListItem>> = useMemo(
     () => [
+      {
+        key: 'select',
+        className: 'w-10',
+        header: (
+          <input
+            type="checkbox"
+            checked={allChecked}
+            onChange={toggleAll}
+            aria-label="Selecionar todos"
+          />
+        ),
+        cell: (p) => (
+          <span onClick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={selected.has(p.id)}
+              onChange={() => toggle(p.id)}
+              aria-label={`Selecionar ${p.name}`}
+            />
+          </span>
+        ),
+        mobileLabel: '',
+      },
       {
         key: 'name',
         header: 'Produto',
@@ -102,7 +159,8 @@ export default function ProdutosPage() {
         ),
       },
     ],
-    [dupId, duplicate],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dupId, duplicate, allChecked, selected],
   );
 
   return (
@@ -151,9 +209,30 @@ export default function ProdutosPage() {
         </form>
       </Card>
 
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-card border border-surface-border bg-surface p-3">
+          <span className="text-sm font-medium">{selected.size} selecionado(s)</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-danger"
+            onClick={() => setConfirmBulk(true)}
+          >
+            Excluir selecionados
+          </Button>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            className="text-sm text-text-muted underline"
+          >
+            Limpar seleção
+          </button>
+        </div>
+      )}
+
       <DataTable
         columns={columns}
-        rows={data?.items ?? []}
+        rows={rows}
         rowKey={(p) => p.id}
         loading={loading}
         error={error}
@@ -195,6 +274,17 @@ export default function ProdutosPage() {
           Recarregar
         </button>
       )}
+
+      <ConfirmDialog
+        open={confirmBulk}
+        title="Excluir produtos"
+        description={`Excluir ${selected.size} produto(s) selecionado(s)? Esta ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        tone="danger"
+        loading={bulkBusy}
+        onConfirm={() => void bulkDelete()}
+        onCancel={() => setConfirmBulk(false)}
+      />
     </div>
   );
 }
