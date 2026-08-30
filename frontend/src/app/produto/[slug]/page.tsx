@@ -165,6 +165,7 @@ export default async function ProdutoPage({ params }: PageProps) {
         product={product}
         redirectAfterAdd={theme.cart_redirect_after_add}
         miniCart={theme.mini_cart_enabled}
+        theme={theme}
       />
 
       {accordionItems.length > 0 && (

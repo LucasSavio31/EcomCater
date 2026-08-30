@@ -9,6 +9,7 @@ import { applyPixDiscount, formatBRL, installmentsText } from '@/lib/format';
 import { HeartIcon } from '@/components/icons';
 import { useWishlist } from '@/modules/wishlist/use-wishlist';
 import { track, type TrackItem } from '@/modules/analytics';
+import { LeadPopup, type LeadPopupConfig } from '@/components/lead-popup';
 
 interface PdpBuyBoxProps {
   product: ProductDetail;
@@ -16,13 +17,20 @@ interface PdpBuyBoxProps {
   redirectAfterAdd?: boolean;
   /** Abrir o mini-carrinho lateral ao adicionar (tem precedência). */
   miniCart?: boolean;
+  leadPopup?: LeadPopupConfig | null;
 }
 
-export function PdpBuyBox({ product, redirectAfterAdd = false, miniCart = false }: PdpBuyBoxProps) {
+export function PdpBuyBox({
+  product,
+  redirectAfterAdd = false,
+  miniCart = false,
+  leadPopup = null,
+}: PdpBuyBoxProps) {
   const router = useRouter();
   const { addItem, openMiniCart } = useCart();
   const { has: isWished, toggle: toggleWish } = useWishlist();
   const [selected, setSelected] = useState<Record<string, string>>({});
+  const [leadOpen, setLeadOpen] = useState(false);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -217,8 +225,15 @@ export function PdpBuyBox({ product, redirectAfterAdd = false, miniCart = false 
             onClick={() => void onBuy()}
             loading={busy}
             disabled={!canBuy}
-            className="flex-1 text-sm font-semibold uppercase tracking-wide"
+            className="flex-1 gap-2 text-sm font-semibold uppercase tracking-wide"
           >
+            {!busy && (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" />
+              </svg>
+            )}
             {added ? 'Adicionado ✓' : 'Comprar'}
           </Button>
           <button
@@ -245,12 +260,18 @@ export function PdpBuyBox({ product, redirectAfterAdd = false, miniCart = false 
         </div>
         <button
           type="button"
-          onClick={() => router.push('/minha-conta')}
+          onClick={() =>
+            leadPopup?.enabled ? setLeadOpen(true) : router.push('/minha-conta')
+          }
           className="w-fit text-xs font-medium text-primary underline"
         >
-          Cadastre-se e ganhe 10% OFF na primeira compra
+          Cadastre-se e ganhe promoções e cupons exclusivos
         </button>
       </div>
+
+      {leadPopup?.enabled && (
+        <LeadPopup open={leadOpen} onClose={() => setLeadOpen(false)} config={leadPopup} />
+      )}
 
       {error && (
         <p className="text-sm text-danger" role="alert">

@@ -69,6 +69,21 @@ async def _on_created(payload: dict) -> None:
                 "boleto_url": pay.boleto_url if pay else None,
             },
         )
+        # Comprador entra na lista de leads (para campanhas)
+        try:
+            from app.modules.newsletter.module import upsert_lead
+
+            addr = order.shipping_address_json or {}
+            await upsert_lead(
+                db,
+                email=order.email,
+                name=addr.get("recipient_name"),
+                phone=addr.get("phone"),
+                source="checkout",
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("falha ao registrar lead do comprador %s", order.email)
+
         # Lojista (ÚNICO e-mail que o admin recebe)
         try:
             admin_to = await mailer.admin_notify_email(db)

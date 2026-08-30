@@ -121,6 +121,17 @@ class ThemeSettings(Base):
     newsletter_button_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
     newsletter_button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
 
+    # Popup de captura de leads (link "Cadastre-se e ganhe X% OFF")
+    lead_popup_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
+    lead_capture_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    lead_popup_title: Mapped[str] = mapped_column(String(160), default="Cadastre-se para 10% OFF na primeira compra", server_default="Cadastre-se para 10% OFF na primeira compra", nullable=False)
+    lead_popup_subtitle: Mapped[str] = mapped_column(String(280), default="Receba promoções e conteúdos exclusivos.", server_default="Receba promoções e conteúdos exclusivos.", nullable=False)
+    lead_popup_coupon_code: Mapped[str | None] = mapped_column(String(60))
+    lead_popup_bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    lead_popup_text_color: Mapped[str] = mapped_column(String(9), default="#111827", server_default="#111827", nullable=False)
+    lead_popup_button_color: Mapped[str] = mapped_column(String(9), default="#F5B301", server_default="#F5B301", nullable=False)
+    lead_popup_button_text_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+
     # Selo de desconto (-XX%) calculado do preço "de" x preço promocional
     discount_badge_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=true(), nullable=False

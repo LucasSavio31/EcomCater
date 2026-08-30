@@ -23,7 +23,30 @@ DbDep = Annotated[AsyncSession, Depends(get_db)]
 class SubscribeIn(BaseModel):
     email: EmailStr
     name: str | None = None
+    phone: str | None = None
     source: str = "home_form"
+
+
+async def _maybe_send_coupon(db: AsyncSession, email: str, name: str | None) -> str | None:
+    """Se houver cupom de lead configurado no tema, envia por e-mail e devolve o código."""
+    from app.modules.theme.models import ThemeSettings
+
+    theme = await db.get(ThemeSettings, 1)
+    code = (getattr(theme, "lead_popup_coupon_code", None) or "").strip() if theme else ""
+    if not code:
+        return None
+    try:
+        from app.shared import mailer
+
+        await mailer.send(
+            db,
+            to=email,
+            template="lead_coupon",
+            context={"name": name or "", "coupon": code},
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    return code
 
 
 @public_router.post("/subscribe", status_code=201)
@@ -35,16 +58,51 @@ async def subscribe(
     existing = await db.scalar(
         select(NewsletterSubscriber).where(NewsletterSubscriber.email == body.email)
     )
+    send_coupon = body.source in ("popup", "lead_popup")
+    coupon = await _maybe_send_coupon(db, body.email, body.name) if send_coupon else None
+
     if existing:
         if existing.unsubscribed_at:
             existing.unsubscribed_at = None
-        return {"ok": True, "already": True}
+        if body.phone and not existing.phone:
+            existing.phone = body.phone
+        if coupon and not existing.coupon_code:
+            existing.coupon_code = coupon
+        return {"ok": True, "already": True, "coupon": coupon}
+
     db.add(
         NewsletterSubscriber(
-            email=body.email, name=body.name, source=body.source, created_at=datetime.now(UTC)
+            email=body.email,
+            name=body.name,
+            phone=body.phone,
+            source=body.source,
+            coupon_code=coupon,
+            created_at=datetime.now(UTC),
         )
     )
-    return {"ok": True}
+    return {"ok": True, "coupon": coupon}
+
+
+async def upsert_lead(
+    db: AsyncSession, *, email: str, name: str | None = None, phone: str | None = None, source: str
+) -> None:
+    """Usado por outros módulos (ex.: comprador vira lead no checkout)."""
+    if not email:
+        return
+    existing = await db.scalar(
+        select(NewsletterSubscriber).where(NewsletterSubscriber.email == email)
+    )
+    if existing:
+        if name and not existing.name:
+            existing.name = name
+        if phone and not existing.phone:
+            existing.phone = phone
+        return
+    db.add(
+        NewsletterSubscriber(
+            email=email, name=name, phone=phone, source=source, created_at=datetime.now(UTC)
+        )
+    )
 
 
 @public_router.get("/unsubscribe")
@@ -67,7 +125,9 @@ async def list_subscribers(
             "id": str(r.id),
             "email": r.email,
             "name": r.name,
+            "phone": r.phone,
             "source": r.source,
+            "coupon_code": r.coupon_code,
             "subscribed": r.unsubscribed_at is None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }

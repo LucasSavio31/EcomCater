@@ -78,6 +78,15 @@ export interface Theme {
   newsletter_button_color: string;
   newsletter_button_text_color: string;
   discount_badge_enabled: boolean;
+  lead_popup_enabled: boolean;
+  lead_capture_enabled: boolean;
+  lead_popup_title: string;
+  lead_popup_subtitle: string;
+  lead_popup_coupon_code: string | null;
+  lead_popup_bg_color: string;
+  lead_popup_text_color: string;
+  lead_popup_button_color: string;
+  lead_popup_button_text_color: string;
   /** Raio das bordas dos botões (px) */
   button_radius_px: number;
   /** Aviso de cookies de terceiros */

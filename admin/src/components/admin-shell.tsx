@@ -14,6 +14,7 @@ import {
   IconCustomers,
   IconDashboard,
   IconFilters,
+  IconLeads,
   IconMail,
   IconMenus,
   IconModules,
@@ -67,7 +68,8 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Marketing',
     items: [
       { href: '/rastreamento', label: 'Rastreamento e anúncios', icon: IconAnalytics },
-      { href: '/newsletter', label: 'Newsletter', icon: IconMail },
+      { href: '/newsletter', label: 'Newsletter e popup', icon: IconMail },
+      { href: '/leads', label: 'Leads', icon: IconLeads },
     ],
   },
   {

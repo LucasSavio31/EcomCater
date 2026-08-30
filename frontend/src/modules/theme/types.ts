@@ -77,6 +77,15 @@ export interface ThemeSettings {
   newsletter_button_color: string;
   newsletter_button_text_color: string;
   discount_badge_enabled: boolean;
+  lead_popup_enabled: boolean;
+  lead_capture_enabled: boolean;
+  lead_popup_title: string;
+  lead_popup_subtitle: string;
+  lead_popup_coupon_code: string | null;
+  lead_popup_bg_color: string;
+  lead_popup_text_color: string;
+  lead_popup_button_color: string;
+  lead_popup_button_text_color: string;
   button_radius_px: number;
   cookie_consent_enabled: boolean;
   cookie_consent_text: string;
@@ -182,6 +191,15 @@ export const NEUTRAL_THEME: ThemeSettings = {
   newsletter_button_color: '#111111',
   newsletter_button_text_color: '#FFFFFF',
   discount_badge_enabled: true,
+  lead_popup_enabled: false,
+  lead_capture_enabled: true,
+  lead_popup_title: 'Cadastre-se para 10% OFF na primeira compra',
+  lead_popup_subtitle: 'Receba promoções e conteúdos exclusivos.',
+  lead_popup_coupon_code: null,
+  lead_popup_bg_color: '#FFFFFF',
+  lead_popup_text_color: '#111827',
+  lead_popup_button_color: '#F5B301',
+  lead_popup_button_text_color: '#111111',
   button_radius_px: 12,
   cookie_consent_enabled: false,
   cookie_consent_text:

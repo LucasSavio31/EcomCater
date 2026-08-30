@@ -45,6 +45,10 @@ _THEME_FIELDS = {
     "email_header_bg_color", "email_header_text_color",
     "email_body_bg_color", "email_text_color",
     "email_button_color", "email_button_text_color", "email_footer_text",
+    "lead_popup_enabled", "lead_capture_enabled",
+    "lead_popup_title", "lead_popup_subtitle", "lead_popup_coupon_code",
+    "lead_popup_bg_color", "lead_popup_text_color",
+    "lead_popup_button_color", "lead_popup_button_text_color",
 }
 
 _BOOL_FIELDS = {
@@ -56,6 +60,7 @@ _BOOL_FIELDS = {
     "filter_color_enabled", "filter_material_enabled",
     "newsletter_enabled", "discount_badge_enabled",
     "cookie_consent_enabled",
+    "lead_popup_enabled", "lead_capture_enabled",
 }
 
 
@@ -138,6 +143,8 @@ async def update_theme(db: AsyncSession, data: dict) -> ThemeSettings:
             v = "top" if str(v) == "top" else "side"
         if k == "checkout_orderbump_product_id":
             v = str(v).strip() or None
+        if k == "lead_popup_coupon_code":
+            v = str(v).strip().upper() or None
         if k == "checkout_orderbump_product_ids":
             v = [str(x).strip() for x in v if str(x).strip()][:20] if isinstance(v, list) else []
         if k == "hero_mode":
