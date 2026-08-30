@@ -39,6 +39,8 @@ class Product(UUIDPKMixin, TimestampMixin, Base):
     short_description: Mapped[str | None] = mapped_column(String(500))
     description: Mapped[str | None] = mapped_column(Text)
     brand: Mapped[str | None] = mapped_column(String(120))
+    # Fornecedor — uso interno (não aparece na loja). Base para separar PDFs/etiquetas.
+    supplier: Mapped[str | None] = mapped_column(String(160), index=True)
     category_id: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("categories.id", ondelete="SET NULL"), index=True
     )

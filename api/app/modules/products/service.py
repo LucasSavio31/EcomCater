@@ -247,6 +247,8 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
         ],
         "related": related,
         "reviews": reviews,
+        # fornecedor: só no contexto admin (nunca na loja)
+        **({"supplier": product.supplier} if include_unpublished else {}),
     }
 
 

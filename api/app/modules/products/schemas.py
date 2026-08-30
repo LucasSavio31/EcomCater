@@ -108,6 +108,7 @@ class ProductBase(BaseModel):
     short_description: str | None = None
     description: str | None = None
     brand: str | None = None
+    supplier: str | None = None
     category_id: str | None = None
     extra_category_ids: list[str] = []
     status: str = "draft"
@@ -134,6 +135,7 @@ class ProductUpdateIn(BaseModel):
     short_description: str | None = None
     description: str | None = None
     brand: str | None = None
+    supplier: str | None = None
     category_id: str | None = None
     extra_category_ids: list[str] | None = None
     status: str | None = None

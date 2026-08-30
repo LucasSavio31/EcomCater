@@ -20,6 +20,7 @@ import { ReviewsTab } from './reviews-tab';
 interface GeneralState {
   name: string;
   brand: string;
+  supplier: string;
   category_id: string;
   extra_category_ids: string[];
   short_description: string;
@@ -41,6 +42,7 @@ function toState(p: ProductDetail | null): GeneralState {
   return {
     name: p?.name ?? '',
     brand: p?.brand ?? '',
+    supplier: p?.supplier ?? '',
     category_id: p?.category_id ?? '',
     extra_category_ids: p?.extra_category_ids ?? [],
     short_description: p?.short_description ?? '',
@@ -63,6 +65,7 @@ function buildPayload(s: GeneralState, status: ProductStatus): ProductInput {
   return {
     name: s.name.trim(),
     brand: s.brand.trim() || null,
+    supplier: s.supplier.trim() || null,
     category_id: s.category_id || null,
     extra_category_ids: s.extra_category_ids,
     status,
@@ -226,6 +229,7 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
             />
             <div className="grid gap-4 sm:grid-cols-2">
               <Input label="Marca" value={state.brand} onChange={(e) => set('brand', e.target.value)} />
+              <Input label="Fornecedor (uso interno)" hint="Não aparece na loja. Usado para separar PDFs e etiquetas." value={state.supplier} onChange={(e) => set('supplier', e.target.value)} />
               <Select
                 label="Categoria principal"
                 value={state.category_id}

@@ -75,6 +75,7 @@ class OrderItem(UUIDPKMixin, Base):
     sku: Mapped[str] = mapped_column(String(80))
     name: Mapped[str] = mapped_column(String(240))
     variant_label: Mapped[str | None] = mapped_column(String(160))
+    supplier: Mapped[str | None] = mapped_column(String(160))  # snapshot p/ PDF/etiqueta
     image_key: Mapped[str | None] = mapped_column(String(300))
     unit_price_cents: Mapped[int] = mapped_column(Integer)
     quantity: Mapped[int] = mapped_column(Integer)

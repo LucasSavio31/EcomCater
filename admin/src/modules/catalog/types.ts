@@ -136,6 +136,7 @@ export interface ProductDetail {
   category_id: string | null;
   extra_category_ids: string[];
   brand: string | null;
+  supplier?: string | null;
   short_description: string | null;
   description: string | null;
   price_cents: number;
@@ -167,6 +168,7 @@ export interface ProductInput {
   pix_discount_pct?: number | null;
   installments_max?: number | null;
   brand?: string | null;
+  supplier?: string | null;
   short_description?: string | null;
   description?: string | null;
   weight_grams: number;

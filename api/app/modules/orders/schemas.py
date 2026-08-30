@@ -31,6 +31,7 @@ class CheckoutIn(BaseModel):
 
 
 class OrderItemOut(BaseModel):
+    supplier: str | None = None
     sku: str
     name: str
     variant_label: str | None
