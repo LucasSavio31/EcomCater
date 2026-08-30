@@ -47,6 +47,11 @@ export interface Theme {
   checkout_show_coupon: boolean;
   checkout_allow_qty_change: boolean;
   checkout_footer_note: string | null;
+  checkout_animated_card: boolean;
+  checkout_show_review: boolean;
+  checkout_review_position: 'side' | 'top';
+  checkout_orderbump_enabled: boolean;
+  checkout_orderbump_product_id: string | null;
   checkout_bg_color: string;
   checkout_header_bg_color: string;
   checkout_header_text_color: string;

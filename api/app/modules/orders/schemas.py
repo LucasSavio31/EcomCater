@@ -16,6 +16,8 @@ class AddressPayload(BaseModel):
     city: str
     state: str = Field(min_length=2, max_length=2)
     country: str = "BR"
+    # telefone é coletado no checkout e repassado ao gateway / CAPI
+    phone: str | None = None
 
 
 class CheckoutIn(BaseModel):

@@ -17,6 +17,8 @@ import { track, identify, cartToTrackItems } from '@/modules/analytics';
 import { CheckoutStepsTimeline, type CheckoutStepId } from './checkout-steps';
 import { StepSection } from './step-section';
 import { OrderSummary } from './order-summary';
+import { AnimatedCard } from './animated-card';
+import { resolveMediaUrl } from '@/lib/media';
 
 type Method = 'pix' | 'credit_card' | 'boleto';
 
@@ -64,6 +66,18 @@ export interface CheckoutSettings {
   itemsLayout: 'with_thumb' | 'simple';
   allowQtyChange: boolean;
   buttonColor: string;
+  buttonTextColor: string;
+  animatedCard: boolean;
+  showReview: boolean;
+  reviewPosition: 'side' | 'top';
+}
+
+export interface OrderBumpProduct {
+  slug: string;
+  name: string;
+  price_cents: number;
+  image_url: string | null;
+  variant_id: string | null;
 }
 
 const DEFAULT_SETTINGS: CheckoutSettings = {
@@ -72,9 +86,19 @@ const DEFAULT_SETTINGS: CheckoutSettings = {
   itemsLayout: 'with_thumb',
   allowQtyChange: true,
   buttonColor: '#111111',
+  buttonTextColor: '#FFFFFF',
+  animatedCard: true,
+  showReview: true,
+  reviewPosition: 'side',
 };
 
-export function CheckoutView({ settings = DEFAULT_SETTINGS }: { settings?: CheckoutSettings }) {
+export function CheckoutView({
+  settings = DEFAULT_SETTINGS,
+  orderBump = null,
+}: {
+  settings?: CheckoutSettings;
+  orderBump?: OrderBumpProduct | null;
+}) {
   const router = useRouter();
   const { cart, loading, refresh, setZip, selectShipping } = useCart();
   const { customer } = useAuth();
@@ -108,6 +132,9 @@ export function CheckoutView({ settings = DEFAULT_SETTINGS }: { settings?: Check
   const [method, setMethod] = useState<Method>('pix');
   const [card, setCard] = useState({ number: '', holder_name: '', exp: '', cvv: '' });
   const [installments, setInstallments] = useState(1);
+
+  const [cvvFocused, setCvvFocused] = useState(false);
+  const [bumpChecked, setBumpChecked] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -301,6 +328,16 @@ export function CheckoutView({ settings = DEFAULT_SETTINGS }: { settings?: Check
     if (!canPlaceOrder) return;
     setSubmitting(true);
     setError(null);
+
+    // order bump: adiciona o produto extra ao carrinho antes de criar o pedido
+    if (orderBump?.variant_id && bumpChecked) {
+      const already = cart.items.some((i) => i.variant_id === orderBump.variant_id);
+      if (!already) {
+        const r = await cartApi.addItem(orderBump.variant_id, 1);
+        if (r.ok) await refresh();
+      }
+    }
+
     track('add_payment_info', {
       value: cart.totals.grand_total_cents / 100,
       coupon: cart.coupon_code ?? undefined,
@@ -321,6 +358,7 @@ export function CheckoutView({ settings = DEFAULT_SETTINGS }: { settings?: Check
         city: addr.city.trim(),
         state: addr.state.trim().toUpperCase(),
         country: 'BR',
+        phone: onlyDigits(phone) || null,
       },
       customer_note: note.trim() || null,
       shipping_service_id: cart.selected_shipping?.id ?? null,
@@ -385,10 +423,21 @@ export function CheckoutView({ settings = DEFAULT_SETTINGS }: { settings?: Check
     { id: 'boleto', label: 'Boleto bancário', enabled: methods?.boleto ?? false, hint: 'Compensa em 1–2 dias úteis.' },
   ];
 
+  const reviewOnSide = settings.showReview && settings.reviewPosition === 'side';
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className={reviewOnSide ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]' : 'flex flex-col gap-6'}>
       <div className="flex flex-col gap-4">
         <CheckoutStepsTimeline current={step} furthest={furthest} onJump={goto} />
+
+        {settings.showReview && settings.reviewPosition === 'top' && (
+          <OrderSummary
+            position="top"
+            showCoupon={settings.showCoupon}
+            layout={settings.itemsLayout}
+            allowQtyChange={settings.allowQtyChange}
+          />
+        )}
 
         {/* 1 — Identificação */}
         <StepSection
@@ -612,6 +661,15 @@ export function CheckoutView({ settings = DEFAULT_SETTINGS }: { settings?: Check
 
                       {active && m.id === 'credit_card' && (
                         <div className="flex flex-col gap-3 border-t border-surface-border p-3">
+                          {settings.animatedCard && (
+                            <AnimatedCard
+                              number={card.number}
+                              name={card.holder_name}
+                              expiry={card.exp}
+                              cvv={card.cvv}
+                              flipped={cvvFocused}
+                            />
+                          )}
                           <Input
                             label="Número do cartão"
                             inputMode="numeric"
@@ -639,6 +697,8 @@ export function CheckoutView({ settings = DEFAULT_SETTINGS }: { settings?: Check
                               label="CVV"
                               inputMode="numeric"
                               value={card.cvv}
+                              onFocus={() => setCvvFocused(true)}
+                              onBlur={() => setCvvFocused(false)}
                               onChange={(e) => setCard((c) => ({ ...c, cvv: onlyDigits(e.target.value).slice(0, 4) }))}
                             />
                           </div>
@@ -677,6 +737,32 @@ export function CheckoutView({ settings = DEFAULT_SETTINGS }: { settings?: Check
             </ul>
           )}
 
+          {orderBump && (
+            <div className="flex items-center gap-3 rounded-card border-2 border-dashed border-accent/60 bg-accent/5 p-3">
+              <input
+                type="checkbox"
+                checked={bumpChecked}
+                onChange={(e) => setBumpChecked(e.target.checked)}
+                className="h-5 w-5 shrink-0"
+                id="orderbump"
+              />
+              {orderBump.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={resolveMediaUrl(orderBump.image_url) ?? ''}
+                  alt=""
+                  className="h-14 w-14 shrink-0 rounded-card object-cover"
+                />
+              )}
+              <label htmlFor="orderbump" className="flex-1 cursor-pointer text-sm">
+                <span className="block font-semibold">Adicione também: {orderBump.name}</span>
+                <span className="text-text-muted">
+                  Aproveite e leve por {formatBRL(orderBump.price_cents)}
+                </span>
+              </label>
+            </div>
+          )}
+
           <label htmlFor="note" className="mt-2 text-sm font-medium">
             Observações do pedido (opcional)
           </label>
@@ -711,7 +797,7 @@ export function CheckoutView({ settings = DEFAULT_SETTINGS }: { settings?: Check
             loading={submitting}
             disabled={!canPlaceOrder}
             onClick={() => void submit()}
-            style={{ background: settings.buttonColor }}
+            style={{ background: settings.buttonColor, color: settings.buttonTextColor }}
           >
             {method === 'pix'
               ? 'Gerar PIX'
@@ -722,11 +808,14 @@ export function CheckoutView({ settings = DEFAULT_SETTINGS }: { settings?: Check
         </StepSection>
       </div>
 
-      <OrderSummary
-        showCoupon={settings.showCoupon}
-        layout={settings.itemsLayout}
-        allowQtyChange={settings.allowQtyChange}
-      />
+      {reviewOnSide && (
+        <OrderSummary
+          position="side"
+          showCoupon={settings.showCoupon}
+          layout={settings.itemsLayout}
+          allowQtyChange={settings.allowQtyChange}
+        />
+      )}
     </div>
   );
 }

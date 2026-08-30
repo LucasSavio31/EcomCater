@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { AsyncBoundary } from '@/components/async-boundary';
@@ -8,6 +8,7 @@ import { Checkbox, Select } from '@/components/form-controls';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { appearanceApi, type Theme } from '@/modules/appearance/api';
+import { productsApi } from '@/modules/catalog/api';
 import { revalidateStore } from '@/lib/revalidate-store';
 
 const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
@@ -46,6 +47,13 @@ export default function CheckoutModeloPage() {
     setDraft({ ...theme, [k]: v });
   };
 
+  const [products, setProducts] = useState<{ slug: string; name: string }[]>([]);
+  useEffect(() => {
+    void productsApi.list({ page: 1, page_size: 200 }).then((r) => {
+      if (r.ok) setProducts(r.data.items.map((p) => ({ slug: p.slug, name: p.name })));
+    });
+  }, []);
+
   async function save() {
     if (!theme) return;
     setSaving(true);
@@ -56,6 +64,11 @@ export default function CheckoutModeloPage() {
       checkout_show_coupon: theme.checkout_show_coupon,
       checkout_allow_qty_change: theme.checkout_allow_qty_change,
       checkout_footer_note: theme.checkout_footer_note,
+      checkout_animated_card: theme.checkout_animated_card,
+      checkout_show_review: theme.checkout_show_review,
+      checkout_review_position: theme.checkout_review_position,
+      checkout_orderbump_enabled: theme.checkout_orderbump_enabled,
+      checkout_orderbump_product_id: theme.checkout_orderbump_product_id ?? '',
       ...Object.fromEntries(COLOR_FIELDS.map((f) => [f.key, theme[f.key]])),
     };
     const res = await appearanceApi.putTheme(body);
@@ -120,6 +133,28 @@ export default function CheckoutModeloPage() {
                 checked={theme.checkout_allow_qty_change}
                 onChange={(v) => set('checkout_allow_qty_change', v)}
               />
+              <Checkbox
+                label="Cartão de crédito animado"
+                hint="Mostra um cartão que atualiza e vira ao focar o CVV."
+                checked={theme.checkout_animated_card}
+                onChange={(v) => set('checkout_animated_card', v)}
+              />
+              <Checkbox
+                label="Exibir a revisão do pedido"
+                checked={theme.checkout_show_review}
+                onChange={(v) => set('checkout_show_review', v)}
+              />
+              <Select
+                label="Posição da revisão"
+                value={theme.checkout_review_position}
+                options={[
+                  { value: 'side', label: 'Lado direito da tela' },
+                  { value: 'top', label: 'Topo, em dropdown' },
+                ]}
+                onChange={(e) =>
+                  set('checkout_review_position', e.target.value as Theme['checkout_review_position'])
+                }
+              />
               <Select
                 label="Layout dos itens no resumo"
                 value={theme.checkout_items_layout}
@@ -158,6 +193,27 @@ export default function CheckoutModeloPage() {
                 value={theme.checkout_footer_note ?? ''}
                 onChange={(e) => set('checkout_footer_note', e.target.value || null)}
               />
+            </Card>
+
+            <Card variant="outline" className="flex flex-col gap-4">
+              <h2 className="text-lg font-semibold">Order bump</h2>
+              <Checkbox
+                label="Oferecer um produto extra no checkout"
+                hint="Aparece um convite para o cliente adicionar outro produto ao pedido."
+                checked={theme.checkout_orderbump_enabled}
+                onChange={(v) => set('checkout_orderbump_enabled', v)}
+              />
+              {theme.checkout_orderbump_enabled && (
+                <Select
+                  label="Produto oferecido"
+                  value={theme.checkout_orderbump_product_id ?? ''}
+                  options={[
+                    { value: '', label: '— selecione —' },
+                    ...products.map((p) => ({ value: p.slug, label: p.name })),
+                  ]}
+                  onChange={(e) => set('checkout_orderbump_product_id', e.target.value || null)}
+                />
+              )}
             </Card>
 
             <Card variant="outline" className="flex flex-col gap-4">

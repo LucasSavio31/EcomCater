@@ -30,11 +30,14 @@ _THEME_FIELDS = {
     "checkout_bg_color", "checkout_header_bg_color", "checkout_header_text_color",
     "checkout_button_color", "checkout_button_text_color", "checkout_accent_color",
     "checkout_footer_bg_color", "checkout_footer_text_color",
+    "checkout_animated_card", "checkout_show_review", "checkout_review_position",
+    "checkout_orderbump_enabled", "checkout_orderbump_product_id",
 }
 
 _BOOL_FIELDS = {
     "top_bar_enabled", "hero_enabled", "footer_seals_enabled", "cart_redirect_after_add",
     "checkout_email_first", "checkout_show_coupon", "checkout_allow_qty_change",
+    "checkout_animated_card", "checkout_show_review", "checkout_orderbump_enabled",
 }
 
 
@@ -113,6 +116,10 @@ async def update_theme(db: AsyncSession, data: dict) -> ThemeSettings:
             v = max(900, min(1600, int(v)))
         if k == "checkout_items_layout":
             v = "simple" if str(v) == "simple" else "with_thumb"
+        if k == "checkout_review_position":
+            v = "top" if str(v) == "top" else "side"
+        if k == "checkout_orderbump_product_id":
+            v = str(v).strip() or None
         if k == "hero_mode":
             v = "static" if str(v) == "static" else "carousel"
         if k == "hero_autoplay_seconds":

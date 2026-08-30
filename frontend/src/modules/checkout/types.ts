@@ -17,6 +17,7 @@ export interface AddressPayload {
   city: string;
   state: string;
   country?: string;
+  phone?: string | null;
 }
 
 export interface CheckoutPayload {

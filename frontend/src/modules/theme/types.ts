@@ -45,6 +45,11 @@ export interface ThemeSettings {
   checkout_show_coupon: boolean;
   checkout_allow_qty_change: boolean;
   checkout_footer_note: string | null;
+  checkout_animated_card: boolean;
+  checkout_show_review: boolean;
+  checkout_review_position: 'side' | 'top';
+  checkout_orderbump_enabled: boolean;
+  checkout_orderbump_product_id: string | null;
   /** Cores próprias do checkout. */
   checkout_bg_color: string;
   checkout_header_bg_color: string;
@@ -121,6 +126,11 @@ export const NEUTRAL_THEME: ThemeSettings = {
   checkout_show_coupon: true,
   checkout_allow_qty_change: true,
   checkout_footer_note: null,
+  checkout_animated_card: true,
+  checkout_show_review: true,
+  checkout_review_position: 'side',
+  checkout_orderbump_enabled: false,
+  checkout_orderbump_product_id: null,
   checkout_bg_color: '#F7F7F7',
   checkout_header_bg_color: '#FFFFFF',
   checkout_header_text_color: '#111827',

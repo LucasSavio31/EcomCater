@@ -12,10 +12,17 @@ interface Props {
   showCoupon?: boolean;
   layout?: 'with_thumb' | 'simple';
   allowQtyChange?: boolean;
+  /** `side` = card fixo à direita (+ recolhível no mobile); `top` = dropdown em todas as telas. */
+  position?: 'side' | 'top';
 }
 
 /** "Revise seu pedido": cupom recolhido + itens + totais. */
-export function OrderSummary({ showCoupon = true, layout = 'with_thumb', allowQtyChange = true }: Props) {
+export function OrderSummary({
+  showCoupon = true,
+  layout = 'with_thumb',
+  allowQtyChange = true,
+  position = 'side',
+}: Props) {
   const { cart, updateItem } = useCart();
   const t = cart.totals;
   const shipping = !cart.selected_shipping
@@ -88,6 +95,18 @@ export function OrderSummary({ showCoupon = true, layout = 'with_thumb', allowQt
       </dl>
     </div>
   );
+
+  if (position === 'top') {
+    return (
+      <details className="rounded-card border border-surface-border bg-surface">
+        <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm font-semibold">
+          <span>Revise seu pedido</span>
+          <span className="font-bold">{formatBRL(t.grand_total_cents)}</span>
+        </summary>
+        <div className="border-t border-surface-border px-4 py-4">{body}</div>
+      </details>
+    );
+  }
 
   return (
     <>

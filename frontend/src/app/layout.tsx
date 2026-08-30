@@ -45,8 +45,10 @@ export default async function RootLayout({
   const orgLd = jsonLdScript([organizationJsonLd({ logoUrl: theme.logo_url ?? undefined }), webSiteJsonLd()]);
 
   return (
-    <html lang="pt-BR">
-      <body className="min-h-dvh bg-bg text-text">
+    // suppressHydrationWarning: extensões (Google Tag Assistant etc.) injetam
+    // atributos em <html>/<body> antes do React hidratar.
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body className="min-h-dvh bg-bg text-text" suppressHydrationWarning>
         {/* Tags de marketing (GTM / GA4 / Google Ads / Meta Pixel) o mais alto possível. */}
         <AnalyticsHeadScripts config={analytics} />
         <AnalyticsBodyNoScript config={analytics} />
