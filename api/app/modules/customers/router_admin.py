@@ -275,3 +275,52 @@ async def delete_address(cid: str, aid: str, db: DbDep, _: EditorDep) -> None:
     addr = next((a for a in user.addresses if str(a.id) == aid), None)
     if addr:
         await db.delete(addr)
+
+
+async def _delete_customer(db: AsyncSession, cid: str) -> None:
+    """Exclui o cadastro do cliente. Os pedidos dele são preservados (viram
+    pedidos "sem conta" — o e-mail/CPF já estão gravados em cada pedido)."""
+    from app.modules.customers.models import CustomerAddress as _Addr
+
+    user = await db.scalar(select(User).where(User.id == cid))
+    if not user:
+        raise NotFoundError("Cliente não encontrado.")
+    await db.execute(
+        Order.__table__.update().where(Order.user_id == user.id).values(user_id=None)
+    )
+    for a in await db.scalars(select(_Addr).where(_Addr.user_id == user.id)):
+        await db.delete(a)
+    try:
+        from app.modules.customers.models import Wishlist, WishlistItem
+
+        wl = await db.scalar(select(Wishlist).where(Wishlist.user_id == user.id))
+        if wl:
+            for wi in await db.scalars(
+                select(WishlistItem).where(WishlistItem.wishlist_id == wl.id)
+            ):
+                await db.delete(wi)
+            await db.delete(wl)
+    except Exception:  # noqa: BLE001 - wishlist é opcional
+        pass
+    await db.delete(user)
+
+
+@router.delete("/{cid}", status_code=204)
+async def delete_customer(cid: str, db: DbDep, _: EditorDep) -> None:
+    await _delete_customer(db, cid)
+
+
+class BulkDeleteIn(BaseModel):
+    ids: list[str]
+
+
+@router.post("/delete")
+async def delete_customers(body: BulkDeleteIn, db: DbDep, _: EditorDep) -> dict:
+    n = 0
+    for cid in body.ids:
+        try:
+            await _delete_customer(db, cid)
+            n += 1
+        except NotFoundError:
+            continue
+    return {"deleted": n}

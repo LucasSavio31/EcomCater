@@ -13,6 +13,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { formatBRL, formatDateTime } from '@/lib/format';
+import { lookupCep } from '@/lib/viacep';
 import { ordersApi, type OrderEditPayload } from '@/modules/orders/api';
 import { type OrderDetail, type OrderStatus } from '@/modules/orders/types';
 
@@ -60,6 +61,21 @@ function maskCep(v: string): string {
   const d = v.replace(/\D/g, '').slice(0, 8);
   return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
 }
+
+/** Máscara progressiva (99) 99999-9999 — limitada a 11 dígitos */
+function maskPhone(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  if (d.length === 0) return '';
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+const ADDR_MASK: Partial<Record<string, (v: string) => string>> = {
+  zip: maskCep,
+  phone: maskPhone,
+};
 
 function VarField({
   label,
@@ -227,6 +243,21 @@ export default function PedidoDetalhePage() {
 
   const setAddr = (k: string, v: string) =>
     setEdit((e) => ({ ...e, shipping_address: { ...e.shipping_address, [k]: v } }));
+
+  async function onCepBlur() {
+    const zip = String(edit.shipping_address?.zip ?? '').replace(/\D/g, '');
+    if (zip.length !== 8) return;
+    const found = await lookupCep(zip);
+    if (!found) return;
+    setEdit((e) => {
+      const a = { ...(e.shipping_address ?? {}) } as Record<string, unknown>;
+      a.street = a.street || found.street;
+      a.district = a.district || found.district;
+      a.city = a.city || found.city;
+      a.state = a.state || found.state;
+      return { ...e, shipping_address: a };
+    });
+  }
   const setItemAttr = (id: string, key: 'cor' | 'numero', v: string) =>
     setEdit((e) => ({
       ...e,
@@ -373,16 +404,26 @@ export default function PedidoDetalhePage() {
                       key={f.key}
                       label={f.label}
                       disabled={!editMode}
-                      inputMode={f.key === 'zip' ? 'numeric' : undefined}
-                      placeholder={f.key === 'zip' ? '00000-000' : undefined}
-                      value={
+                      inputMode={f.key === 'zip' || f.key === 'phone' ? 'numeric' : undefined}
+                      placeholder={
                         f.key === 'zip'
-                          ? maskCep((edit.shipping_address?.zip as string) ?? '')
+                          ? '00000-000'
+                          : f.key === 'phone'
+                            ? '(11) 99999-9999'
+                            : undefined
+                      }
+                      value={
+                        ADDR_MASK[f.key]
+                          ? ADDR_MASK[f.key]!((edit.shipping_address?.[f.key] as string) ?? '')
                           : ((edit.shipping_address?.[f.key] as string) ?? '')
                       }
                       onChange={(e) =>
-                        setAddr(f.key, f.key === 'zip' ? maskCep(e.target.value) : e.target.value)
+                        setAddr(
+                          f.key,
+                          ADDR_MASK[f.key] ? ADDR_MASK[f.key]!(e.target.value) : e.target.value,
+                        )
                       }
+                      onBlur={f.key === 'zip' ? () => void onCepBlur() : undefined}
                     />
                   ))}
                 </div>

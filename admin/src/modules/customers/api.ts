@@ -87,5 +87,8 @@ export const customersApi = {
     adminFetch<CustomerAddress>(`${BASE}/${id}/addresses/${aid}`, { method: 'PATCH', body }),
   deleteAddress: (id: string, aid: string) =>
     adminFetch<void>(`${BASE}/${id}/addresses/${aid}`, { method: 'DELETE' }),
+  remove: (id: string) => adminFetch<void>(`${BASE}/${id}`, { method: 'DELETE' }),
+  removeMany: (ids: string[]) =>
+    adminFetch<{ deleted: number }>(`${BASE}/delete`, { method: 'POST', body: { ids } }),
   ordersByEmail: (email: string) => ordersApi.list({ q: email, page_size: 100 }),
 };

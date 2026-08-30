@@ -6,6 +6,7 @@ import { useAuth } from '@/modules/customer/auth-context';
 import { useCart } from '@/modules/cart/cart-context';
 import { track } from '@/modules/analytics';
 import { isValidCpf, maskCpf, onlyDigits as digits } from '@/lib/cpf';
+import { maskPhone } from '@/lib/phone';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -114,8 +115,10 @@ export function AuthForms({ onDone }: { onDone?: () => void }) {
         {mode === 'register' && (
           <Input
             label="Telefone (opcional)"
+            inputMode="numeric"
+            placeholder="(11) 99999-9999"
             value={form.phone}
-            onChange={(e) => set('phone', e.target.value)}
+            onChange={(e) => set('phone', maskPhone(e.target.value))}
           />
         )}
 

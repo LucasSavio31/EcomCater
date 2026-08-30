@@ -84,6 +84,16 @@ async def list_menus(db: AsyncSession) -> list[Menu]:
     return list(await db.scalars(select(Menu).options(selectinload(Menu.items)).order_by(Menu.position)))
 
 
+async def list_items(db: AsyncSession, menu_id: str) -> list[MenuItem]:
+    menu = await db.get(Menu, _uuid(menu_id))
+    if not menu:
+        raise NotFoundError("Menu não encontrado.")
+    rows = await db.scalars(
+        select(MenuItem).where(MenuItem.menu_id == menu.id).order_by(MenuItem.position)
+    )
+    return list(rows)
+
+
 async def create_menu(db: AsyncSession, data: dict) -> Menu:
     menu = Menu(**data)
     db.add(menu)

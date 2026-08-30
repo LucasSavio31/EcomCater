@@ -27,7 +27,11 @@ export const checkoutApi = {
   paymentMethods: () => checkoutFetch<PaymentMethods>('/api/payment/methods'),
 
   placeOrder: (body: CheckoutPayload) =>
-    checkoutFetch<Order>('/api/orders/checkout', { method: 'POST', body }),
+    checkoutFetch<
+      Order & {
+        auth?: { access_token: string; refresh_token: string; expires_in: number } | null;
+      }
+    >('/api/orders/checkout', { method: 'POST', body }),
 
   charge: (body: ChargePayload) =>
     checkoutFetch<ChargeResult>('/api/payment/charge', { method: 'POST', body }),

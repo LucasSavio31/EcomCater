@@ -12,6 +12,8 @@ import { StatusBadge } from '@/components/status-badge';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { formatBRL, formatDateTime } from '@/lib/format';
+import { lookupCep } from '@/lib/viacep';
+import { maskPhone } from '@/lib/phone';
 import {
   customersApi,
   type CustomerAddress,
@@ -56,6 +58,18 @@ export default function ClienteDetalhePage() {
 
   const [pf, setPf] = useState({ full_name: '', email: '', phone: '', cpf: '', is_active: true });
   const [savingPf, setSavingPf] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function deleteCustomer() {
+    setDeleting(true);
+    const res = await customersApi.remove(id);
+    setDeleting(false);
+    setConfirmDel(false);
+    if (!res.ok) return toast.error(res.error.message);
+    toast.success('Cliente excluído. O histórico de pedidos foi mantido.');
+    router.push('/clientes');
+  }
 
   useEffect(() => {
     if (data) {
@@ -101,6 +115,18 @@ export default function ClienteDetalhePage() {
             ← Voltar para clientes
           </button>
         }
+        actions={
+          data ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-danger"
+              onClick={() => setConfirmDel(true)}
+            >
+              Excluir cliente
+            </Button>
+          ) : undefined
+        }
       />
 
       <AsyncBoundary loading={loading} error={error} onRetry={reload}>
@@ -122,8 +148,10 @@ export default function ClienteDetalhePage() {
                   />
                   <Input
                     label="Telefone"
-                    value={pf.phone}
-                    onChange={(e) => setPf((s) => ({ ...s, phone: e.target.value }))}
+                    inputMode="numeric"
+                    placeholder="(11) 99999-9999"
+                    value={maskPhone(pf.phone)}
+                    onChange={(e) => setPf((s) => ({ ...s, phone: maskPhone(e.target.value) }))}
                   />
                   <Input
                     label="CPF"
@@ -176,6 +204,17 @@ export default function ClienteDetalhePage() {
           </div>
         )}
       </AsyncBoundary>
+
+      <ConfirmDialog
+        open={confirmDel}
+        title="Excluir cliente"
+        description="Remove o cadastro do cliente (dados pessoais e endereços). Os pedidos dele são preservados — ficam sem conta vinculada. Não pode ser desfeito."
+        confirmLabel="Excluir"
+        tone="danger"
+        loading={deleting}
+        onConfirm={() => void deleteCustomer()}
+        onCancel={() => setConfirmDel(false)}
+      />
     </div>
   );
 
@@ -194,6 +233,19 @@ export default function ClienteDetalhePage() {
     const [del, setDel] = useState<string | null>(null);
     const set = <K extends keyof CustomerAddressInput>(k: K, v: CustomerAddressInput[K]) =>
       setForm((f) => ({ ...f, [k]: v }));
+
+    async function onCepBlur() {
+      if (form.zip.replace(/\D/g, '').length !== 8) return;
+      const found = await lookupCep(form.zip);
+      if (!found) return;
+      setForm((f) => ({
+        ...f,
+        street: found.street || f.street,
+        district: found.district || f.district,
+        city: found.city || f.city,
+        state: found.state || f.state,
+      }));
+    }
 
     function edit(a: CustomerAddress) {
       setEditing(a.id);
@@ -274,6 +326,7 @@ export default function ClienteDetalhePage() {
               inputMode="numeric"
               value={maskCep(form.zip)}
               onChange={(e) => set('zip', maskCep(e.target.value))}
+              onBlur={() => void onCepBlur()}
             />
             <Input label="Rua" value={form.street} onChange={(e) => set('street', e.target.value)} />
             <Input label="Número" value={form.number} onChange={(e) => set('number', e.target.value)} />

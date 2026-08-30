@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { Button, Card, Input } from '@ecom/ui';
 import { useAuth } from '@/modules/customer/auth-context';
 import { customerApi } from '@/modules/customer/api';
+import { maskPhone } from '@/lib/phone';
 
 export function AccountDashboard() {
   const { customer, logout, reload } = useAuth();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     full_name: customer?.full_name ?? '',
-    phone: customer?.phone ?? '',
+    phone: customer?.phone ? maskPhone(customer.phone) : '',
     cpf: customer?.cpf ?? '',
   });
   const [busy, setBusy] = useState(false);
@@ -113,8 +114,10 @@ export function AccountDashboard() {
             />
             <Input
               label="Telefone"
+              inputMode="numeric"
+              placeholder="(11) 99999-9999"
               value={form.phone}
-              onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+              onChange={(e) => setForm((p) => ({ ...p, phone: maskPhone(e.target.value) }))}
             />
             <Input
               label="CPF"

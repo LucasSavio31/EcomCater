@@ -8,6 +8,8 @@ import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { centsToInput, inputToCents } from '@/lib/format';
 import { appearanceApi, type StoreSettings } from '@/modules/appearance/api';
+import { lookupCep } from '@/lib/viacep';
+import { maskPhone } from '@/lib/phone';
 
 const ADDRESS_FIELDS: Array<{ key: string; label: string }> = [
   { key: 'zip', label: 'CEP' },
@@ -40,6 +42,20 @@ export function StoreTab() {
     if (!settings) return;
     setDraft({ ...settings, social_json: { ...(settings.social_json ?? {}), [key]: value } });
   };
+  async function onCepBlur(): Promise<void> {
+    const base = draft ?? data;
+    if (!base) return;
+    const zip = String(base.address_json?.zip ?? '').replace(/\D/g, '');
+    if (zip.length !== 8) return;
+    const found = await lookupCep(zip);
+    if (!found) return;
+    const a = { ...(base.address_json ?? {}) };
+    a.street = a.street || found.street;
+    a.district = a.district || found.district;
+    a.city = a.city || found.city;
+    a.state = a.state || found.state;
+    setDraft({ ...base, address_json: a });
+  }
 
   async function save(): Promise<void> {
     if (!settings) return;
@@ -71,13 +87,17 @@ export function StoreTab() {
               <Input label="CNPJ" value={settings.cnpj ?? ''} onChange={(e) => set('cnpj', e.target.value)} />
               <Input
                 label="Telefone"
-                value={settings.contact_phone ?? ''}
-                onChange={(e) => set('contact_phone', e.target.value)}
+                inputMode="numeric"
+                placeholder="(11) 99999-9999"
+                value={maskPhone(settings.contact_phone ?? '')}
+                onChange={(e) => set('contact_phone', maskPhone(e.target.value))}
               />
               <Input
                 label="WhatsApp"
-                value={settings.contact_whatsapp ?? ''}
-                onChange={(e) => set('contact_whatsapp', e.target.value)}
+                inputMode="numeric"
+                placeholder="(11) 99999-9999"
+                value={maskPhone(settings.contact_whatsapp ?? '')}
+                onChange={(e) => set('contact_whatsapp', maskPhone(e.target.value))}
               />
               <Input
                 label="Frete grátis a partir de (R$)"
@@ -97,6 +117,7 @@ export function StoreTab() {
                   label={f.label}
                   value={settings.address_json?.[f.key] ?? ''}
                   onChange={(e) => setAddress(f.key, e.target.value)}
+                  onBlur={f.key === 'zip' ? () => void onCepBlur() : undefined}
                 />
               ))}
             </div>

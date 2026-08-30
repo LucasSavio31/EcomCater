@@ -20,7 +20,7 @@ DbDep = Annotated[AsyncSession, Depends(get_db)]
 UserDep = Annotated[User | None, Depends(get_current_customer_optional)]
 
 
-@router.post("/checkout", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
+@router.post("/checkout", response_model=None, status_code=status.HTTP_201_CREATED)
 async def checkout(
     body: CheckoutIn,
     response: Response,
@@ -45,9 +45,36 @@ async def checkout(
         customer_note=body.customer_note,
         idempotency_key=body.idempotency_key,
     )
+
+    # comprador vira usuário do sistema e já sai logado (para ir a "minhas compras")
+    from app.modules.customers.service import (
+        ensure_user_for_checkout,
+        sync_default_address,
+    )
+
+    addr = body.shipping_address.model_dump()
+    auth: dict | None = None
+    buyer = user
+    if not user:
+        buyer, pair = await ensure_user_for_checkout(
+            db,
+            email=body.email,
+            cpf=body.cpf,
+            full_name=addr.get("recipient_name") or "",
+            phone=addr.get("phone"),
+        )
+        order.user_id = buyer.id
+        auth = pair
+    # o endereço da última compra vira o endereço padrão do cliente
+    if buyer is not None:
+        if not buyer.phone and addr.get("phone"):
+            buyer.phone = addr["phone"]
+        await sync_default_address(db, buyer, addr)
+    await db.flush()
+
     await cart_service.clear(db, cart)
     full = await service._load(db, order.id)
-    return service.to_out(full)
+    return {**service.to_out(full), "auth": auth}
 
 
 @router.get("")

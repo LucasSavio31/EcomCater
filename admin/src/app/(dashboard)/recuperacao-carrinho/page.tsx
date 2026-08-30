@@ -15,11 +15,21 @@ import {
   type RecoveryMessageInput,
 } from '@/modules/cart-recovery/api';
 
-const EMPTY: RecoveryMessageInput = {
+const STORE_URL =
+  process.env.NEXT_PUBLIC_STORE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+const TEST_CART_LINK = `${STORE_URL}/checkout`;
+
+/** Rascunho já preenchido no padrão de e-commerce (editável e salvável). */
+const DEFAULT_DRAFT: RecoveryMessageInput = {
   position: 0,
-  delay_minutes: 60,
-  subject: '',
-  body: '',
+  delay_minutes: 30,
+  subject: '{nome}, você esqueceu produtos no seu carrinho',
+  body:
+    'Olá {nome}, notamos que você deixou alguns itens no carrinho.\n\n' +
+    'Eles ainda estão reservados para você — mas por pouco tempo. Retome sua ' +
+    'compra de onde parou: é rápido e 100% seguro.\n\n' +
+    'Se tiver qualquer dúvida sobre pagamento, frete ou os produtos, é só ' +
+    'responder este e-mail.',
   is_active: true,
 };
 
@@ -27,7 +37,7 @@ export default function CartRecoveryPage() {
   const toast = useToast();
   const carts = useResource(() => cartRecoveryApi.listCarts());
   const messages = useResource(() => cartRecoveryApi.listMessages());
-  const [form, setForm] = useState<RecoveryMessageInput>(EMPTY);
+  const [form, setForm] = useState<RecoveryMessageInput>(DEFAULT_DRAFT);
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [del, setDel] = useState<string | null>(null);
@@ -85,7 +95,7 @@ export default function CartRecoveryPage() {
     setBusy(false);
     if (!res.ok) return toast.error(res.error.message);
     toast.success('Mensagem salva.');
-    setForm(EMPTY);
+    setForm(DEFAULT_DRAFT);
     setEditing(null);
     messages.reload();
   }
@@ -166,6 +176,29 @@ export default function CartRecoveryPage() {
             carrinho” já é adicionado automaticamente ao fim do e-mail.
           </span>
         </label>
+
+        <div className="flex flex-col gap-2 rounded-card border border-surface-border bg-bg-subtle p-4">
+          <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+            Pré-visualização do e-mail
+          </span>
+          <p className="whitespace-pre-wrap text-sm text-text">
+            {(form.body || DEFAULT_DRAFT.body)
+              .replace(/\{nome\}/g, 'Maria')
+              .replace(/\{link\}/g, TEST_CART_LINK)}
+          </p>
+          <a
+            href={TEST_CART_LINK}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 inline-flex w-fit items-center justify-center rounded-card bg-black px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+          >
+            Voltar ao meu carrinho
+          </a>
+          <span className="text-xs text-text-muted">
+            Botão de teste — abre <code>{TEST_CART_LINK}</code>. No e-mail real, o link leva o
+            cliente de volta ao checkout com os produtos dele.
+          </span>
+        </div>
         <div className="flex gap-2">
           <Button loading={busy} onClick={() => void save()}>
             {editing ? 'Salvar' : 'Adicionar'}
@@ -175,7 +208,7 @@ export default function CartRecoveryPage() {
               variant="outline"
               onClick={() => {
                 setEditing(null);
-                setForm(EMPTY);
+                setForm(DEFAULT_DRAFT);
               }}
             >
               Cancelar

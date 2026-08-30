@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { apiFetch } from '@/lib/api-client';
 import { resolveMediaUrl } from '@/lib/media';
+import { maskPhone } from '@/lib/phone';
 
 export interface LeadPopupConfig {
   enabled: boolean;
@@ -130,9 +131,10 @@ export function LeadPopup({
               className="min-h-touch rounded-lg border-0 bg-black/5 px-3 text-sm outline-none"
             />
             <input
-              placeholder="Digite seu celular"
+              inputMode="numeric"
+              placeholder="(11) 99999-9999"
               value={form.phone}
-              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, phone: maskPhone(e.target.value) }))}
               className="min-h-touch rounded-lg border-0 bg-black/5 px-3 text-sm outline-none"
             />
             {err && <p className="text-xs text-danger">{err}</p>}

@@ -65,6 +65,92 @@ async def register(
     return user, pair
 
 
+async def ensure_user_for_checkout(
+    db: AsyncSession, *, email: str, cpf: str | None, full_name: str, phone: str | None
+) -> tuple[User, dict | None]:
+    """Garante uma conta para o comprador. Devolve (user, pair) — `pair` só vem
+    quando é seguro logar automaticamente:
+    - conta nova → cria com o CPF como senha e loga;
+    - conta existente com o mesmo CPF → loga;
+    - conta existente com CPF diferente → só vincula o pedido, sem login.
+    """
+    from app.shared.cpf import only_digits
+
+    cpf_digits = only_digits(cpf) if cpf else ""
+    existing = await db.scalar(select(User).where(User.email == email))
+    if existing:
+        if not existing.phone and phone:
+            existing.phone = phone
+        if not existing.cpf and cpf_digits:
+            existing.cpf = cpf_digits
+        same_person = bool(
+            cpf_digits and verify_password(cpf_digits, existing.password_hash)
+        )
+        if not same_person:
+            return existing, None
+        pair = issue_pair(str(existing.id), scope="customer")
+        await _store_refresh(db, str(existing.id), pair)
+        return existing, pair
+
+    user = User(
+        full_name=full_name or (email.split("@", 1)[0]),
+        email=email,
+        password_hash=hash_password(cpf_digits or email),
+        phone=phone,
+        cpf=cpf_digits or None,
+        is_active=True,
+    )
+    db.add(user)
+    await db.flush()
+    pair = issue_pair(str(user.id), scope="customer")
+    await _store_refresh(db, str(user.id), pair)
+    await emit("customer.registered", {"user_id": str(user.id)})
+    return user, pair
+
+
+async def sync_default_address(db: AsyncSession, user: User, addr: dict) -> None:
+    """Grava (ou atualiza) o endereço padrão do cliente a partir de uma compra.
+    O endereço da última compra é sempre o "atual" — aparece em Meus endereços
+    e nos detalhes do cliente no painel."""
+    from app.shared.cpf import only_digits
+
+    zip_digits = only_digits(str(addr.get("zip") or ""))[:8]
+    street = (addr.get("street") or "").strip()
+    if not zip_digits or not street:
+        return  # sem dados de endereço utilizáveis
+
+    fields = dict(
+        label="Endereço da última compra",
+        recipient_name=(addr.get("recipient_name") or user.full_name or "").strip()[:160],
+        zip=zip_digits,
+        street=street[:200],
+        number=(str(addr.get("number") or "").strip() or "s/n")[:20],
+        complement=((addr.get("complement") or "").strip() or None),
+        district=(addr.get("district") or "").strip()[:120],
+        city=(addr.get("city") or "").strip()[:120],
+        state=(addr.get("state") or "").strip().upper()[:2],
+        country=(addr.get("country") or "BR").strip().upper()[:2],
+    )
+
+    existing = list(
+        await db.scalars(select(CustomerAddress).where(CustomerAddress.user_id == user.id))
+    )
+    for a in existing:
+        a.is_default = False
+    target = next((a for a in existing if a.is_default), None) or next(
+        (a for a in existing if a.label == fields["label"]), None
+    )
+    if target is None and len(existing) == 1:
+        target = existing[0]
+    if target is None:
+        db.add(CustomerAddress(user_id=user.id, is_default=True, **fields))
+    else:
+        for k, v in fields.items():
+            setattr(target, k, v)
+        target.is_default = True
+    await db.flush()
+
+
 async def login(db: AsyncSession, email: str, password: str) -> tuple[User, dict]:
     user = await db.scalar(select(User).where(User.email == email))
     if not user or not user.is_active or not verify_password(password, user.password_hash):

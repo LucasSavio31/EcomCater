@@ -12,6 +12,7 @@ import type { CardPayload, CheckoutPayload, PaymentMethods } from '@/modules/che
 import type { ShippingOption } from '@/modules/cart/types';
 import { cartApi } from '@/modules/cart/api';
 import { apiFetch } from '@/lib/api-client';
+import { setCustomerSession } from '@/lib/customer-auth-storage';
 import { formatBRL } from '@/lib/format';
 import { isValidCpf } from '@/lib/cpf';
 import { lookupCep } from '@/lib/viacep';
@@ -59,6 +60,14 @@ const maskCpf = (v: string) => {
     .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
     .replace(/\.(\d{3})(\d)/, '.$1-$2');
 };
+const maskPhone = (v: string) => {
+  const d = onlyDigits(v).slice(0, 11);
+  if (d.length === 0) return '';
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+};
 
 const STEP_ORDER: CheckoutStepId[] = ['identify', 'profile', 'shipping', 'payment'];
 
@@ -103,7 +112,7 @@ export function CheckoutView({
 }) {
   const router = useRouter();
   const { cart, loading, refresh, setZip, selectShipping } = useCart();
-  const { customer } = useAuth();
+  const { customer, reload: reloadAuth } = useAuth();
 
   // ---- navegação entre etapas
   const [step, setStep] = useState<CheckoutStepId>('identify');
@@ -140,6 +149,7 @@ export function CheckoutView({
   const [bumpChecked, setBumpChecked] = useState<Set<string>>(new Set());
 
   const [submitting, setSubmitting] = useState(false);
+  const [placed, setPlaced] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const idemRef = useRef<string>('');
   if (!idemRef.current && typeof crypto !== 'undefined') idemRef.current = crypto.randomUUID();
@@ -152,7 +162,7 @@ export function CheckoutView({
     const parts = customer.full_name.trim().split(/\s+/);
     setFirstName((v) => v || parts[0] || '');
     setLastName((v) => v || parts.slice(1).join(' '));
-    setPhone((v) => v || customer.phone || '');
+    setPhone((v) => v || (customer.phone ? maskPhone(customer.phone) : ''));
     setFurthest((f) => (f === 'identify' ? 'profile' : f));
     setStep((s) => (s === 'identify' ? 'profile' : s));
   }, [customer]);
@@ -410,6 +420,13 @@ export function CheckoutView({
       return;
     }
     const order = orderRes.data;
+    setPlaced(true); // trava a tela de checkout — nada de "carrinho vazio" piscando
+
+    // comprador já sai logado — pode ir direto para "minhas compras"
+    if (order.auth) {
+      setCustomerSession(order.auth);
+      void reloadAuth();
+    }
 
     const chargeRes = await checkoutApi.charge({
       order_number: order.number,
@@ -418,6 +435,7 @@ export function CheckoutView({
     });
     if (!chargeRes.ok) {
       setSubmitting(false);
+      setPlaced(false); // volta o formulário para o cliente refazer o pagamento
       setError(
         `Pedido ${order.number} criado, mas o pagamento não foi autorizado: ${chargeRes.error.message}. Revise os dados e tente novamente.`,
       );
@@ -429,14 +447,23 @@ export function CheckoutView({
     } catch {
       /* segue mesmo sem sessionStorage */
     }
-    await refresh();
+    // navega ANTES de atualizar o carrinho — assim a tela de "obrigado" entra
+    // direto, sem a tela de "carrinho vazio" aparecer no meio do caminho
     router.push(`/checkout/obrigado?pedido=${order.number}&email=${encodeURIComponent(email.trim())}`);
+    void refresh();
   }
 
   if (loading) {
     return (
       <p className="flex items-center gap-2 py-16 text-text-muted">
         <Spinner /> Carregando…
+      </p>
+    );
+  }
+  if (placed) {
+    return (
+      <p className="flex items-center justify-center gap-2 py-24 text-text-muted">
+        <Spinner /> Finalizando seu pedido…
       </p>
     );
   }
@@ -620,8 +647,9 @@ export function CheckoutView({
               label="Telefone / WhatsApp"
               inputMode="numeric"
               required
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              placeholder="(11) 99999-9999"
+              value={maskPhone(phone)}
+              onChange={(e) => setPhone(maskPhone(e.target.value))}
               error={phone && onlyDigits(phone).length < 10 ? 'Telefone incompleto' : undefined}
             />
           </div>
