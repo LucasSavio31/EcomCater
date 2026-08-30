@@ -66,18 +66,19 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
       : null;
 
   const configuredMessages = (
-    theme.top_bar_carousel
-      ? [theme.top_bar_message, theme.top_bar_message_2, theme.top_bar_message_3]
-      : [theme.top_bar_message]
+    theme.top_bar_enabled
+      ? theme.top_bar_carousel
+        ? [theme.top_bar_message, theme.top_bar_message_2, theme.top_bar_message_3]
+        : [theme.top_bar_message]
+      : []
   )
     .map((m) => (m ?? '').trim())
     .filter(Boolean);
 
+  // a barra só existe se houver algo real para mostrar — nada de tarja vazia
   const topBarMessages = [freeShipMsg, ...configuredMessages].filter(Boolean) as string[];
-  if (topBarMessages.length === 0) topBarMessages.push('Bem-vindo à nossa loja');
-
   const rotate = topBarMessages.length > 1;
-  const showTopBar = theme.top_bar_enabled || Boolean(freeShipMsg);
+  const showTopBar = topBarMessages.length > 0;
   const [topBarIdx, setTopBarIdx] = useState(0);
   useEffect(() => {
     if (!rotate) return;
