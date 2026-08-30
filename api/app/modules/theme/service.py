@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.modules.theme.models import Page, ThemeSettings
-from app.shared.images import process_image
+from app.shared.images import process_favicon, process_image
 from app.shared.slugify import make_slug
 from app.shared.storage import storage
 
@@ -231,8 +231,12 @@ async def set_theme_image(db: AsyncSession, kind: str, raw: bytes, filename: str
     if kind not in ("logo", "logo_mobile", "favicon"):
         raise ValidationError("Tipo de imagem inválido.")
     row = await get_theme(db)
-    processed = process_image(raw, filename, prefix="theme")
-    setattr(row, f"{kind}_key", processed.medium_key if kind != "favicon" else processed.thumb_key)
+    if kind == "favicon":
+        # 50x50 + .ico, aceita qualquer formato de imagem enviado
+        row.favicon_key = process_favicon(raw, prefix="theme")
+    else:
+        processed = process_image(raw, filename, prefix="theme")
+        setattr(row, f"{kind}_key", processed.medium_key)
     row.updated_at = datetime.now(UTC)
     return row
 

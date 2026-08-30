@@ -17,17 +17,22 @@ import { MiniCartDrawer } from '@/components/cart/mini-cart-drawer';
 import { AuthProvider } from '@/modules/customer/auth-context';
 import { SITE_NAME, SITE_URL, jsonLdScript, organizationJsonLd, webSiteJsonLd } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
-  title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
-  description: 'Loja online.',
-  manifest: '/manifest.json',
-  applicationName: SITE_NAME,
-  icons: {
-    icon: '/icons/icon-192.png',
-    apple: '/icons/icon-192.png',
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const theme = await getTheme();
+  const favicon = theme.favicon_url || '/icons/icon-192.png';
+  return {
+    metadataBase: new URL(SITE_URL),
+    title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
+    description: 'Loja online.',
+    manifest: '/manifest.json',
+    applicationName: SITE_NAME,
+    icons: {
+      icon: favicon,
+      shortcut: favicon,
+      apple: theme.favicon_url || '/icons/icon-192.png',
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: '#111111',

@@ -34,6 +34,20 @@ def _resize_webp(img: Image.Image, max_side: int, quality: int) -> bytes:
     return buf.getvalue()
 
 
+def process_favicon(raw: bytes, *, prefix: str = "theme") -> str:
+    """Redimensiona para 50x50 (quadrado, sem distorcer) e salva como .ico
+    (com 32 e 16 embutidos p/ compatibilidade). Retorna a storage key."""
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw)))
+    if img.mode not in ("RGB", "RGBA"):
+        img = img.convert("RGBA")
+    square = ImageOps.fit(img, (50, 50), Image.LANCZOS)
+    buf = io.BytesIO()
+    square.save(buf, format="ICO", sizes=[(50, 50), (32, 32), (16, 16)])
+    key = f"{prefix}/{uuid.uuid4().hex}/favicon.ico"
+    storage.save(key, buf.getvalue(), "image/x-icon")
+    return key
+
+
 def process_image(
     raw: bytes,
     original_filename: str,

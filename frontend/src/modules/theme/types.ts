@@ -25,6 +25,7 @@ export interface ThemeSettings {
   logo_mobile_key?: string | null;
   logo_url?: string | null;
   favicon_key?: string | null;
+  favicon_url?: string | null;
   free_shipping_threshold_cents?: number | null;
   whatsapp_number?: string | null;
   top_bar_message?: string | null;
@@ -161,6 +162,7 @@ export const NEUTRAL_THEME: ThemeSettings = {
   footer_text_color: '#E5E7EB',
   font_family: 'Inter, system-ui, sans-serif',
   logo_url: null,
+  favicon_url: null,
   top_bar_enabled: false,
   top_bar_message: null,
   top_bar_carousel: false,
