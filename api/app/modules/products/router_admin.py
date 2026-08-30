@@ -14,6 +14,7 @@ from app.modules.admin.models import AdminUser
 from app.modules.products import service, service_variants
 from app.modules.products.models import Product
 from app.modules.products.schemas import (
+    ColorGroupIn,
     OptionTypeIn,
     OptionTypePatchIn,
     OptionValueAddIn,
@@ -94,6 +95,16 @@ async def delete_product(product_id: str, db: DbDep, _: EditorDep) -> None:
 async def duplicate_product(product_id: str, db: DbDep, _: EditorDep) -> dict:
     product = await service.duplicate(db, product_id)
     return {"id": str(product.id), "slug": product.slug, "name": product.name}
+
+
+@router.put("/{product_id}/color-group", response_model=None)
+async def set_color_group(product_id: str, body: ColorGroupIn, db: DbDep, _: EditorDep) -> dict:
+    await service.set_color_group(
+        db, product_id, color_name=body.color_name, sibling_ids=body.sibling_ids
+    )
+    return await service.get_detail_by_slug(
+        db, (await service.get_admin(db, product_id)).slug, include_unpublished=True
+    )
 
 
 # ------------------------------------------------------------------ eixos de opção

@@ -2,11 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { Button } from '@ecom/ui';
-import type { OptionType, ProductDetail, ProductVariant } from '@/modules/catalog/types';
+import type { ProductDetail, ProductVariant } from '@/modules/catalog/types';
 import { useCart } from '@/modules/cart/cart-context';
-import { resolveMediaUrl } from '@/lib/media';
 import { applyPixDiscount, formatBRL, installmentsText } from '@/lib/format';
 import { HeartIcon } from '@/components/icons';
 import { useWishlist } from '@/modules/wishlist/use-wishlist';
@@ -18,24 +16,12 @@ interface PdpBuyBoxProps {
   redirectAfterAdd?: boolean;
   /** Abrir o mini-carrinho lateral ao adicionar (tem precedência). */
   miniCart?: boolean;
-  /** Eixo de cor (renderizado como miniaturas), controlado pelo pai. */
-  colorType?: OptionType | null;
-  colorValueId?: string | null;
-  onColorChange?: (valueId: string) => void;
 }
 
-export function PdpBuyBox({
-  product,
-  redirectAfterAdd = false,
-  miniCart = false,
-  colorType = null,
-  colorValueId = null,
-  onColorChange,
-}: PdpBuyBoxProps) {
+export function PdpBuyBox({ product, redirectAfterAdd = false, miniCart = false }: PdpBuyBoxProps) {
   const router = useRouter();
   const { addItem, openMiniCart } = useCart();
   const { has: isWished, toggle: toggleWish } = useWishlist();
-  // seleção dos eixos que NÃO são cor (a cor vem do pai)
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
@@ -49,12 +35,7 @@ export function PdpBuyBox({
     [product.variants],
   );
 
-  /** Seleção efetiva = eixos internos + cor controlada pelo pai. */
-  const effectiveSelected = useMemo<Record<string, string>>(() => {
-    const base = { ...selected };
-    if (colorType && colorValueId) base[colorType.id] = colorValueId;
-    return base;
-  }, [selected, colorType, colorValueId]);
+  const effectiveSelected = selected;
 
   const isValueAvailable = (optionTypeId: string, valueId: string): boolean => {
     const others = Object.entries(effectiveSelected).filter(([tid]) => tid !== optionTypeId);
@@ -93,10 +74,6 @@ export function PdpBuyBox({
   const canBuy = !needsSelection && !outOfStock && !!buyVariant && !busy;
 
   const chooseValue = (typeId: string, valueId: string) => {
-    if (colorType && typeId === colorType.id) {
-      onColorChange?.(valueId);
-      return;
-    }
     setSelected((prev) => ({ ...prev, [typeId]: valueId }));
   };
 
@@ -137,8 +114,6 @@ export function PdpBuyBox({
     };
   }
 
-  const colorValue = colorType?.values.find((v) => v.id === colorValueId) ?? null;
-
   return (
     <div className="flex flex-col gap-5">
       {/* Preço */}
@@ -163,48 +138,8 @@ export function PdpBuyBox({
         {parcela && <p className="text-sm text-text-muted">{parcela.replace(/^ou /, 'Ou ')}</p>}
       </div>
 
-      {/* Miniaturas de cor (quando há eixo de cor com +1 valor) */}
-      {colorType && colorType.values.length > 1 && (
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-semibold uppercase tracking-wide">
-            {colorType.name}
-            {colorValue && (
-              <span className="font-normal normal-case text-text-muted">: {colorValue.value}</span>
-            )}
-          </legend>
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={colorType.name}>
-            {colorType.values.map((v) => {
-              const isSelected = v.id === colorValueId;
-              const available = isValueAvailable(colorType.id, v.id);
-              const src = resolveMediaUrl(v.swatch_thumb_url ?? undefined);
-              return (
-                <button
-                  key={v.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={isSelected}
-                  title={v.value}
-                  onClick={() => chooseValue(colorType.id, v.id)}
-                  className={`relative h-[70px] w-[103px] overflow-hidden rounded-card border-2 bg-surface transition ${
-                    isSelected ? 'border-var-border' : 'border-surface-border hover:border-var-border'
-                  } ${!available ? 'opacity-60' : ''}`}
-                >
-                  {src ? (
-                    <Image src={src} alt={v.value} fill sizes="103px" className="object-cover" />
-                  ) : (
-                    <span className="flex h-full items-center justify-center px-1 text-xs">{v.value}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
-      )}
-
-      {/* Eixos de variação que NÃO são cor → caixinhas (numeração/tamanho etc.) */}
-      {product.option_types
-        .filter((type) => !(colorType && type.id === colorType.id))
-        .map((type) => (
+      {/* Eixos de variação → caixinhas (numeração/tamanho etc.) */}
+      {product.option_types.map((type) => (
           <fieldset key={type.id} className="flex flex-col gap-2">
             <legend className="mb-1 flex w-full items-center justify-between text-sm font-semibold uppercase tracking-wide">
               <span>

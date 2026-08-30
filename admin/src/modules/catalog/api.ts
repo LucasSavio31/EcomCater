@@ -129,6 +129,8 @@ export const productsApi = {
     adminFetch<ProductDetail>(`/api/admin/products/${id}/option-values/${valueId}`, {
       method: 'DELETE',
     }),
+  setColorGroup: (id: string, body: { color_name: string | null; sibling_ids: string[] }) =>
+    adminFetch<ProductDetail>(`/api/admin/products/${id}/color-group`, { method: 'PUT', body }),
 
   createVariant: (id: string, body: VariantInput) =>
     adminFetch<Variant>(`/api/admin/products/${id}/variants`, { method: 'POST', body }),

@@ -41,6 +41,10 @@ class Product(UUIDPKMixin, TimestampMixin, Base):
     brand: Mapped[str | None] = mapped_column(String(120))
     # Fornecedor — uso interno (não aparece na loja). Base para separar PDFs/etiquetas.
     supplier: Mapped[str | None] = mapped_column(String(160), index=True)
+    # Variação de COR = produtos irmãos. Produtos com o mesmo color_group_id são
+    # a mesma peça em cores diferentes; color_name é o rótulo ("Preto", "Cinza").
+    color_group_id: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), index=True)
+    color_name: Mapped[str | None] = mapped_column(String(60))
     category_id: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("categories.id", ondelete="SET NULL"), index=True
     )

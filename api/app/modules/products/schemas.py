@@ -28,6 +28,11 @@ class OptionValueAddIn(BaseModel):
     value: str
 
 
+class ColorGroupIn(BaseModel):
+    color_name: str | None = None
+    sibling_ids: list[str] = []
+
+
 class OptionValueUpdateIn(BaseModel):
     value: str | None = None
     image_id: str | None = None
@@ -214,6 +219,8 @@ class ProductDetail(BaseModel):
     rating_count: int
     seo_title: str | None
     seo_description: str | None
+    color_name: str | None = None
+    color_siblings: list[dict] = []
     option_types: list[OptionTypeOut]
     variants: list[VariantOut]
     images: list[ImageOut]

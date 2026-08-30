@@ -6,6 +6,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -158,6 +159,34 @@ def _detail_loader(stmt: Select) -> Select:
     )
 
 
+async def _color_siblings(
+    db: AsyncSession, product: Product, *, include_unpublished: bool = False
+) -> list[dict]:
+    """Produtos irmãos de cor (mesmo color_group_id), incluindo o atual, ordenados
+    por nome. Cada item traz a imagem principal para a miniatura da PDP."""
+    if not product.color_group_id:
+        return []
+    stmt = select(Product).where(Product.color_group_id == product.color_group_id)
+    if not include_unpublished:
+        stmt = stmt.where(Product.status == "active")
+    rows = list(await db.scalars(stmt.options(selectinload(Product.images))))
+    rows.sort(key=lambda p: (p.color_name or p.name or "").lower())
+    out: list[dict] = []
+    for p in rows:
+        imgs = sorted(p.images, key=lambda i: (not i.is_primary, i.position))
+        out.append(
+            {
+                "id": str(p.id),
+                "slug": p.slug,
+                "name": p.name,
+                "color_name": p.color_name or p.name,
+                "image_url": storage.url(imgs[0].thumb_key) if imgs else None,
+                "is_current": p.id == product.id,
+            }
+        )
+    return out
+
+
 async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished: bool = False) -> dict:
     stmt = _detail_loader(select(Product).where(Product.slug == slug))
     product = await db.scalar(stmt)
@@ -166,6 +195,7 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
 
     category = await db.get(Category, product.category_id) if product.category_id else None
     price = _min_variant_price(product)
+    color_siblings = await _color_siblings(db, product, include_unpublished=include_unpublished)
 
     related_ids = [
         r.related_product_id
@@ -251,6 +281,8 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
         "rating_count": product.rating_count,
         "seo_title": product.seo_title,
         "seo_description": product.seo_description,
+        "color_name": product.color_name,
+        "color_siblings": color_siblings,
         "option_types": option_types,
         "variants": [
             _variant_out(product, v)
@@ -469,6 +501,59 @@ async def get_admin(db: AsyncSession, product_id: str) -> Product:
     if not product:
         raise NotFoundError("Produto não encontrado.")
     return product
+
+
+async def _cleanup_color_group(db: AsyncSession, group_id: uuid.UUID | None) -> None:
+    """Se o grupo de cor ficou com menos de 2 membros, dissolve-o."""
+    if not group_id:
+        return
+    ids = list(await db.scalars(select(Product.id).where(Product.color_group_id == group_id)))
+    if len(ids) < 2:
+        await db.execute(
+            sa_update(Product).where(Product.color_group_id == group_id).values(color_group_id=None)
+        )
+
+
+async def set_color_group(
+    db: AsyncSession, product_id: str, *, color_name: str | None, sibling_ids: list[str]
+) -> Product:
+    """Define o rótulo de cor do produto e liga/desliga os produtos irmãos
+    (mesma peça em outra cor). Todos os membros passam a compartilhar o
+    `color_group_id`."""
+    p = await get_admin(db, product_id)
+    p.color_name = (color_name or "").strip() or None
+
+    members = {p.id}
+    for s in sibling_ids or []:
+        try:
+            members.add(_uuid(s))
+        except ValidationError:
+            continue
+    old_gid = p.color_group_id
+
+    if len(members) <= 1:
+        p.color_group_id = None
+        await db.flush()
+        await _cleanup_color_group(db, old_gid)
+        return await get_admin(db, product_id)
+
+    existing = list(await db.scalars(select(Product).where(Product.id.in_(members))))
+    if len(existing) != len(members):
+        raise ValidationError("Um dos produtos irmãos não foi encontrado.")
+    gid = next((m.color_group_id for m in existing if m.color_group_id), None) or uuid.uuid4()
+
+    await db.execute(
+        sa_update(Product).where(Product.id.in_(members)).values(color_group_id=gid)
+    )
+    if old_gid and old_gid != gid:
+        await db.execute(
+            sa_update(Product)
+            .where(Product.color_group_id == old_gid, Product.id.notin_(members))
+            .values(color_group_id=None)
+        )
+        await _cleanup_color_group(db, old_gid)
+    await db.flush()
+    return await get_admin(db, product_id)
 
 
 _PRODUCT_COPY_FIELDS = (

@@ -157,12 +157,23 @@ export interface ProductDetail {
   is_featured: boolean;
   seo_title: string | null;
   seo_description: string | null;
+  color_name: string | null;
+  color_siblings: ColorSibling[];
   option_types: OptionType[];
   variants: Variant[];
   images: ProductImage[];
   specs: ProductSpec[];
   related_product_ids: string[];
   related_products?: RelatedProduct[];
+}
+
+export interface ColorSibling {
+  id: string;
+  slug: string;
+  name: string;
+  color_name: string;
+  image_url: string | null;
+  is_current: boolean;
 }
 
 export interface ProductInput {

@@ -113,6 +113,15 @@ export interface ProductImage {
   zoom_url: string;
 }
 
+export interface ColorSibling {
+  id: string;
+  slug: string;
+  name: string;
+  color_name: string;
+  image_url: string | null;
+  is_current: boolean;
+}
+
 export interface ProductSpec {
   id: string;
   group: string | null;
@@ -159,6 +168,8 @@ export interface ProductDetail {
   rating_count: number;
   seo_title: string | null;
   seo_description: string | null;
+  color_name: string | null;
+  color_siblings: ColorSibling[];
   option_types: OptionType[];
   variants: ProductVariant[];
   images: ProductImage[];
