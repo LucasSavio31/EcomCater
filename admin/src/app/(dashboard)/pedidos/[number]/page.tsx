@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Badge, Button, Card, Input } from '@ecom/ui';
@@ -187,14 +187,23 @@ export default function PedidoDetalhePage() {
   }, [data]);
 
   // Atualiza o pedido (status + linha do tempo) sozinho, sem refresh e sem
-  // piscar a tela. Pausa durante edição ou enquanto uma ação está em curso.
+  // piscar a tela. Bate um "pulse" leve a cada 3s e só refaz o GET completo
+  // quando algo muda — rápido e sem gargalo. Pausa durante edição/ação.
+  const lastPulse = useRef('');
   useEffect(() => {
     const tick = async (): Promise<void> => {
       if (editMode || busy || document.visibilityState !== 'visible') return;
-      const res = await ordersApi.get(number);
-      if (res.ok) setData(res.data);
+      const p = await ordersApi.pulse(number);
+      if (!p.ok) return;
+      const sig = `${p.data.status}|${p.data.payment_status}|${p.data.fulfillment_status}|${p.data.event_count}|${p.data.last_change_at}`;
+      if (lastPulse.current && lastPulse.current !== sig) {
+        const res = await ordersApi.get(number);
+        if (res.ok) setData(res.data);
+      }
+      lastPulse.current = sig;
     };
-    const id = window.setInterval(() => void tick(), 15_000);
+    void tick();
+    const id = window.setInterval(() => void tick(), 3_000);
     const onFocus = (): void => void tick();
     window.addEventListener('focus', onFocus);
     return () => {

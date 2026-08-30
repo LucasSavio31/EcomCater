@@ -82,4 +82,13 @@ export const customerApi = {
     authFetch<void>(`${BASE}/me/addresses/${id}`, { method: 'DELETE' }),
 
   myOrders: () => authFetch<Order[]>(`/api/orders`),
+  orderPulse: (number: string) =>
+    authFetch<{
+      number: string;
+      status: string;
+      payment_status: string;
+      fulfillment_status: string;
+      event_count: number;
+      last_change_at: string | null;
+    }>(`/api/orders/${number}/pulse`),
 };

@@ -97,8 +97,24 @@ function Timeline({ events }: { events: OrderEvent[] }) {
   );
 }
 
-/** Recarrega os pedidos a cada 15s para refletir mudança de status sem refresh. */
-const POLL_MS = 15_000;
+const PAYMENT_METHOD_PT: Record<string, string> = {
+  pix: 'PIX',
+  credit_card: 'Cartão de crédito',
+  boleto: 'Boleto bancário',
+};
+const PAYMENT_STATUS_PT: Record<string, string> = {
+  pending: 'Aguardando pagamento',
+  authorized: 'Autorizado',
+  paid: 'Pago',
+  failed: 'Não autorizado',
+  refunded: 'Estornado',
+  chargeback: 'Chargeback',
+  canceled: 'Cancelado',
+};
+
+/** Poll completo lento (rede de segurança) + poll leve rápido no pedido aberto. */
+const SLOW_POLL_MS = 30_000;
+const FAST_PULSE_MS = 4_000;
 
 export function OrdersList() {
   const [orders, setOrders] = useState<Order[] | null>(null);
@@ -121,7 +137,7 @@ export function OrdersList() {
     void load(false);
     const id = window.setInterval(() => {
       if (document.visibilityState === 'visible') void load(true);
-    }, POLL_MS);
+    }, SLOW_POLL_MS);
     const onFocus = () => void load(true);
     window.addEventListener('focus', onFocus);
     return () => {
@@ -129,6 +145,25 @@ export function OrdersList() {
       window.removeEventListener('focus', onFocus);
     };
   }, [load]);
+
+  // pedido aberto: bate um "pulse" leve a cada 4s e só refaz o GET quando muda
+  const openNumber = orders?.find((o) => o.id === openId)?.number ?? null;
+  const lastPulse = useRef<string>('');
+  useEffect(() => {
+    if (!openNumber) return;
+    lastPulse.current = '';
+    const tick = async () => {
+      if (document.visibilityState !== 'visible') return;
+      const res = await customerApi.orderPulse(openNumber);
+      if (!res.ok) return;
+      const sig = `${res.data.status}|${res.data.payment_status}|${res.data.fulfillment_status}|${res.data.event_count}|${res.data.last_change_at}`;
+      if (lastPulse.current && lastPulse.current !== sig) void load(true);
+      lastPulse.current = sig;
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), FAST_PULSE_MS);
+    return () => window.clearInterval(id);
+  }, [openNumber, load]);
 
   if (error) return <p className="text-sm text-danger">{error}</p>;
   if (!orders) {
@@ -207,6 +242,32 @@ export function OrdersList() {
                     Entrega: {o.shipping_address.recipient_name} — {o.shipping_address.street},{' '}
                     {o.shipping_address.number}, {o.shipping_address.city}/{o.shipping_address.state}
                   </div>
+
+                  {o.payment && (
+                    <div className="flex flex-col gap-1">
+                      <h3 className="text-sm font-semibold">Pagamento</h3>
+                      <dl className="flex flex-col gap-1 text-sm">
+                        <div className="flex justify-between gap-2">
+                          <dt className="text-text-muted">Método</dt>
+                          <dd>{PAYMENT_METHOD_PT[o.payment.method] ?? o.payment.method}</dd>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <dt className="text-text-muted">Situação</dt>
+                          <dd>{PAYMENT_STATUS_PT[o.payment.status] ?? o.payment.status}</dd>
+                        </div>
+                        {o.payment.installments && o.payment.installments > 1 && (
+                          <div className="flex justify-between gap-2">
+                            <dt className="text-text-muted">Parcelas</dt>
+                            <dd>{o.payment.installments}x</dd>
+                          </div>
+                        )}
+                        <div className="flex justify-between gap-2">
+                          <dt className="text-text-muted">Valor</dt>
+                          <dd>{formatBRL(o.payment.amount_cents)}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-2">
                     <h3 className="text-sm font-semibold">Linha do tempo</h3>

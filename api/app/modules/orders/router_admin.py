@@ -71,6 +71,11 @@ async def _payment_out(db: AsyncSession, order: Order) -> dict | None:
     }
 
 
+@router.get("/{number}/pulse")
+async def order_pulse(number: str, db: DbDep, _: AdminDep) -> dict:
+    return await service.order_pulse(db, number)
+
+
 @router.get("/{number}")
 async def get_order(number: str, db: DbDep, _: AdminDep) -> dict:
     order = await service.get_by_number(db, number)

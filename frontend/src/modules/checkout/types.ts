@@ -49,6 +49,16 @@ export interface OrderEvent {
   created_at: string | null;
 }
 
+export interface OrderPayment {
+  method: string;
+  status: string;
+  amount_cents: number;
+  installments: number | null;
+  paid_at: string | null;
+  pix_qr_code: string | null;
+  boleto_url: string | null;
+}
+
 export interface Order {
   id: string;
   number: string;
@@ -56,6 +66,7 @@ export interface Order {
   payment_status: string;
   fulfillment_status: string;
   email: string;
+  payment?: OrderPayment | null;
   items: OrderItem[];
   items_total_cents: number;
   discount_cents: number;

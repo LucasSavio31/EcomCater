@@ -216,6 +216,90 @@ async def get_by_number(db: AsyncSession, number: str, *, email: str | None = No
     return order
 
 
+def _payment_public(p) -> dict | None:
+    if not p:
+        return None
+    return {
+        "method": p.method,
+        "status": p.status,
+        "amount_cents": p.amount_cents,
+        "installments": p.installments,
+        "paid_at": p.paid_at.isoformat() if p.paid_at else None,
+        "pix_qr_code": p.pix_qr_code,
+        "boleto_url": p.boleto_url,
+    }
+
+
+async def payment_for_order(db: AsyncSession, order_id: uuid.UUID) -> dict | None:
+    from app.modules.payment.models import Payment
+
+    p = await db.scalar(
+        select(Payment).where(Payment.order_id == order_id).order_by(Payment.created_at.desc())
+    )
+    return _payment_public(p)
+
+
+async def payments_for_orders(
+    db: AsyncSession, order_ids: list[uuid.UUID]
+) -> dict[str, dict]:
+    """Último pagamento de cada pedido, em uma consulta só."""
+    if not order_ids:
+        return {}
+    from app.modules.payment.models import Payment
+
+    rows = await db.scalars(
+        select(Payment)
+        .where(Payment.order_id.in_(order_ids))
+        .order_by(Payment.order_id, Payment.created_at.desc())
+    )
+    out: dict[str, dict] = {}
+    for p in rows:
+        key = str(p.order_id)
+        if key not in out:  # o primeiro por pedido já é o mais recente
+            out[key] = _payment_public(p)  # type: ignore[assignment]
+    return out
+
+
+async def order_pulse(
+    db: AsyncSession, number: str, *, email: str | None = None
+) -> dict:
+    """Resposta minúscula para polling rápido: só o que muda (status + nº de
+    eventos + data do último). O cliente só refaz o GET completo quando isto
+    muda — sem gargalo mesmo com intervalo curto."""
+    from sqlalchemy import func
+
+    from app.modules.orders.models import OrderEvent
+
+    row = (
+        await db.execute(
+            select(
+                Order.email,
+                Order.status,
+                Order.payment_status,
+                Order.fulfillment_status,
+                Order.updated_at,
+                func.count(OrderEvent.id),
+                func.max(OrderEvent.created_at),
+            )
+            .outerjoin(OrderEvent, OrderEvent.order_id == Order.id)
+            .where(Order.number == number)
+            .group_by(Order.id)
+        )
+    ).first()
+    if not row or (email is not None and (row[0] or "").lower() != email.lower()):
+        raise NotFoundError("Pedido não encontrado.")
+    _email, status_, pay, ful, updated_at, ev_count, ev_max = row
+    stamp = ev_max or updated_at
+    return {
+        "number": number,
+        "status": status_,
+        "payment_status": pay,
+        "fulfillment_status": ful,
+        "event_count": int(ev_count or 0),
+        "last_change_at": stamp.isoformat() if stamp else None,
+    }
+
+
 _ORDER_STATUSES = (
     "pending_payment", "paid", "processing", "shipped", "delivered", "canceled", "refunded",
 )

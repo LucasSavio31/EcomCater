@@ -50,6 +50,16 @@ class OrderEventOut(BaseModel):
     created_at: datetime | None
 
 
+class OrderPaymentOut(BaseModel):
+    method: str
+    status: str
+    amount_cents: int
+    installments: int | None = None
+    paid_at: str | None = None
+    pix_qr_code: str | None = None
+    boleto_url: str | None = None
+
+
 class OrderOut(BaseModel):
     id: str
     number: str
@@ -69,6 +79,7 @@ class OrderOut(BaseModel):
     customer_note: str | None
     placed_at: datetime | None
     events: list[OrderEventOut]
+    payment: OrderPaymentOut | None = None
 
 
 class OrderListItem(BaseModel):

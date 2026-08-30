@@ -150,35 +150,77 @@ async def update_module(
 
 # ---------------------------------------------------------------- dashboard / settings
 @router.get("/dashboard", response_model=DashboardOut)
-async def dashboard(db: DbDep, _: CurrentAdmin):
-    from datetime import UTC, datetime
+async def dashboard(
+    db: DbDep,
+    _: CurrentAdmin,
+    date_from: str | None = None,
+    date_to: str | None = None,
+):
+    from datetime import UTC, date, datetime, time
 
     from app.modules.orders.models import Order
     from app.modules.products.models import ProductVariant
 
     now = datetime.now(UTC)
+
+    def _parse(raw: str | None, *, end: bool) -> datetime | None:
+        """Aceita ISO completo (com fuso, vindo do navegador) ou só a data."""
+        if not raw:
+            return None
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+        except ValueError:
+            pass
+        try:
+            d = date.fromisoformat(raw)
+            return datetime.combine(d, time.max if end else time.min, tzinfo=UTC)
+        except ValueError:
+            return None
+
+    # janela de análise: filtro informado, senão "hoje" (contagem) e "mês" (receita)
+    win_start = _parse(date_from, end=False)
+    win_end = _parse(date_to, end=True)
+
     start_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    ranged = win_start is not None or win_end is not None
+
+    count_start = win_start if ranged else start_day
+    rev_start = win_start if ranged else start_month
+
+    def _between(col):
+        conds = []
+        if count_start is not None:
+            conds.append(col >= count_start)
+        if win_end is not None:
+            conds.append(col <= win_end)
+        return conds
 
     orders_today = await db.scalar(
-        select(func.count()).select_from(Order).where(Order.placed_at >= start_day)
+        select(func.count()).select_from(Order).where(*_between(Order.placed_at))
     )
     orders_pending = await db.scalar(
         select(func.count()).select_from(Order).where(Order.status == "pending_payment")
     )
+    rev_conds = [Order.payment_status == "paid"]
+    if rev_start is not None:
+        rev_conds.append(Order.placed_at >= rev_start)
+    if win_end is not None:
+        rev_conds.append(Order.placed_at <= win_end)
     revenue_month = await db.scalar(
-        select(func.coalesce(func.sum(Order.grand_total_cents), 0)).where(
-            Order.placed_at >= start_month,
-            Order.payment_status == "paid",
-        )
+        select(func.coalesce(func.sum(Order.grand_total_cents), 0)).where(*rev_conds)
     )
     low_stock = await db.scalar(
         select(func.count()).select_from(ProductVariant).where(
             ProductVariant.is_active.is_(True), ProductVariant.stock_qty <= 3
         )
     )
+    recent_stmt = select(Order)
+    if ranged:
+        recent_stmt = recent_stmt.where(*_between(Order.placed_at))
     recent = await db.scalars(
-        select(Order).order_by(Order.placed_at.desc().nullslast()).limit(10)
+        recent_stmt.order_by(Order.placed_at.desc().nullslast()).limit(10)
     )
     return DashboardOut(
         orders_today=int(orders_today or 0),

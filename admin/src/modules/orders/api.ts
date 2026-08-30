@@ -43,6 +43,15 @@ export const ordersApi = {
       },
     }),
   get: (number: string) => adminFetch<OrderDetail>(`/api/admin/orders/${number}`),
+  pulse: (number: string) =>
+    adminFetch<{
+      number: string;
+      status: string;
+      payment_status: string;
+      fulfillment_status: string;
+      event_count: number;
+      last_change_at: string | null;
+    }>(`/api/admin/orders/${number}/pulse`),
   bulk: (numbers: string[]) =>
     adminFetch<OrderDetail[]>('/api/admin/orders/bulk', { method: 'POST', body: { numbers } }),
   edit: (number: string, body: OrderEditPayload) =>

@@ -88,13 +88,37 @@ async def my_orders(db: DbDep, user: UserDep):
         from app.core.errors import AuthError
 
         raise AuthError("Faça login para ver seus pedidos.")
-    rows = await db.scalars(
-        select(Order)
-        .where(Order.user_id == user.id)
-        .options(selectinload(Order.items), selectinload(Order.events))
-        .order_by(Order.placed_at.desc().nullslast())
+    orders = list(
+        await db.scalars(
+            select(Order)
+            .where(Order.user_id == user.id)
+            .options(selectinload(Order.items), selectinload(Order.events))
+            .order_by(Order.placed_at.desc().nullslast())
+        )
     )
-    return [service.to_out(o) for o in rows]
+    pay_by_order = await service.payments_for_orders(db, [o.id for o in orders])
+    return [
+        {**service.to_out(o), "payment": pay_by_order.get(str(o.id))} for o in orders
+    ]
+
+
+@router.get("/{number}/pulse")
+async def order_pulse(
+    number: str,
+    db: DbDep,
+    user: UserDep,
+    email: str | None = Query(None),
+):
+    """Batimento leve do pedido para atualização quase em tempo real na conta
+    do cliente, sem baixar o pedido inteiro a cada poll."""
+    if user:
+        try:
+            order = await service.get_by_number(db, number)
+            if order.user_id and str(order.user_id) == str(user.id):
+                return await service.order_pulse(db, number)
+        except Exception:  # noqa: BLE001
+            pass
+    return await service.order_pulse(db, number, email=email)
 
 
 @router.get("/{number}", response_model=OrderOut)
@@ -107,6 +131,6 @@ async def get_order(
     if user:
         order = await service.get_by_number(db, number)
         if order.user_id and str(order.user_id) == str(user.id):
-            return service.to_out(order)
+            return {**service.to_out(order), "payment": await service.payment_for_order(db, order.id)}
     order = await service.get_by_number(db, number, email=email)
-    return service.to_out(order)
+    return {**service.to_out(order), "payment": await service.payment_for_order(db, order.id)}

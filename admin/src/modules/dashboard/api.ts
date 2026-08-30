@@ -20,5 +20,11 @@ export interface DashboardData {
 }
 
 export const dashboardApi = {
-  get: () => adminFetch<DashboardData>('/api/admin/dashboard'),
+  get: (range?: { from?: string; to?: string }) =>
+    adminFetch<DashboardData>('/api/admin/dashboard', {
+      query: {
+        date_from: range?.from || undefined,
+        date_to: range?.to || undefined,
+      },
+    }),
 };
