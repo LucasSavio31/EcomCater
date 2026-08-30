@@ -361,15 +361,17 @@ def to_out(order: Order) -> dict:
 
 async def attach_variation_options(db: AsyncSession, out: dict) -> dict:
     """Enriquece cada item do pedido com as opções de Cor / Número cadastradas
-    no produto correspondente — para os dropdowns da tela de edição."""
-    from app.modules.products.models import VariantOptionType
+    no produto correspondente (dropdowns da edição) e completa a miniatura
+    quando o item não tem imagem snapshot."""
+    from app.modules.products.models import Product, ProductImage, VariantOptionType
 
     pids = {i["product_id"] for i in out.get("items", []) if i.get("product_id")}
     if not pids:
         return out
+    pid_uuids = [uuid.UUID(p) for p in pids]
     rows = await db.scalars(
         select(VariantOptionType)
-        .where(VariantOptionType.product_id.in_([uuid.UUID(p) for p in pids]))
+        .where(VariantOptionType.product_id.in_(pid_uuids))
         .options(selectinload(VariantOptionType.values))
     )
     cor_by_pid: dict[str, list[str]] = {}
@@ -382,12 +384,28 @@ async def attach_variation_options(db: AsyncSession, out: dict) -> dict:
             cor_by_pid.setdefault(pid, []).extend(vals)
         if ot.is_size or "num" in name or "tam" in name:
             num_by_pid.setdefault(pid, []).extend(vals)
+
+    # imagem principal atual de cada produto (fallback da miniatura)
+    imgs = await db.scalars(
+        select(ProductImage).where(ProductImage.product_id.in_(pid_uuids))
+    )
+    img_by_pid: dict[str, ProductImage] = {}
+    for im in imgs:
+        pid = str(im.product_id)
+        cur = img_by_pid.get(pid)
+        if cur is None or (im.is_primary and not cur.is_primary) or im.position < cur.position:
+            img_by_pid[pid] = im
+
     for item in out.get("items", []):
         pid = item.get("product_id")
         if not pid:
             continue
         item["cor_options"] = cor_by_pid.get(pid, [])
         item["numero_options"] = num_by_pid.get(pid, [])
+        # na visão admin, prefere a imagem ATUAL do produto (o snapshot pode
+        # apontar para um arquivo já removido)
+        if pid in img_by_pid:
+            item["image_url"] = storage.url(img_by_pid[pid].medium_key)
     return out
 
 
