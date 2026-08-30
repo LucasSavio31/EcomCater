@@ -29,6 +29,12 @@ export interface ThemeSettings {
   whatsapp_number?: string | null;
   top_bar_message?: string | null;
   top_bar_enabled: boolean;
+  /** Barra superior em carrossel: roda as 3 mensagens; senão mostra só a 1ª. */
+  top_bar_carousel: boolean;
+  top_bar_message_2?: string | null;
+  top_bar_message_3?: string | null;
+  top_bar_bg_color: string;
+  top_bar_text_color: string;
   /** Banner principal (hero) da home. */
   hero_enabled: boolean;
   hero_mode: 'carousel' | 'static';
@@ -156,6 +162,11 @@ export const NEUTRAL_THEME: ThemeSettings = {
   logo_url: null,
   top_bar_enabled: false,
   top_bar_message: null,
+  top_bar_carousel: false,
+  top_bar_message_2: null,
+  top_bar_message_3: null,
+  top_bar_bg_color: '#111111',
+  top_bar_text_color: '#FFFFFF',
   hero_enabled: true,
   hero_mode: 'carousel',
   hero_autoplay_seconds: 5,

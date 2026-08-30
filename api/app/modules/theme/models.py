@@ -60,6 +60,18 @@ class ThemeSettings(Base):
     whatsapp_number: Mapped[str | None] = mapped_column(String(32))
     top_bar_message: Mapped[str | None] = mapped_column(String(240))
     top_bar_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # carrossel: quando ligado, roda as 3 mensagens; senão mostra só a 1ª
+    top_bar_carousel: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    top_bar_message_2: Mapped[str | None] = mapped_column(String(240))
+    top_bar_message_3: Mapped[str | None] = mapped_column(String(240))
+    top_bar_bg_color: Mapped[str] = mapped_column(
+        String(9), default="#111111", server_default="#111111", nullable=False
+    )
+    top_bar_text_color: Mapped[str] = mapped_column(
+        String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False
+    )
 
     # Banner principal (hero) da home
     hero_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)

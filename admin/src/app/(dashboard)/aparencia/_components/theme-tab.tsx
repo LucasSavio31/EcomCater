@@ -211,11 +211,49 @@ export function ThemeTab() {
                 checked={theme.top_bar_enabled}
                 onChange={(v) => set('top_bar_enabled', v)}
               />
-              <Input
-                label="Mensagem da barra superior"
-                value={theme.top_bar_message ?? ''}
-                onChange={(e) => set('top_bar_message', e.target.value)}
+              <Checkbox
+                label="Texto em carrossel (até 3 mensagens girando)"
+                hint="Desligado: mostra só uma mensagem fixa."
+                checked={theme.top_bar_carousel}
+                onChange={(v) => set('top_bar_carousel', v)}
               />
+              {theme.top_bar_carousel ? (
+                <>
+                  <Input
+                    label="Mensagem 1"
+                    value={theme.top_bar_message ?? ''}
+                    onChange={(e) => set('top_bar_message', e.target.value)}
+                  />
+                  <Input
+                    label="Mensagem 2"
+                    value={theme.top_bar_message_2 ?? ''}
+                    onChange={(e) => set('top_bar_message_2', e.target.value || null)}
+                  />
+                  <Input
+                    label="Mensagem 3"
+                    value={theme.top_bar_message_3 ?? ''}
+                    onChange={(e) => set('top_bar_message_3', e.target.value || null)}
+                  />
+                </>
+              ) : (
+                <Input
+                  label="Mensagem da barra superior"
+                  value={theme.top_bar_message ?? ''}
+                  onChange={(e) => set('top_bar_message', e.target.value)}
+                />
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ColorField
+                  label="Cor de fundo da barra"
+                  value={String(theme.top_bar_bg_color ?? '#111111')}
+                  onChange={(hex) => set('top_bar_bg_color', hex as Theme['top_bar_bg_color'])}
+                />
+                <ColorField
+                  label="Cor do texto da barra"
+                  value={String(theme.top_bar_text_color ?? '#FFFFFF')}
+                  onChange={(hex) => set('top_bar_text_color', hex as Theme['top_bar_text_color'])}
+                />
+              </div>
               <Input
                 label="WhatsApp"
                 value={theme.whatsapp_number ?? ''}
@@ -407,12 +445,13 @@ export function ThemeTab() {
               className="overflow-hidden rounded-card border"
               style={{ borderColor: theme.secondary_color, fontFamily: theme.font_family }}
             >
-              {theme.top_bar_enabled && theme.top_bar_message && (
+              {theme.top_bar_enabled && (theme.top_bar_message || theme.top_bar_message_2) && (
                 <div
                   className="px-3 py-1 text-center text-xs"
-                  style={{ background: theme.primary_color, color: theme.bg_color }}
+                  style={{ background: theme.top_bar_bg_color, color: theme.top_bar_text_color }}
                 >
-                  {theme.top_bar_message}
+                  {theme.top_bar_message || theme.top_bar_message_2}
+                  {theme.top_bar_carousel && ' · (carrossel)'}
                 </div>
               )}
               {/* header mock: largura limitada por header_max_width_px */}

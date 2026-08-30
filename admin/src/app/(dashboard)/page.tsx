@@ -20,7 +20,10 @@ function monthStartISO(): string {
 }
 /** "2026-08-29" -> ISO no fuso local do navegador (início/fim do dia). */
 function dayBoundISO(ymd: string, end: boolean): string {
-  const [y, m, d] = ymd.split('-').map(Number);
+  const parts = ymd.split('-');
+  const y = Number(parts[0]) || 1970;
+  const m = Number(parts[1]) || 1;
+  const d = Number(parts[2]) || 1;
   const dt = end
     ? new Date(y, m - 1, d, 23, 59, 59, 999)
     : new Date(y, m - 1, d, 0, 0, 0, 0);

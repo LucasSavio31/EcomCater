@@ -53,17 +53,37 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
   const logo = resolveMediaUrl(theme.logo_url);
   const wa = whatsappHref(theme.whatsapp_number);
 
+  // Barra superior: 1 texto estático ou carrossel com até 3 textos.
+  const topBarMessages = [theme.top_bar_message, theme.top_bar_message_2, theme.top_bar_message_3]
+    .map((m) => (m ?? '').trim())
+    .filter(Boolean);
+  if (topBarMessages.length === 0) {
+    topBarMessages.push(
+      theme.free_shipping_threshold_cents
+        ? 'Frete grátis nas compras acima do valor mínimo'
+        : 'Bem-vindo à nossa loja',
+    );
+  }
+  const carousel = theme.top_bar_carousel && topBarMessages.length > 1;
+  const [topBarIdx, setTopBarIdx] = useState(0);
+  useEffect(() => {
+    if (!carousel) return;
+    setTopBarIdx(0);
+    const id = window.setInterval(
+      () => setTopBarIdx((i) => (i + 1) % topBarMessages.length),
+      4000,
+    );
+    return () => window.clearInterval(id);
+  }, [carousel, topBarMessages.length]);
+
   return (
     <header className="sticky top-0 z-40 border-b border-surface-border bg-header text-header-fg">
       {/* Barra utilitária */}
       {theme.top_bar_enabled && (
-        <div className="bg-primary text-primary-fg">
+        <div style={{ backgroundColor: theme.top_bar_bg_color, color: theme.top_bar_text_color }}>
           <div className="mx-auto flex max-w-header items-center justify-between gap-3 px-4 py-1.5 text-xs">
-            <p className="truncate">
-              {theme.top_bar_message ??
-                (theme.free_shipping_threshold_cents
-                  ? 'Frete grátis nas compras acima do valor mínimo'
-                  : 'Bem-vindo à nossa loja')}
+            <p key={carousel ? topBarIdx : 'static'} className="truncate transition-opacity">
+              {carousel ? topBarMessages[topBarIdx] : topBarMessages[0]}
             </p>
             {wa && (
               <a
