@@ -34,6 +34,23 @@ def _resize_webp(img: Image.Image, max_side: int, quality: int) -> bytes:
     return buf.getvalue()
 
 
+def whiten_bytes(raw: bytes) -> bytes:
+    """Devolve uma versão BRANCA da imagem: mantém as formas (silhueta) e pinta
+    tudo de branco. Funciona com fundo transparente ou fundo claro/branco —
+    útil para tiras de logos de pagamento sobre rodapé escuro."""
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw)))
+    if img.mode == "RGBA":
+        a = img.getchannel("A")
+    else:
+        # pixels escuros viram opacos; fundo claro vira transparente
+        a = img.convert("L").point(lambda p: 255 - p)
+    white = Image.new("RGBA", img.size, (255, 255, 255, 0))
+    white.putalpha(a)
+    buf = io.BytesIO()
+    white.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def process_favicon(raw: bytes, *, prefix: str = "theme") -> str:
     """Redimensiona para 50x50 (quadrado, sem distorcer) e salva como .ico
     (com 32 e 16 embutidos p/ compatibilidade). Retorna a storage key."""

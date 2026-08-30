@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.modules.theme.models import Page, ThemeSettings
-from app.shared.images import process_favicon, process_image
+from app.shared.images import process_favicon, process_image, whiten_bytes
 from app.shared.slugify import make_slug
 from app.shared.storage import storage
 
@@ -199,7 +199,8 @@ def _clean_seals(raw: object) -> dict:
 
 
 async def set_seal_image(
-    db: AsyncSession, column: str, index: int, raw: bytes, filename: str
+    db: AsyncSession, column: str, index: int, raw: bytes, filename: str,
+    *, whiten: bool = False,
 ) -> ThemeSettings:
     if column not in _SEAL_COLUMNS:
         raise ValidationError("Coluna de selo inválida.")
@@ -207,6 +208,9 @@ async def set_seal_image(
         raise ValidationError("Posição de selo inválida (0 a 2).")
     row = await get_theme(db)
     seals = _clean_seals(row.footer_seals_json)
+    if whiten:
+        raw = whiten_bytes(raw)
+        filename = "selo-branco.png"
     processed = process_image(raw, filename, prefix="theme/seals")
     images = list(seals[column]["images"])
     if index < len(images):

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -44,9 +44,12 @@ async def upload_seal_image(
     db: DbDep,
     _: EditorDep,
     file: Annotated[UploadFile, File()],
+    whiten: Annotated[bool, Form()] = False,
 ) -> dict:
     raw = await file.read()
-    row = await service.set_seal_image(db, column, index, raw, file.filename or "selo.png")
+    row = await service.set_seal_image(
+        db, column, index, raw, file.filename or "selo.png", whiten=whiten
+    )
     return service.theme_out(row)
 
 

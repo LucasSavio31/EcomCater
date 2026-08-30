@@ -22,6 +22,12 @@ export default function SelosRodapePage() {
   const { data, loading, error, reload, setData } = useResource(() => appearanceApi.getTheme());
   const [draft, setDraft] = useState<Theme | null>(null);
   const [savingText, setSavingText] = useState(false);
+  // "enviar como versão branca" por coluna
+  const [whiten, setWhiten] = useState<Record<SealColumn, boolean>>({
+    payment: true,
+    shipping: false,
+    security: false,
+  });
 
   const theme = draft ?? data;
   const dirty = draft !== null;
@@ -68,7 +74,7 @@ export default function SelosRodapePage() {
   }
 
   async function upload(col: SealColumn, index: number, file: File) {
-    const res = await appearanceApi.uploadSealImage(col, index, file);
+    const res = await appearanceApi.uploadSealImage(col, index, file, whiten[col]);
     if (!res.ok) throw new Error(res.error.message);
     await revalidateStore('theme');
     setData(res.data);
@@ -118,6 +124,13 @@ export default function SelosRodapePage() {
                       label="Título exibido"
                       value={col.title}
                       onChange={(e) => setSeal(key, 'title', e.target.value)}
+                    />
+
+                    <Checkbox
+                      label="Enviar como versão branca"
+                      hint="Recolore a imagem para branco (mantém as formas). Ideal para tiras de logos sobre o rodapé escuro."
+                      checked={whiten[key]}
+                      onChange={(v) => setWhiten((s) => ({ ...s, [key]: v }))}
                     />
 
                     <div className="flex flex-col gap-4">

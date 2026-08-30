@@ -244,9 +244,10 @@ export const appearanceApi = {
     form.append('file', file);
     return uploadMultipart<Theme>(`/api/admin/theme/image/${kind}`, form);
   },
-  uploadSealImage: (column: SealColumn, index: number, file: File) => {
+  uploadSealImage: (column: SealColumn, index: number, file: File, whiten = false) => {
     const form = new FormData();
     form.append('file', file);
+    if (whiten) form.append('whiten', 'true');
     return uploadMultipart<Theme>(`/api/admin/theme/seal-image/${column}/${index}`, form);
   },
   removeSealImage: (column: SealColumn, index: number) =>
