@@ -172,8 +172,10 @@ async def run_all(db: AsyncSession) -> None:
     await db.commit()
 
     from app.seed.payment_seal import run as seed_payment_seal
+    from app.seed.security_seal import run as seed_security_seal
     from app.seed.shipping_seal import run as seed_shipping_seal
 
-    await seed_payment_seal(db)  # faz o próprio commit
+    await seed_payment_seal(db)  # cada um faz o próprio commit
     await seed_shipping_seal(db)
+    await seed_security_seal(db)
     logger.info("seed concluído.")
