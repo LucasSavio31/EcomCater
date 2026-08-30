@@ -93,6 +93,10 @@ export interface ThemeSettings {
   checkout_accent_color: string;
   checkout_footer_bg_color: string;
   checkout_footer_text_color: string;
+  checkout_step_button_color: string;
+  checkout_step_button_text_color: string;
+  checkout_step_active_bg_color: string;
+  checkout_step_active_text_color: string;
   /** Bloco de newsletter na home (menu "Newsletter"). */
   newsletter_enabled: boolean;
   newsletter_title: string;
@@ -234,6 +238,10 @@ export const NEUTRAL_THEME: ThemeSettings = {
   checkout_accent_color: '#111111',
   checkout_footer_bg_color: '#111827',
   checkout_footer_text_color: '#E5E7EB',
+  checkout_step_button_color: '#111111',
+  checkout_step_button_text_color: '#FFFFFF',
+  checkout_step_active_bg_color: '#111111',
+  checkout_step_active_text_color: '#FFFFFF',
   newsletter_enabled: true,
   newsletter_title: 'Receba novidades e ofertas',
   newsletter_subtitle: 'Cadastre seu e-mail e fique por dentro dos lançamentos.',

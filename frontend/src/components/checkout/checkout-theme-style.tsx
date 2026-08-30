@@ -11,9 +11,8 @@ function sanitize(v: string): string {
 }
 
 export function CheckoutThemeStyle({ theme }: { theme: ThemeSettings }) {
-  // NÃO sobrescreve --color-btn-*: os botões de etapa ("Avançar", "Calcular")
-  // continuam com o estilo padrão do sistema. Só o botão de finalizar usa a
-  // cor do checkout (aplicada inline no próprio botão).
+  // Os botões de etapa ("Avançar", "Calcular frete") usam --color-btn-*.
+  // O botão de finalizar e a bolinha da etapa ativa recebem cor inline.
   const vars: Record<string, string> = {
     '--color-bg': theme.checkout_bg_color,
     '--color-bg-subtle': theme.checkout_bg_color,
@@ -21,8 +20,9 @@ export function CheckoutThemeStyle({ theme }: { theme: ThemeSettings }) {
     '--color-accent': theme.checkout_accent_color,
     '--color-header-bg': theme.checkout_header_bg_color,
     '--color-header-fg': theme.checkout_header_text_color,
-    '--color-footer-bg': theme.checkout_footer_bg_color,
-    '--color-footer-fg': theme.checkout_footer_text_color,
+    '--color-btn-bg': theme.checkout_step_button_color,
+    '--color-btn-fg': theme.checkout_step_button_text_color,
+    '--color-btn-hover': theme.checkout_step_button_color,
   };
   const css = `.checkout-scope{${Object.entries(vars)
     .map(([k, v]) => `${k}:${sanitize(v)}`)

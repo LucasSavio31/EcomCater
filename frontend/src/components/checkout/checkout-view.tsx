@@ -78,6 +78,9 @@ export interface CheckoutSettings {
   allowQtyChange: boolean;
   buttonColor: string;
   buttonTextColor: string;
+  /** Bolinha da etapa ativa (1,2,3,4) na linha do tempo. */
+  stepActiveBg: string;
+  stepActiveText: string;
   animatedCard: boolean;
   showReview: boolean;
   reviewPosition: 'side' | 'top';
@@ -98,6 +101,8 @@ const DEFAULT_SETTINGS: CheckoutSettings = {
   allowQtyChange: true,
   buttonColor: '#111111',
   buttonTextColor: '#FFFFFF',
+  stepActiveBg: '#111111',
+  stepActiveText: '#FFFFFF',
   animatedCard: true,
   showReview: true,
   reviewPosition: 'side',
@@ -555,7 +560,12 @@ export function CheckoutView({
       }
     >
       <div className="flex min-w-0 flex-col gap-4">
-        <CheckoutStepsTimeline current={step} furthest={furthest} onJump={goto} />
+        <CheckoutStepsTimeline
+          current={step}
+          furthest={furthest}
+          onJump={goto}
+          activeStyle={{ bg: settings.stepActiveBg, fg: settings.stepActiveText }}
+        />
 
         {settings.showReview && settings.reviewPosition === 'top' && (
           <OrderSummary

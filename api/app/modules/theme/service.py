@@ -37,6 +37,8 @@ _THEME_FIELDS = {
     "checkout_bg_color", "checkout_header_bg_color", "checkout_header_text_color",
     "checkout_button_color", "checkout_button_text_color", "checkout_accent_color",
     "checkout_footer_bg_color", "checkout_footer_text_color",
+    "checkout_step_button_color", "checkout_step_button_text_color",
+    "checkout_step_active_bg_color", "checkout_step_active_text_color",
     "checkout_animated_card", "checkout_show_review", "checkout_review_position",
     "checkout_orderbump_enabled", "checkout_orderbump_product_id",
     "checkout_orderbump_product_ids",

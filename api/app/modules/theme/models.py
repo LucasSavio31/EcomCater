@@ -172,6 +172,12 @@ class ThemeSettings(Base):
     checkout_accent_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
     checkout_footer_bg_color: Mapped[str] = mapped_column(String(9), default="#111827", server_default="#111827", nullable=False)
     checkout_footer_text_color: Mapped[str] = mapped_column(String(9), default="#E5E7EB", server_default="#E5E7EB", nullable=False)
+    # botões "Avançar"/"Calcular frete" das etapas
+    checkout_step_button_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    checkout_step_button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    # bolinha da etapa ativa (1,2,3,4) na linha do tempo
+    checkout_step_active_bg_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    checkout_step_active_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
 
     # Newsletter (bloco de captura na home) — menu "Newsletter" no admin
     newsletter_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)

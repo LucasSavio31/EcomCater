@@ -85,6 +85,10 @@ export interface Theme {
   checkout_accent_color: string;
   checkout_footer_bg_color: string;
   checkout_footer_text_color: string;
+  checkout_step_button_color: string;
+  checkout_step_button_text_color: string;
+  checkout_step_active_bg_color: string;
+  checkout_step_active_text_color: string;
   /** Newsletter (menu "Newsletter") */
   newsletter_enabled: boolean;
   newsletter_title: string;

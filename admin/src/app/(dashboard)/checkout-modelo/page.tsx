@@ -18,21 +18,25 @@ type ColorKey =
   | 'checkout_bg_color'
   | 'checkout_header_bg_color'
   | 'checkout_header_text_color'
+  | 'checkout_step_button_color'
+  | 'checkout_step_button_text_color'
   | 'checkout_button_color'
   | 'checkout_button_text_color'
-  | 'checkout_accent_color'
-  | 'checkout_footer_bg_color'
-  | 'checkout_footer_text_color';
+  | 'checkout_step_active_bg_color'
+  | 'checkout_step_active_text_color'
+  | 'checkout_accent_color';
 
 const COLOR_FIELDS: { key: ColorKey; label: string }[] = [
   { key: 'checkout_bg_color', label: 'Fundo da página' },
   { key: 'checkout_header_bg_color', label: 'Fundo do cabeçalho' },
   { key: 'checkout_header_text_color', label: 'Texto do cabeçalho' },
+  { key: 'checkout_step_button_color', label: 'Fundo dos botões de etapa (Continuar/Calcular)' },
+  { key: 'checkout_step_button_text_color', label: 'Texto dos botões de etapa' },
   { key: 'checkout_button_color', label: 'Fundo do botão finalizar' },
   { key: 'checkout_button_text_color', label: 'Texto do botão finalizar' },
-  { key: 'checkout_accent_color', label: 'Destaque (etapa ativa, seleção)' },
-  { key: 'checkout_footer_bg_color', label: 'Fundo do rodapé' },
-  { key: 'checkout_footer_text_color', label: 'Texto do rodapé' },
+  { key: 'checkout_step_active_bg_color', label: 'Fundo da etapa ativa (1,2,3,4)' },
+  { key: 'checkout_step_active_text_color', label: 'Texto da etapa ativa' },
+  { key: 'checkout_accent_color', label: 'Destaque (seleção, links)' },
 ];
 
 export default function CheckoutModeloPage() {

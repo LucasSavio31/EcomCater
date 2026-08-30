@@ -17,11 +17,14 @@ export function CheckoutStepsTimeline({
   hasShipping = true,
   onJump,
   furthest,
+  activeStyle,
 }: {
   current: CheckoutStepId;
   hasShipping?: boolean;
   furthest: CheckoutStepId;
   onJump?: (id: CheckoutStepId) => void;
+  /** Cores da bolinha da etapa ativa. */
+  activeStyle?: { bg: string; fg: string };
 }) {
   const steps = ORDER.filter((s) => (s === 'shipping' ? hasShipping : true));
   const idx = (id: CheckoutStepId) => steps.indexOf(id);
@@ -43,9 +46,16 @@ export function CheckoutStepsTimeline({
               className={`flex min-w-0 items-center gap-2 ${reachable && onJump ? 'cursor-pointer' : 'cursor-default'}`}
             >
               <span
+                style={
+                  active && activeStyle
+                    ? { backgroundColor: activeStyle.bg, color: activeStyle.fg }
+                    : undefined
+                }
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                   active
-                    ? 'bg-btn text-btn-fg'
+                    ? activeStyle
+                      ? ''
+                      : 'bg-btn text-btn-fg'
                     : done
                       ? 'bg-success text-white'
                       : 'border border-surface-border text-text-muted'
