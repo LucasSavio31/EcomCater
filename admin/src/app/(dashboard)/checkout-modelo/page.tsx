@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
+import { ColorField } from '@/components/color-field';
 import { AsyncBoundary } from '@/components/async-boundary';
 import { Checkbox, Select } from '@/components/form-controls';
 import { ProductPicker } from '@/components/product-picker';
@@ -12,7 +13,6 @@ import { appearanceApi, type Theme } from '@/modules/appearance/api';
 import { productsApi } from '@/modules/catalog/api';
 import { revalidateStore } from '@/lib/revalidate-store';
 
-const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 type ColorKey =
   | 'checkout_bg_color'
@@ -85,27 +85,6 @@ export default function CheckoutModeloPage() {
     toast.success('Modelo do checkout salvo e aplicado.');
   }
 
-  function ColorRow({ f }: { f: { key: ColorKey; label: string } }) {
-    if (!theme) return null;
-    const raw = String(theme[f.key] ?? '#000000');
-    const valid = HEX_RE.test(raw);
-    return (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium">{f.label}</label>
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            value={valid ? raw.slice(0, 7) : '#000000'}
-            onChange={(e) => set(f.key, e.target.value)}
-            className="h-10 w-14 shrink-0 rounded-card border border-surface-border"
-            aria-label={f.label}
-          />
-          <Input value={raw} aria-invalid={!valid} onChange={(e) => set(f.key, e.target.value)} className="flex-1" />
-        </div>
-        {!valid && <span className="text-xs text-red-600">Use #RRGGBB.</span>}
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -252,7 +231,12 @@ export default function CheckoutModeloPage() {
               <h2 className="text-lg font-semibold">Cores do checkout</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 {COLOR_FIELDS.map((f) => (
-                  <ColorRow key={f.key} f={f} />
+                  <ColorField
+                    key={f.key}
+                    label={f.label}
+                    value={String(theme[f.key] ?? '#000000')}
+                    onChange={(hex) => set(f.key, hex as never)}
+                  />
                 ))}
               </div>
             </Card>

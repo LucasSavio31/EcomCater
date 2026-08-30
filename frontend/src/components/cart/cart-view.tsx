@@ -150,7 +150,17 @@ function CartRow({ item }: { item: CartItem }) {
               >
                 −
               </button>
-              <span className="w-8 text-center text-sm">{item.quantity}</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                aria-label="Quantidade"
+                value={item.quantity}
+                onChange={(e) => {
+                  const n = Number(e.target.value.replace(/\D/g, ''));
+                  if (n >= 1) void change(Math.min(n, item.max_qty));
+                }}
+                className="w-10 border-0 bg-transparent text-center text-sm outline-none"
+              />
               <button
                 type="button"
                 onClick={() => void change(item.quantity + 1)}

@@ -8,37 +8,38 @@ import { useToast } from '@/components/toast';
 import { AsyncBoundary } from '@/components/async-boundary';
 import { useResource } from '@/lib/use-resource';
 import { centsToInput, inputToCents } from '@/lib/format';
+import { ColorField } from '@/components/color-field';
 import { appearanceApi, type Theme, type ThemeImageKind } from '@/modules/appearance/api';
 import { revalidateStore } from '@/lib/revalidate-store';
 
-type ColorField = { key: keyof Theme; label: string };
+type ColorFieldDef = { key: keyof Theme; label: string };
 
-const PALETTE_FIELDS: ColorField[] = [
+const PALETTE_FIELDS: ColorFieldDef[] = [
   { key: 'primary_color', label: 'Primária' },
   { key: 'secondary_color', label: 'Secundária' },
   { key: 'accent_color', label: 'Destaque' },
   { key: 'text_color', label: 'Texto' },
   { key: 'bg_color', label: 'Fundo' },
 ];
-const BUTTON_FIELDS: ColorField[] = [
+const BUTTON_FIELDS: ColorFieldDef[] = [
   { key: 'button_bg_color', label: 'Fundo do botão' },
   { key: 'button_text_color', label: 'Texto do botão' },
   { key: 'button_hover_color', label: 'Botão (hover)' },
 ];
-const VARIATION_FIELDS: ColorField[] = [
+const VARIATION_FIELDS: ColorFieldDef[] = [
   { key: 'variation_bg_color', label: 'Fundo da caixa selecionada' },
   { key: 'variation_text_color', label: 'Texto da caixa selecionada' },
   { key: 'variation_border_color', label: 'Borda da caixa' },
 ];
-const HEADER_FIELDS: ColorField[] = [
+const HEADER_FIELDS: ColorFieldDef[] = [
   { key: 'header_bg_color', label: 'Fundo do menu superior' },
   { key: 'header_text_color', label: 'Texto do menu superior' },
 ];
-const FOOTER_FIELDS: ColorField[] = [
+const FOOTER_FIELDS: ColorFieldDef[] = [
   { key: 'footer_bg_color', label: 'Fundo do rodapé' },
   { key: 'footer_text_color', label: 'Texto do rodapé' },
 ];
-const EMAIL_FIELDS: ColorField[] = [
+const EMAIL_FIELDS: ColorFieldDef[] = [
   { key: 'email_header_bg_color', label: 'Fundo do cabeçalho' },
   { key: 'email_header_text_color', label: 'Texto do cabeçalho' },
   { key: 'email_body_bg_color', label: 'Fundo do corpo' },
@@ -47,7 +48,6 @@ const EMAIL_FIELDS: ColorField[] = [
   { key: 'email_button_text_color', label: 'Texto do botão (CTA)' },
 ];
 
-const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 export function ThemeTab() {
   const toast = useToast();
@@ -62,35 +62,6 @@ export function ThemeTab() {
     setDraft({ ...theme, [k]: v });
   };
 
-  function ColorRow({ f }: { f: ColorField }) {
-    if (!theme) return null;
-    const raw = String(theme[f.key] ?? '#000000');
-    const valid = HEX_RE.test(raw);
-    return (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium" htmlFor={`color-${f.key}`}>
-          {f.label}
-        </label>
-        <div className="flex items-center gap-2">
-          <input
-            id={`color-${f.key}`}
-            type="color"
-            value={valid ? raw.slice(0, 7) : '#000000'}
-            onChange={(e) => set(f.key, e.target.value as Theme[typeof f.key])}
-            className="h-10 w-14 shrink-0 rounded-card border border-surface-border"
-            aria-label={f.label}
-          />
-          <Input
-            value={raw}
-            aria-invalid={!valid}
-            onChange={(e) => set(f.key, e.target.value as Theme[typeof f.key])}
-            className="flex-1"
-          />
-        </div>
-        {!valid && <span className="text-xs text-red-600">Use #RRGGBB.</span>}
-      </div>
-    );
-  }
 
   async function save(): Promise<void> {
     if (!theme) return;
@@ -125,7 +96,12 @@ export function ThemeTab() {
               <h2 className="text-lg font-semibold">Paleta base</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 {PALETTE_FIELDS.map((f) => (
-                  <ColorRow key={f.key} f={f} />
+                  <ColorField
+                    key={f.key}
+                    label={f.label}
+                    value={String(theme[f.key] ?? '#000000')}
+                    onChange={(hex) => set(f.key, hex as Theme[typeof f.key])}
+                  />
                 ))}
               </div>
               <Input
@@ -149,7 +125,12 @@ export function ThemeTab() {
               />
               <div className="grid gap-4 sm:grid-cols-2">
                 {BUTTON_FIELDS.map((f) => (
-                  <ColorRow key={f.key} f={f} />
+                  <ColorField
+                    key={f.key}
+                    label={f.label}
+                    value={String(theme[f.key] ?? '#000000')}
+                    onChange={(hex) => set(f.key, hex as Theme[typeof f.key])}
+                  />
                 ))}
               </div>
             </Card>
@@ -162,7 +143,12 @@ export function ThemeTab() {
               </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 {VARIATION_FIELDS.map((f) => (
-                  <ColorRow key={f.key} f={f} />
+                  <ColorField
+                    key={f.key}
+                    label={f.label}
+                    value={String(theme[f.key] ?? '#000000')}
+                    onChange={(hex) => set(f.key, hex as Theme[typeof f.key])}
+                  />
                 ))}
               </div>
             </Card>
@@ -171,7 +157,12 @@ export function ThemeTab() {
               <h2 className="text-lg font-semibold">Menu superior</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 {HEADER_FIELDS.map((f) => (
-                  <ColorRow key={f.key} f={f} />
+                  <ColorField
+                    key={f.key}
+                    label={f.label}
+                    value={String(theme[f.key] ?? '#000000')}
+                    onChange={(hex) => set(f.key, hex as Theme[typeof f.key])}
+                  />
                 ))}
               </div>
               <div className="flex flex-col gap-1">
@@ -203,7 +194,12 @@ export function ThemeTab() {
               <h2 className="text-lg font-semibold">Rodapé</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 {FOOTER_FIELDS.map((f) => (
-                  <ColorRow key={f.key} f={f} />
+                  <ColorField
+                    key={f.key}
+                    label={f.label}
+                    value={String(theme[f.key] ?? '#000000')}
+                    onChange={(hex) => set(f.key, hex as Theme[typeof f.key])}
+                  />
                 ))}
               </div>
             </Card>
@@ -311,7 +307,12 @@ export function ThemeTab() {
               </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 {EMAIL_FIELDS.map((f) => (
-                  <ColorRow key={f.key} f={f} />
+                  <ColorField
+                    key={f.key}
+                    label={f.label}
+                    value={String(theme[f.key] ?? '#000000')}
+                    onChange={(hex) => set(f.key, hex as Theme[typeof f.key])}
+                  />
                 ))}
               </div>
               <Input

@@ -69,9 +69,17 @@ export function OrderSummary({
                     >
                       −
                     </button>
-                    <span className="min-w-[1.5rem] text-center text-xs font-medium">
-                      {i.quantity}
-                    </span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      aria-label={`Quantidade de ${i.product_name}`}
+                      value={i.quantity}
+                      onChange={(e) => {
+                        const n = Number(e.target.value.replace(/\D/g, ''));
+                        if (n >= 1) void updateItem(i.id, Math.min(n, i.max_qty || 99));
+                      }}
+                      className="w-9 border-0 bg-transparent text-center text-xs font-medium outline-none"
+                    />
                     <button
                       type="button"
                       aria-label={`Aumentar quantidade de ${i.product_name}`}
