@@ -59,3 +59,30 @@ export function CouponField() {
     </div>
   );
 }
+
+/**
+ * Cupom em sanfona: "Tenho um cupom de desconto" abre e fecha o campo.
+ * Se já houver um cupom aplicado, mostra o campo direto (para poder remover).
+ */
+export function CollapsibleCoupon() {
+  const { cart } = useCart();
+  if (cart.coupon_code) return <CouponField />;
+  return (
+    <details className="group">
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-primary [&::-webkit-details-marker]:hidden">
+        <span className="underline">Tenho um cupom de desconto</span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          aria-hidden="true"
+          className="h-4 w-4 transition-transform group-open:rotate-180"
+        >
+          <path d="M5 7l5 6 5-6z" />
+        </svg>
+      </summary>
+      <div className="pt-2">
+        <CouponField />
+      </div>
+    </details>
+  );
+}

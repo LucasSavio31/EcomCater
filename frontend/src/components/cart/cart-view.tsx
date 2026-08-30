@@ -11,7 +11,7 @@ import type { CartItem } from '@/modules/cart/types';
 import { resolveMediaUrl } from '@/lib/media';
 import { formatBRL } from '@/lib/format';
 import { BagIcon } from '@/components/icons';
-import { CouponField } from './coupon-field';
+import { CollapsibleCoupon } from './coupon-field';
 import { ShippingPicker } from './shipping-picker';
 import { OrderTotals } from './order-totals';
 
@@ -188,18 +188,3 @@ function CartRow({ item }: { item: CartItem }) {
   );
 }
 
-/** Cupom recolhido: "Tenho um cupom" que expande o campo. */
-function CollapsibleCoupon() {
-  const { cart } = useCart();
-  const [open, setOpen] = useState(false);
-  if (cart.coupon_code || open) return <CouponField />;
-  return (
-    <button
-      type="button"
-      onClick={() => setOpen(true)}
-      className="flex w-fit items-center gap-1 text-sm font-medium text-primary underline"
-    >
-      Tenho um cupom de desconto
-    </button>
-  );
-}
