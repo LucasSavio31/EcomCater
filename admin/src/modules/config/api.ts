@@ -30,6 +30,8 @@ export interface ShippingConfig {
     height_mm?: number;
   };
   free_shipping_services: string[];
+  /** Frete grátis para tudo — checkout não calcula frete */
+  free_shipping_all?: boolean;
 }
 
 export interface ShippingQuoteRate {

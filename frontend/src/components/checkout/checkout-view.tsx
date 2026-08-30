@@ -217,12 +217,17 @@ export function CheckoutView({
       if (res.ok) {
         setShipOptions(res.data);
         if (res.data.length === 0) setShipError('Nenhuma opção de frete para este CEP.');
+        // frete grátis (opção única e sem custo): seleciona sozinho
+        const only = res.data.length === 1 ? res.data[0] : undefined;
+        if (only && only.price_cents === 0) {
+          void selectShipping(only.id);
+        }
       } else {
         setShipOptions([]);
         setShipError(res.error.message);
       }
     },
-    [setZip],
+    [setZip, selectShipping],
   );
 
   // dispara a cotação sempre que o CEP fica completo
@@ -593,31 +598,33 @@ export function CheckoutView({
             <Input label="Nome" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
             <Input label="Sobrenome" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
           </div>
-          {settings.emailFirst && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {settings.emailFirst && (
+              <Input
+                label="CPF"
+                inputMode="numeric"
+                required
+                value={cpf}
+                onChange={(e) => setCpf(maskCpf(e.target.value))}
+                hint="Também é a sua senha de acesso à conta."
+                error={
+                  cpf && onlyDigits(cpf).length === 11 && !cpfOk
+                    ? 'CPF inválido'
+                    : cpf && onlyDigits(cpf).length > 0 && onlyDigits(cpf).length < 11
+                      ? 'CPF incompleto'
+                      : undefined
+                }
+              />
+            )}
             <Input
-              label="CPF"
+              label="Telefone / WhatsApp"
               inputMode="numeric"
               required
-              value={cpf}
-              onChange={(e) => setCpf(maskCpf(e.target.value))}
-              hint="Também é a sua senha de acesso à conta."
-              error={
-                cpf && onlyDigits(cpf).length === 11 && !cpfOk
-                  ? 'CPF inválido'
-                  : cpf && onlyDigits(cpf).length > 0 && onlyDigits(cpf).length < 11
-                    ? 'CPF incompleto'
-                    : undefined
-              }
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              error={phone && onlyDigits(phone).length < 10 ? 'Telefone incompleto' : undefined}
             />
-          )}
-          <Input
-            label="Telefone / WhatsApp"
-            inputMode="numeric"
-            required
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            error={phone && onlyDigits(phone).length < 10 ? 'Telefone incompleto' : undefined}
-          />
+          </div>
           <button type="button" onClick={() => goto('identify')} className="w-fit text-xs text-primary underline">
             {settings.emailFirst ? 'Trocar e-mail' : 'Trocar e-mail / CPF'}
           </button>

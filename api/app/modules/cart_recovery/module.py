@@ -134,6 +134,7 @@ async def _process_due(db: AsyncSession) -> dict:
             select(AbandonedCart).where(AbandonedCart.recovered_at.is_(None))
         )
     )
+    from app.modules.newsletter.models import NewsletterSubscriber
     from app.shared import mailer
 
     now = datetime.now(UTC)
@@ -146,14 +147,26 @@ async def _process_due(db: AsyncSession) -> dict:
         due = ac.created_at + timedelta(minutes=msg.delay_minutes)
         if now < due:
             continue
+
+        sub = await db.scalar(
+            select(NewsletterSubscriber).where(NewsletterSubscriber.email == ac.email)
+        )
+        name = (sub.name if sub and sub.name else "") or ""
+        cta_url = f"{settings.public_api_url.rstrip('/')}/api/cart-recovery/r/{ac.id}"
+        body = (
+            (msg.body or "")
+            .replace("{nome}", name)
+            .replace("{link}", cta_url)
+        )
+        subject = (msg.subject or "").replace("{nome}", name)
         ok = await mailer.send(
             db,
             to=ac.email,
             template="cart_recovery",
             context={
-                "subject": msg.subject,
-                "body": msg.body,
-                "cta_url": f"{settings.public_api_url.rstrip('/')}/api/cart-recovery/r/{ac.id}",
+                "subject": subject,
+                "body": body,
+                "cta_url": cta_url,
                 "total": ac.total_cents,
             },
         )

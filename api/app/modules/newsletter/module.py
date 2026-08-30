@@ -195,14 +195,15 @@ async def send_campaign(body: CampaignIn, db: DbDep, _: AdminRoleDep) -> dict:
     )
     sent = failed = 0
     for r in rows:
+        name = r.name or ""
         ok = await mailer.send(
             db,
             to=r.email,
             template="campaign",
             context={
-                "name": r.name or "",
-                "subject": body.subject,
-                "body": body.body,
+                "name": name,
+                "subject": (body.subject or "").replace("{nome}", name),
+                "body": (body.body or "").replace("{nome}", name),
                 "coupon": (body.coupon_code or "").strip().upper() or None,
             },
         )

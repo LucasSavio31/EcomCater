@@ -34,6 +34,7 @@ class ShippingConfigOut(BaseModel):
     has_token: bool
     default_package: dict
     free_shipping_services: list[str]
+    free_shipping_all: bool = False
 
 
 class ShippingConfigIn(BaseModel):
@@ -44,3 +45,4 @@ class ShippingConfigIn(BaseModel):
     webhook_token: str | None = None
     default_package: dict | None = None
     free_shipping_services: list[str] | None = None
+    free_shipping_all: bool | None = None

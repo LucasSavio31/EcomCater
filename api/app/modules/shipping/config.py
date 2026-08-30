@@ -19,3 +19,5 @@ class ShippingConfig(BaseModel):
     webhook_token: str = ""               # querystring ?token= no webhook
     default_package: DefaultPackage = Field(default_factory=DefaultPackage)
     free_shipping_services: list[str] = []
+    # Frete grátis para tudo: o checkout não calcula frete e vai direto ao pagamento
+    free_shipping_all: bool = False

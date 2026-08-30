@@ -130,6 +130,11 @@ export default function CartRecoveryPage() {
             rows={5}
             className="rounded-card border border-surface-border bg-surface px-3 py-2 text-sm"
           />
+          <span className="text-xs text-text-muted">
+            Variáveis: <code>{'{nome}'}</code> (nome do cliente),{' '}
+            <code>{'{link}'}</code> (link que volta ao carrinho). Um botão “Voltar ao meu
+            carrinho” já é adicionado automaticamente ao fim do e-mail.
+          </span>
         </label>
         <div className="flex gap-2">
           <Button loading={busy} onClick={() => void save()}>

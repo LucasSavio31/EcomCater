@@ -139,7 +139,19 @@ def _cart_packages(cart) -> list[Package]:
     return pkgs or [Package(300, 200, 150, 100)]
 
 
+FREE_SHIPPING_OPTION = {
+    "id": "free",
+    "service": "Frete grátis",
+    "carrier": "Loja",
+    "price_cents": 0,
+    "delivery_days": 0,
+}
+
+
 async def quote_for_cart(db: AsyncSession, cart) -> list[dict]:
+    cfg = await load_config(db)
+    if getattr(cfg, "free_shipping_all", False):
+        return [dict(FREE_SHIPPING_OPTION)]
     if not cart.shipping_zip:
         raise DomainError("Informe o CEP para calcular o frete.", code="missing_zip")
     from app.modules.cart.service import cart_items_signature

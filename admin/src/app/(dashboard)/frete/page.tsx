@@ -95,6 +95,12 @@ export default function FretePage() {
               checked={cfg.melhor_envio_sandbox}
               onChange={(v) => set('melhor_envio_sandbox', v)}
             />
+            <Checkbox
+              label="Frete grátis para todos os pedidos"
+              hint="O checkout não calcula frete — a entrega fica R$ 0,00 e o cliente segue direto para o pagamento."
+              checked={!!cfg.free_shipping_all}
+              onChange={(v) => set('free_shipping_all', v)}
+            />
             <fieldset className="grid gap-4 rounded-card border border-surface-border p-3 sm:grid-cols-4">
               <legend className="px-1 text-sm font-medium">Pacote padrão</legend>
               <Input

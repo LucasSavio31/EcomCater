@@ -68,7 +68,7 @@ export function CartView() {
       <aside className="flex flex-col gap-4 lg:sticky lg:top-24 lg:self-start">
         <Card variant="outline" className="flex flex-col gap-4">
           <h2 className="text-base font-semibold">Resumo</h2>
-          <CouponField />
+          <CollapsibleCoupon />
           <ShippingPicker />
           <OrderTotals totals={cart.totals} hasShipping={!!cart.selected_shipping} />
           {hasBlockingIssue && (
@@ -175,5 +175,21 @@ function CartRow({ item }: { item: CartItem }) {
         </div>
       </Card>
     </li>
+  );
+}
+
+/** Cupom recolhido: "Tenho um cupom" que expande o campo. */
+function CollapsibleCoupon() {
+  const { cart } = useCart();
+  const [open, setOpen] = useState(false);
+  if (cart.coupon_code || open) return <CouponField />;
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className="flex w-fit items-center gap-1 text-sm font-medium text-primary underline"
+    >
+      Tenho um cupom de desconto
+    </button>
   );
 }

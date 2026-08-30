@@ -187,6 +187,12 @@ async def select_shipping(db: AsyncSession, cart: Cart, service_id: str) -> Cart
     """Fixa a opção de frete escolhida (a partir do cache de cotação da F5)."""
     from app.modules.shipping import service as shipping
 
+    cfg = await shipping.load_config(db)
+    if getattr(cfg, "free_shipping_all", False):
+        cart.selected_shipping_json = dict(shipping.FREE_SHIPPING_OPTION)
+        await db.flush()
+        return cart
+
     if not cart.shipping_zip:
         raise ValidationError("Informe o CEP antes de escolher o frete.")
     rate = await shipping.get_cached_rate(db, cart.shipping_zip, cart_items_signature(cart), service_id)

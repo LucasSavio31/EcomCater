@@ -210,6 +210,9 @@ export default function LeadsPage() {
               rows={6}
               className="rounded-card border border-surface-border bg-surface px-3 py-2 text-sm"
             />
+            <span className="text-xs text-text-muted">
+              Use <code>{'{nome}'}</code> para inserir o nome do lead.
+            </span>
           </label>
           <Select
             label="Cupom (opcional)"
