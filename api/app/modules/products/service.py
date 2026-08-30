@@ -348,10 +348,13 @@ async def list_products(
             )
         )
 
+    # o filtro de preço NÃO entra nos facets — o range de preço mostrado tem que
+    # ser sempre o da categoria inteira (senão o slider "encolhe" a cada aplicação)
+    price_conds: list[Any] = []
     if price_min is not None:
-        conds.append(Product.price_cents >= price_min)
+        price_conds.append(Product.price_cents >= price_min)
     if price_max is not None:
-        conds.append(Product.price_cents <= price_max)
+        price_conds.append(Product.price_cents <= price_max)
 
     if option_values:
         ov_ids = [_uuid(v) for v in option_values if _looks_uuid(v)]
@@ -384,7 +387,8 @@ async def list_products(
     if colors:
         conds.append(func.lower(Product.color_name).in_([c.lower() for c in colors]))
 
-    base = select(Product).where(and_(*conds)) if conds else select(Product)
+    all_conds = conds + price_conds
+    base = select(Product).where(and_(*all_conds)) if all_conds else select(Product)
     total = int(await db.scalar(select(func.count()).select_from(base.subquery())) or 0)
 
     order = SORTS.get(sort, SORTS["relevancia"])
@@ -399,6 +403,7 @@ async def list_products(
     if in_stock is not None:
         items = [i for i in items if i["in_stock"] == in_stock]
 
+    # facets sem o filtro de preço (range de preço = o da categoria toda)
     facets = await _facets(db, and_(*conds) if conds else None)
 
     return {

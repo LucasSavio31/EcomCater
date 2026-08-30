@@ -66,35 +66,44 @@ export function PlpFilters({ facets, show = ALL_VISIBLE, categoryLinks = [] }: P
   // Truque do range duplo: dois valores INDEPENDENTES (a, b); a faixa exibida
   // é [min(a,b), max(a,b)]. Assim nenhum controle "briga" com o outro ao arrastar.
   const STEP = 5000; // R$ 50
-  const priceMax = Math.max(Math.ceil((facets.price.max || 0) / STEP) * STEP, STEP);
-  const cap = (v: number) => Math.min(Math.max(Math.round(v), 0), priceMax);
+  // O teto NUNCA diminui durante a vida do componente — senão, ao aplicar um
+  // filtro de preço, o `facets` volta menor, o slider "encolhe" e re-aplica,
+  // criando um loop de recarregamento.
+  const ceilNow = Math.max(Math.ceil((facets.price.max || 0) / STEP) * STEP, STEP);
+  const priceMaxRef = useRef(ceilNow);
+  if (ceilNow > priceMaxRef.current) priceMaxRef.current = ceilNow;
+  const priceMax = priceMaxRef.current;
+  const cap = (v: number) => Math.min(Math.max(Math.round(v || 0), 0), priceMax);
+
   const [a, setA] = useState(() => cap(Number(params.get('price_min')) || 0));
   const [b, setB] = useState(() => {
     const raw = Number(params.get('price_max'));
     return raw > 0 ? cap(raw) : priceMax;
   });
-  const lo = Math.min(a, b);
-  const hi = Math.max(a, b);
+  const lo = Math.min(cap(a), cap(b));
+  const hi = Math.max(cap(a), cap(b));
 
-  // reajusta ao trocar de categoria (novo teto de preço)
-  useEffect(() => {
-    setA((v) => cap(v));
-    setB((v) => (v <= 0 || v >= priceMax ? priceMax : cap(v)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [priceMax]);
-
-  // FILTRO AUTOMÁTICO: ~350ms depois de parar de mexer, aplica na URL
+  // FILTRO AUTOMÁTICO: ~350ms depois de parar de mexer, aplica na URL —
+  // mas só se o resultado for DIFERENTE do que já está na URL (evita loop).
   const firstRun = useRef(true);
   useEffect(() => {
     if (firstRun.current) {
       firstRun.current = false;
       return;
     }
+    const wantMin = lo > 0 ? String(lo) : null;
+    const wantMax = hi < priceMax ? String(hi) : null;
+    if (
+      (params.get('price_min') || null) === wantMin &&
+      (params.get('price_max') || null) === wantMax
+    ) {
+      return; // nada mudou
+    }
     const t = setTimeout(() => {
       push((next) => {
-        if (lo > 0) next.set('price_min', String(lo));
+        if (wantMin) next.set('price_min', wantMin);
         else next.delete('price_min');
-        if (hi < priceMax) next.set('price_max', String(hi));
+        if (wantMax) next.set('price_max', wantMax);
         else next.delete('price_max');
       });
     }, 350);
