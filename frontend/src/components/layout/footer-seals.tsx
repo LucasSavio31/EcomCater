@@ -24,13 +24,16 @@ export function FooterSealsBar({ seals }: { seals: FooterSeals }) {
   return (
     <div className="grid gap-6 border-t border-footer-fg/15 pt-6 sm:grid-cols-3">
       {columns.map((col) => (
-        <div key={col.key} className="flex flex-col gap-2">
+        <div
+          key={col.key}
+          className="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left"
+        >
           <p className="text-xs font-semibold uppercase tracking-wide text-footer-fg/80">
             {col.title}
           </p>
 
           {col.image_urls.length > 0 ? (
-            <ul className="flex flex-wrap items-center gap-2">
+            <ul className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
               {col.image_urls.map((url, i) => {
                 const src = resolveMediaUrl(url);
                 if (!src) return null;
@@ -44,7 +47,7 @@ export function FooterSealsBar({ seals }: { seals: FooterSeals }) {
             </ul>
           ) : (
             col.badges.length > 0 && (
-              <ul className="flex flex-wrap items-center gap-1.5">
+              <ul className="flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
                 {col.badges.map((badge) => (
                   <li key={badge}>
                     <Badge value={badge} />
