@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/page-header';
 import { AsyncBoundary } from '@/components/async-boundary';
 import { Select, Textarea } from '@/components/form-controls';
 import { StatusBadge, orderStatusLabel } from '@/components/status-badge';
+import { IconEdit, IconPrinter, IconTag } from '@/components/nav-icons';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
@@ -26,6 +27,24 @@ const ADDR_FIELDS: { key: keyof NonNullable<OrderEditPayload['shipping_address']
   { key: 'state', label: 'UF' },
   { key: 'phone', label: 'Telefone' },
 ];
+
+function formatCpf(cpf: string | null): string {
+  if (!cpf) return '—';
+  const d = cpf.replace(/\D/g, '');
+  if (d.length !== 11) return cpf;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
+function buildDraft(d: OrderDetail): OrderEditPayload {
+  return {
+    email: d.email,
+    shipping_address: { ...(d.shipping_address ?? {}) },
+    shipping_service: { tracking_code: '' },
+    items: d.items
+      .filter((it) => it.id)
+      .map((it) => ({ id: it.id as string, cor: it.cor, numero: it.numero, name: it.name })),
+  };
+}
 
 function Timeline({ events }: { events: OrderDetail['events'] }) {
   if (events.length === 0) return <p className="text-sm text-text-muted">Sem eventos.</p>;
@@ -73,21 +92,12 @@ export default function PedidoDetalhePage() {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   // Rascunho de edição (cliente + endereço + variação dos itens)
   const [edit, setEdit] = useState<OrderEditPayload>({});
   useEffect(() => {
-    if (!data) return;
-    setEdit({
-      email: data.email,
-      shipping_address: { ...(data.shipping_address ?? {}) },
-      shipping_service: { tracking_code: '' },
-      items: data.items.map((it) => ({
-        id: it.id ?? '',
-        variant_label: it.variant_label,
-        name: it.name,
-      })),
-    });
+    if (data) setEdit(buildDraft(data));
   }, [data]);
 
   const transitions = data ? ORDER_TRANSITIONS[data.status] : [];
@@ -130,6 +140,12 @@ export default function PedidoDetalhePage() {
     if (!result.ok) return toast.error(result.error.message);
     toast.success('Pedido atualizado.');
     setData(result.data);
+    setEditMode(false);
+  }
+
+  function cancelEdit(): void {
+    if (data) setEdit(buildDraft(data));
+    setEditMode(false);
   }
 
   async function doDelete(): Promise<void> {
@@ -144,10 +160,10 @@ export default function PedidoDetalhePage() {
 
   const setAddr = (k: string, v: string) =>
     setEdit((e) => ({ ...e, shipping_address: { ...e.shipping_address, [k]: v } }));
-  const setItem = (id: string, v: string) =>
+  const setItemAttr = (id: string, key: 'cor' | 'numero', v: string) =>
     setEdit((e) => ({
       ...e,
-      items: e.items?.map((it) => (it.id === id ? { ...it, variant_label: v } : it)),
+      items: e.items?.map((it) => (it.id === id ? { ...it, [key]: v } : it)),
     }));
 
   return (
@@ -179,16 +195,16 @@ export default function PedidoDetalhePage() {
           <Link
             href={`/pedidos/imprimir?ids=${number}`}
             target="_blank"
-            className="rounded-card border border-surface-border px-3 py-1.5 text-sm hover:border-primary"
+            className="inline-flex items-center gap-1.5 rounded-card border border-surface-border px-3 py-1.5 text-sm text-text hover:border-primary"
           >
-            📄 PDF do pedido
+            <IconPrinter width={16} height={16} /> PDF do pedido
           </Link>
           <Link
             href={`/pedidos/etiquetas?ids=${number}`}
             target="_blank"
-            className="rounded-card border border-surface-border px-3 py-1.5 text-sm hover:border-primary"
+            className="inline-flex items-center gap-1.5 rounded-card border border-surface-border px-3 py-1.5 text-sm text-text hover:border-primary"
           >
-            🏷️ Etiqueta
+            <IconTag width={16} height={16} /> Etiqueta
           </Link>
           <Button size="sm" variant="ghost" className="text-danger" onClick={() => setConfirmDel(true)}>
             Excluir pedido
@@ -220,14 +236,9 @@ export default function PedidoDetalhePage() {
                         <span className="text-xs text-text-muted">
                           {it.quantity} × {formatBRL(it.unit_price_cents)}
                         </span>
-                        {it.id && (
-                          <Input
-                            className="mt-1"
-                            label="Variação (tam./cor)"
-                            value={edit.items?.find((x) => x.id === it.id)?.variant_label ?? ''}
-                            onChange={(e) => setItem(it.id!, e.target.value)}
-                          />
-                        )}
+                        <span className="text-xs text-text-muted">
+                          Variação: {it.variant_label || '—'}
+                        </span>
                       </div>
                       <span className="text-sm font-medium">{formatBRL(it.total_cents)}</span>
                     </li>
@@ -258,9 +269,24 @@ export default function PedidoDetalhePage() {
               </Card>
 
               <Card variant="outline" className="flex flex-col gap-3">
-                <h2 className="text-lg font-semibold">Editar dados de entrega e cliente</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Dados de entrega e cliente</h2>
+                  {!editMode && (
+                    <button
+                      type="button"
+                      title="Editar dados"
+                      aria-label="Editar dados"
+                      onClick={() => setEditMode(true)}
+                      className="rounded-card border border-surface-border p-2 text-text hover:border-primary"
+                    >
+                      <IconEdit width={16} height={16} />
+                    </button>
+                  )}
+                </div>
+
                 <Input
                   label="E-mail do cliente"
+                  disabled={!editMode}
                   value={edit.email ?? ''}
                   onChange={(e) => setEdit((s) => ({ ...s, email: e.target.value }))}
                 />
@@ -269,21 +295,64 @@ export default function PedidoDetalhePage() {
                     <Input
                       key={f.key}
                       label={f.label}
+                      disabled={!editMode}
                       value={(edit.shipping_address?.[f.key] as string) ?? ''}
                       onChange={(e) => setAddr(f.key, e.target.value)}
                     />
                   ))}
                 </div>
+
+                <div className="flex flex-col gap-3 border-t border-surface-border pt-3">
+                  <span className="text-sm font-medium text-text">Variação dos itens</span>
+                  {data.items.map((it, i) =>
+                    it.id ? (
+                      <div key={it.id} className="flex flex-col gap-1">
+                        <span className="text-xs text-text-muted">
+                          {it.name} ({it.sku})
+                        </span>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <Input
+                            label="Cor"
+                            disabled={!editMode}
+                            value={edit.items?.find((x) => x.id === it.id)?.cor ?? ''}
+                            onChange={(e) => setItemAttr(it.id!, 'cor', e.target.value)}
+                          />
+                          <Input
+                            label="Número / tamanho"
+                            disabled={!editMode}
+                            value={edit.items?.find((x) => x.id === it.id)?.numero ?? ''}
+                            onChange={(e) => setItemAttr(it.id!, 'numero', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <p key={i} className="text-xs text-text-muted">
+                        {it.name}: variação não editável
+                      </p>
+                    ),
+                  )}
+                </div>
+
                 <Input
                   label="Código de rastreio (tracking)"
+                  disabled={!editMode}
+                  hint="Preenchido automaticamente quando o Melhor Envio posta a etiqueta."
                   value={edit.shipping_service?.tracking_code ?? ''}
                   onChange={(e) =>
                     setEdit((s) => ({ ...s, shipping_service: { tracking_code: e.target.value } }))
                   }
                 />
-                <Button loading={busy} onClick={() => void saveEdit()}>
-                  Salvar alterações
-                </Button>
+
+                {editMode && (
+                  <div className="flex gap-2">
+                    <Button loading={busy} onClick={() => void saveEdit()}>
+                      Salvar alterações
+                    </Button>
+                    <Button variant="outline" disabled={busy} onClick={cancelEdit}>
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
               </Card>
 
               <Card variant="outline" className="flex flex-col gap-2">
@@ -362,9 +431,14 @@ export default function PedidoDetalhePage() {
                 )}
               </Card>
 
-              <Card variant="outline" className="flex flex-col gap-3">
+              <Card variant="outline" className="flex flex-col gap-2">
                 <h2 className="text-lg font-semibold">Cliente</h2>
-                <p className="text-sm">{data.email}</p>
+                <p className="text-sm font-medium">{data.customer_name}</p>
+                <p className="text-sm text-text-muted">{data.email}</p>
+                <p className="text-sm">
+                  <span className="text-text-muted">CPF: </span>
+                  {formatCpf(data.cpf)}
+                </p>
                 <Badge tone="neutral">Fulfillment: {data.fulfillment_status}</Badge>
               </Card>
 

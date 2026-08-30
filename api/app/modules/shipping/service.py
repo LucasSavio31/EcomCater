@@ -201,15 +201,35 @@ async def handle_tracking_webhook(
         logger.info("webhook de rastreio sem pedido correspondente: %s", update)
         return {"matched": False}
 
-    mapping = {
-        "POSTADO": ("shipped", "shipped"),
-        "EM_TRANSITO": ("shipped", "shipped"),
-        "ENTREGUE": ("delivered", "fulfilled"),
-    }
-    new_status, new_fulfillment = mapping.get(update.status, (order.status, order.fulfillment_status))
-    if new_status != order.status:
-        from app.modules.orders.service import record_event
+    from app.modules.orders.service import record_event
 
+    # 1) Persistir o código de rastreio assim que o Melhor Envio o informar.
+    tracking_saved = False
+    if update.tracking_code:
+        svc = dict(order.shipping_service_json or {})
+        if svc.get("tracking_code") != update.tracking_code:
+            svc["tracking_code"] = update.tracking_code
+            if update.provider_shipment_id:
+                svc.setdefault("shipment_id", update.provider_shipment_id)
+            order.shipping_service_json = svc
+            tracking_saved = True
+            await record_event(
+                db, order, type="tracking_added", actor_type="system",
+                message=f"Código de rastreio do Melhor Envio: {update.tracking_code}",
+            )
+
+    # 2) Mapear o status do rastreio para o status do pedido.
+    #    EM_TRANSITO mantém 'shipped' mas dispara e-mail próprio ('in_transit').
+    mapping = {
+        "POSTADO": ("shipped", "shipped", "shipped"),
+        "EM_TRANSITO": ("shipped", "shipped", "in_transit"),
+        "ENTREGUE": ("delivered", "fulfilled", "delivered"),
+    }
+    new_status, new_fulfillment, email_key = mapping.get(
+        update.status, (order.status, order.fulfillment_status, None)
+    )
+    status_changed = new_status != order.status
+    if status_changed:
         prev = order.status
         order.status = new_status
         order.fulfillment_status = new_fulfillment
@@ -217,8 +237,13 @@ async def handle_tracking_webhook(
             db, order, type="status_changed", from_status=prev, to_status=new_status,
             message=f"Rastreio Melhor Envio: {update.raw_status}", actor_type="system",
         )
-        await emit("order.status_changed", {"order_id": str(order.id), "status": new_status})
-    return {"matched": True, "status": update.status}
+
+    # Dispara o e-mail transacional adequado (inclusive quando só chegou o
+    # rastreio, ou quando é EM_TRANSITO sem mudança de status do pedido).
+    if email_key and (status_changed or email_key == "in_transit" or tracking_saved):
+        await emit("order.status_changed", {"order_id": str(order.id), "status": email_key})
+
+    return {"matched": True, "status": update.status, "tracking_saved": tracking_saved}
 
 
 async def send_orders_to_melhor_envio(db: AsyncSession, order_numbers: list[str]) -> dict:

@@ -71,7 +71,6 @@ export function ReviewsTab({ productId }: { productId: string }) {
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
-                  variant="secondary"
                   disabled={busyId === r.id || r.status === 'approved'}
                   onClick={() => void moderate(r.id, 'approved')}
                 >

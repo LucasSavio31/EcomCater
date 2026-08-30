@@ -47,6 +47,11 @@ export function themeToCssVars(theme: AdminTheme): string {
     '--color-bg': theme.bg_color,
     '--color-surface': theme.bg_color,
     '--font-family': theme.font_family,
+    // Botões do painel são SEMPRE pretos com texto branco — não seguem o tema
+    // da loja (só a loja usa a cor de botão configurada pelo lojista).
+    '--color-btn-bg': '#111111',
+    '--color-btn-fg': '#FFFFFF',
+    '--color-btn-hover': '#000000',
   };
   const body = Object.entries(vars)
     .map(([k, v]) => `${k}:${String(v).replace(/[<>]/g, '')};`)

@@ -41,17 +41,67 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         "<p>O pagamento do pedido <b>{{ number }}</b> não foi concluído. "
         "Você pode tentar novamente.</p>",
     ),
+    "order_processing": (
+        "Pedido {{ number }} em separação",
+        "<h2>Estamos preparando seu pedido 📦</h2>"
+        "<p>O pedido <b>{{ number }}</b> entrou em separação e logo será enviado.</p>",
+    ),
     "order_shipped": (
         "Seu pedido {{ number }} foi enviado",
         "<h2>Pedido a caminho 🚚</h2>"
         "<p>O pedido <b>{{ number }}</b> foi postado."
-        "{% if tracking %} Código de rastreio: <b>{{ tracking }}</b>{% endif %}</p>",
+        "{% if tracking %} Código de rastreio: <b>{{ tracking }}</b>{% endif %}</p>"
+        "{% if tracking_url %}<p><a href='{{ tracking_url }}'>Acompanhar entrega</a></p>{% endif %}",
+    ),
+    "order_in_transit": (
+        "Pedido {{ number }} em trânsito",
+        "<h2>Seu pedido está em trânsito 🛣️</h2>"
+        "<p>O pedido <b>{{ number }}</b> está a caminho do endereço de entrega."
+        "{% if tracking %} Rastreio: <b>{{ tracking }}</b>{% endif %}</p>"
+        "{% if tracking_url %}<p><a href='{{ tracking_url }}'>Acompanhar entrega</a></p>{% endif %}",
     ),
     "order_delivered": (
-        "Pedido {{ number }} entregue",
-        "<h2>Entregue! 🎉</h2><p>O pedido <b>{{ number }}</b> foi entregue. Aproveite!</p>",
+        "Pedido {{ number }} entregue — conte como foi",
+        "<h2>Entregue! 🎉</h2>"
+        "<p>O pedido <b>{{ number }}</b> foi entregue. Esperamos que goste!</p>"
+        "<p>Sua opinião ajuda muito outros clientes:</p>"
+        "<p><a href='{{ review_url }}' "
+        "style='display:inline-block;padding:12px 20px;background:#111;color:#fff;"
+        "text-decoration:none;border-radius:8px'>Avaliar minha compra</a></p>",
+    ),
+    "order_canceled": (
+        "Pedido {{ number }} cancelado",
+        "<h2>Pedido cancelado</h2>"
+        "<p>O pedido <b>{{ number }}</b> foi cancelado. "
+        "Em caso de dúvida, entre em contato com a loja.</p>",
+    ),
+    "order_refunded": (
+        "Reembolso do pedido {{ number }}",
+        "<h2>Reembolso processado</h2>"
+        "<p>O reembolso do pedido <b>{{ number }}</b> foi processado. "
+        "O prazo de estorno depende do meio de pagamento.</p>",
+    ),
+    "account_created": (
+        "Bem-vindo(a) à {{ store_name }}",
+        "<h2>Conta criada 🎉</h2>"
+        "<p>Sua conta na <b>{{ store_name }}</b> foi criada com sucesso.</p>"
+        "<p>Use seu e-mail para entrar e acompanhar seus pedidos.</p>",
+    ),
+    "admin_order_created": (
+        "[Loja] Novo pedido {{ number }} — R$ {{ '%.2f'|format(total_cents/100) }}",
+        "<h2>Novo pedido: {{ number }}</h2>"
+        "<p>Cliente: <b>{{ customer_name }}</b> ({{ email }})</p>"
+        "<p>Total: <b>R$ {{ '%.2f'|format(total_cents/100) }}</b></p>"
+        "<p>Itens:</p><ul>{% for it in items %}<li>{{ it }}</li>{% endfor %}</ul>"
+        "<p><a href='{{ admin_url }}'>Abrir no painel</a></p>",
     ),
 }
+
+
+async def admin_notify_email(db: AsyncSession) -> str:
+    """E-mail que recebe as notificações do lojista (só o aviso de novo pedido)."""
+    conf = await _smtp_conf(db)
+    return conf.get("from_email") or settings.admin_email or settings.smtp_from_email
 
 
 async def _smtp_conf(db: AsyncSession) -> dict:

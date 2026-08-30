@@ -7,6 +7,7 @@ import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { Select } from '@/components/form-controls';
 import { StatusBadge } from '@/components/status-badge';
+import { IconEdit, IconPrinter, IconTag, IconTrash } from '@/components/nav-icons';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
@@ -193,16 +194,16 @@ export default function PedidosPage() {
           <Link
             href={printHref('imprimir', selectedList.join(','))}
             target="_blank"
-            className="rounded-card border border-surface-border px-3 py-1.5 text-sm hover:border-primary"
+            className="inline-flex items-center gap-1.5 rounded-card border border-surface-border px-3 py-1.5 text-sm text-text hover:border-primary"
           >
-            📄 PDF resumo (por fornecedor)
+            <IconPrinter width={16} height={16} /> PDF resumo (por fornecedor)
           </Link>
           <Link
             href={printHref('etiquetas', selectedList.join(','))}
             target="_blank"
-            className="rounded-card border border-surface-border px-3 py-1.5 text-sm hover:border-primary"
+            className="inline-flex items-center gap-1.5 rounded-card border border-surface-border px-3 py-1.5 text-sm text-text hover:border-primary"
           >
-            🏷️ Etiquetas (A4, 4/página)
+            <IconTag width={16} height={16} /> Etiquetas (A4, 4/página)
           </Link>
           <Button size="sm" variant="outline" loading={busy} onClick={() => void sendToME()}>
             Enviar ao Melhor Envio
@@ -266,7 +267,10 @@ export default function PedidosPage() {
                     {o.number}
                   </Link>
                 </td>
-                <td className="px-3 py-2">{o.email}</td>
+                <td className="px-3 py-2">
+                  <span className="block font-medium text-text">{o.customer_name}</span>
+                  <span className="block text-xs text-text-muted">{o.email}</span>
+                </td>
                 <td className="px-3 py-2">
                   {o.items_summary}
                   {o.items_count > 1 && (
@@ -289,30 +293,30 @@ export default function PedidosPage() {
                   {formatDateTime(o.placed_at ?? o.created_at)}
                 </td>
                 <td className="px-3 py-2">
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex items-center justify-end gap-1 text-text">
                     <Link
                       href={printHref('imprimir', o.number)}
                       target="_blank"
                       title="Gerar PDF do pedido"
-                      className="rounded p-1 hover:bg-surface-border"
+                      className="rounded p-1.5 hover:bg-bg-subtle"
                     >
-                      📄
+                      <IconPrinter width={16} height={16} />
                     </Link>
                     <button
                       type="button"
                       title="Editar"
                       onClick={() => router.push(`/pedidos/${o.number}`)}
-                      className="rounded p-1 hover:bg-surface-border"
+                      className="rounded p-1.5 hover:bg-bg-subtle"
                     >
-                      ✏️
+                      <IconEdit width={16} height={16} />
                     </button>
                     <button
                       type="button"
                       title="Excluir pedido"
                       onClick={() => setDeleting([o.number])}
-                      className="rounded p-1 text-danger hover:bg-surface-border"
+                      className="rounded p-1.5 hover:bg-bg-subtle"
                     >
-                      🗑
+                      <IconTrash width={16} height={16} />
                     </button>
                   </div>
                 </td>

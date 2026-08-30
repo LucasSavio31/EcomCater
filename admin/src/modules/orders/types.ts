@@ -14,6 +14,7 @@ export interface OrderListItem {
   payment_status: string;
   fulfillment_status: string;
   email: string;
+  customer_name: string;
   grand_total_cents: number;
   placed_at: string | null;
   created_at: string;
@@ -39,6 +40,8 @@ export interface OrderItem {
   sku: string;
   name: string;
   variant_label: string | null;
+  cor: string | null;
+  numero: string | null;
   supplier: string | null;
   image_url: string | null;
   unit_price_cents: number;
@@ -73,6 +76,8 @@ export interface OrderDetail {
   payment_status: string;
   fulfillment_status: string;
   email: string;
+  customer_name: string;
+  cpf: string | null;
   items: OrderItem[];
   items_total_cents: number;
   discount_cents: number;

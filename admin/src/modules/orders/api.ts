@@ -19,7 +19,13 @@ export interface OrderEditPayload {
   customer_note?: string | null;
   shipping_address?: Partial<OrderAddress>;
   shipping_service?: { tracking_code?: string };
-  items?: { id: string; variant_label?: string | null; name?: string }[];
+  items?: {
+    id: string;
+    variant_label?: string | null;
+    cor?: string | null;
+    numero?: string | null;
+    name?: string;
+  }[];
 }
 
 export const ordersApi = {

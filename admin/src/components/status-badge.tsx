@@ -43,8 +43,9 @@ const MAPS: Record<Kind, Record<string, { label: string; tone: BadgeTone }>> = {
 
 export function StatusBadge({ kind, value }: { kind: Kind; value: string }) {
   const entry = MAPS[kind][value];
-  if (!entry) return <Badge tone="neutral">{value}</Badge>;
-  return <Badge tone={entry.tone}>{entry.label}</Badge>;
+  const cls = 'whitespace-nowrap';
+  if (!entry) return <Badge tone="neutral" className={cls}>{value}</Badge>;
+  return <Badge tone={entry.tone} className={cls}>{entry.label}</Badge>;
 }
 
 export function orderStatusLabel(value: string): string {

@@ -128,3 +128,28 @@ export const IconLeads = (p: P) => (
     <path d="M8 9h8M8 12h5" />
   </svg>
 );
+export const IconEdit = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+  </svg>
+);
+export const IconTrash = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
+    <path d="M10 11v6M14 11v6" />
+  </svg>
+);
+export const IconPrinter = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M6 9V3h12v6" />
+    <rect x="3" y="9" width="18" height="8" rx="2" />
+    <path d="M6 14h12v7H6z" />
+  </svg>
+);
+export const IconTag = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M20.6 12.6 12 21l-8-8a4.5 4.5 0 0 1 0-6.4l4-4H21v13.6a4.5 4.5 0 0 1-.4 0Z" />
+    <circle cx="15.5" cy="8.5" r="1.5" />
+  </svg>
+);

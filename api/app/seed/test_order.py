@@ -55,42 +55,51 @@ async def _ensure_user(db) -> User:
     return u
 
 
-async def _make_order(db, user: User, *, pay: bool) -> str:
-    variant = await db.scalar(
-        select(ProductVariant)
-        .join(Product, Product.id == ProductVariant.product_id)
-        .where(ProductVariant.is_active.is_(True), ProductVariant.stock_qty > 0, Product.status == "active")
-        .limit(1)
-    )
-    if not variant:
-        raise RuntimeError("Sem variante em estoque — rode `python -m app.seed.sneaker` antes.")
+async def _make_order(user_id: str, *, pay: bool) -> str:
+    """Sessão própria por pedido — evita reaproveitar carrinho já convertido."""
+    async with SessionLocal() as db:
+        variant = await db.scalar(
+            select(ProductVariant)
+            .join(Product, Product.id == ProductVariant.product_id)
+            .where(
+                ProductVariant.is_active.is_(True),
+                ProductVariant.stock_qty > 0,
+                Product.status == "active",
+            )
+            .limit(1)
+        )
+        if not variant:
+            raise RuntimeError("Sem variante em estoque — rode `python -m app.seed.sneaker` antes.")
+        user = await db.scalar(select(User).where(User.id == user_id))
 
-    cart = await cart_service.get_or_create(db, token=None, user_id=str(user.id))
-    cart = await cart_service.add_item(db, cart, str(variant.id), 1)
-    order = await order_service.create_from_cart(
-        db,
-        cart,
-        email=EMAIL,
-        cpf=CPF,
-        shipping_address=ADDR,
-        billing_address=None,
-        customer_note="Pedido de teste (seed)",
-    )
-    await cart_service.clear(db, cart)
-    if pay:
-        await order_service.finalize_paid(db, order)
-    await db.flush()
-    logger.info("pedido %s criado (%s)", order.number, "PAGO" if pay else "pendente")
-    return order.number
+        cart = await cart_service.get_or_create(db, token=None, user_id=str(user.id))
+        cart = await cart_service.add_item(db, cart, str(variant.id), 1)
+        order = await order_service.create_from_cart(
+            db,
+            cart,
+            email=EMAIL,
+            cpf=CPF,
+            shipping_address=ADDR,
+            billing_address=None,
+            customer_note="Pedido de teste (seed)",
+        )
+        await cart_service.clear(db, cart)
+        if pay:
+            await order_service.finalize_paid(db, order)
+        number = order.number
+        await db.commit()
+        logger.info("pedido %s criado (%s)", number, "PAGO" if pay else "pendente")
+        return number
 
 
 async def run() -> None:
     async with SessionLocal() as db:
         user = await _ensure_user(db)
-        n1 = await _make_order(db, user, pay=True)
-        n2 = await _make_order(db, user, pay=False)
         await db.commit()
-        logger.info("OK — cliente %s | pedidos: %s (pago), %s (pendente)", EMAIL, n1, n2)
+        user_id = str(user.id)
+    n1 = await _make_order(user_id, pay=True)
+    n2 = await _make_order(user_id, pay=False)
+    logger.info("OK — cliente %s | pedidos: %s (pago), %s (pendente)", EMAIL, n1, n2)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 
 from app.core.module_registry import ModuleSpec, register
+from app.modules.customers import events as _events  # noqa: F401 - registra subscribers
 from app.modules.customers.router_public import router as public_router
 
 admin_router = APIRouter()

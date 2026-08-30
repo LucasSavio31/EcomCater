@@ -195,9 +195,7 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
         actions={
           <div className="flex flex-wrap gap-2">
             {!isNew && status !== 'active' && (
-              <Button variant="secondary" onClick={() => void handleStatus('active')}>
-                Publicar
-              </Button>
+              <Button onClick={() => void handleStatus('active')}>Publicar</Button>
             )}
             {!isNew && status === 'active' && (
               <Button variant="outline" onClick={() => void handleStatus('archived')}>

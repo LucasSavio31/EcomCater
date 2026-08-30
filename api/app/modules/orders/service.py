@@ -281,12 +281,20 @@ async def add_note(db: AsyncSession, order: Order, message: str, actor_id: str |
 
 
 # --------------------------------------------------------------------- serialização
+def _variant_label_from_attrs(cor: str | None, numero: str | None) -> str | None:
+    parts = [p.strip() for p in (cor, numero) if p and p.strip()]
+    return " / ".join(parts) or None
+
+
 def _item_out(it: OrderItem) -> dict:
+    attrs = it.variant_attrs or {}
     return {
         "id": str(it.id),
         "sku": it.sku,
         "name": it.name,
         "variant_label": it.variant_label,
+        "cor": attrs.get("cor"),
+        "numero": attrs.get("numero"),
         "supplier": it.supplier,
         "image_url": storage.url(it.image_key) if it.image_key else None,
         "unit_price_cents": it.unit_price_cents,
@@ -303,6 +311,8 @@ def to_out(order: Order) -> dict:
         "payment_status": order.payment_status,
         "fulfillment_status": order.fulfillment_status,
         "email": order.email,
+        "customer_name": _customer_name(order),
+        "cpf": order.cpf,
         "items": [_item_out(i) for i in order.items],
         "items_total_cents": order.items_total_cents,
         "discount_cents": order.discount_cents,
@@ -328,6 +338,19 @@ def to_out(order: Order) -> dict:
     }
 
 
+def _customer_name(order: Order) -> str:
+    """Nome do cliente para exibição: usa o destinatário do endereço; se não
+    houver, cai para a parte local do e-mail e, por fim, o e-mail inteiro."""
+    for src in (order.shipping_address_json, order.billing_address_json):
+        if isinstance(src, dict):
+            name = (src.get("recipient_name") or src.get("name") or "").strip()
+            if name:
+                return name
+    if order.email and "@" in order.email:
+        return order.email.split("@", 1)[0]
+    return order.email or "—"
+
+
 def list_item_out(order: Order) -> dict:
     items = list(order.items)
     total_qty = sum(i.quantity for i in items)
@@ -346,6 +369,7 @@ def list_item_out(order: Order) -> dict:
         "payment_status": order.payment_status,
         "fulfillment_status": order.fulfillment_status,
         "email": order.email,
+        "customer_name": _customer_name(order),
         "grand_total_cents": order.grand_total_cents,
         "placed_at": order.placed_at,
         "created_at": order.created_at,
@@ -430,10 +454,21 @@ async def edit_order(db: AsyncSession, number: str, data: dict) -> Order:
         it = next((x for x in order.items if str(x.id) == str(it_edit.get("id"))), None)
         if not it:
             continue
-        if it_edit.get("variant_label") is not None:
-            it.variant_label = str(it_edit["variant_label"]).strip() or None
         if it_edit.get("name"):
             it.name = str(it_edit["name"]).strip()
+        # Variação estruturada (cor / número). Quando presente, recompõe o rótulo.
+        has_struct = "cor" in it_edit or "numero" in it_edit
+        if has_struct:
+            attrs = dict(it.variant_attrs or {})
+            if "cor" in it_edit:
+                attrs["cor"] = (str(it_edit["cor"]).strip() or None) if it_edit["cor"] is not None else None
+            if "numero" in it_edit:
+                attrs["numero"] = (str(it_edit["numero"]).strip() or None) if it_edit["numero"] is not None else None
+            attrs = {k: v for k, v in attrs.items() if v}
+            it.variant_attrs = attrs or None
+            it.variant_label = _variant_label_from_attrs(attrs.get("cor"), attrs.get("numero"))
+        if it_edit.get("variant_label") is not None:
+            it.variant_label = str(it_edit["variant_label"]).strip() or None
 
     await record_event(db, order, type="edited", actor_type="admin", message="Dados do pedido editados")
     await db.flush()

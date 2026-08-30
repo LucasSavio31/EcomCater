@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
     public_api_url: str = "http://localhost:8000"
     site_url: str = "http://localhost:3000"
+    admin_url: str = "http://localhost:3001/administracao"
 
     # seed admin
     admin_email: str = "admin@loja.local"
