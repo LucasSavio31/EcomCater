@@ -25,6 +25,7 @@ async def get_theme(db: DbDep) -> dict:
         out["store_name"] = store.store_name
         out["legal_name"] = store.legal_name
         out["cnpj"] = store.cnpj
+        out["social_json"] = store.social_json or {}
     return out
 
 

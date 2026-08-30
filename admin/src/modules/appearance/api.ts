@@ -43,6 +43,10 @@ export interface Theme {
   footer_copyright_text: string;
   footer_copyright_bg_color: string;
   footer_copyright_text_color: string;
+  footer_social_instagram_enabled: boolean;
+  footer_social_facebook_enabled: boolean;
+  footer_social_tiktok_enabled: boolean;
+  footer_social_youtube_enabled: boolean;
   /** Banner principal (hero) */
   hero_enabled: boolean;
   hero_mode: 'carousel' | 'static';

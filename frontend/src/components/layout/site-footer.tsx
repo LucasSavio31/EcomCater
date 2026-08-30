@@ -54,15 +54,35 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
     // limpa "CNPJ —." quando não há CNPJ cadastrado
     .replace(/\s*[—-]?\s*CNPJ\s*—\.?/i, '.')
     .trim();
-  const columns =
+  const columns = (
     menu && menu.items.length > 0
       ? menu.items
-      : [{ id: 'inst', label: 'Institucional', url: '#', highlight: false, is_megamenu: false, size_shortcuts: [], children: FALLBACK_LINKS.map((l, i) => ({ id: `fb-${i}`, label: l.label, url: l.url, highlight: false, is_megamenu: false, size_shortcuts: [], children: [] })) }];
+      : [{ id: 'inst', label: 'Institucional', url: '#', highlight: false, is_megamenu: false, size_shortcuts: [], children: FALLBACK_LINKS.map((l, i) => ({ id: `fb-${i}`, label: l.label, url: l.url, highlight: false, is_megamenu: false, size_shortcuts: [], children: [] })) }]
+  ).slice(0, 3);
+
+  // redes sociais: só as ligadas no tema e com URL cadastrada em Dados da loja
+  const social = theme.social_json ?? {};
+  const socialLinksResolved: SocialLink[] = (
+    [
+      ['instagram', theme.footer_social_instagram_enabled],
+      ['facebook', theme.footer_social_facebook_enabled],
+      ['tiktok', theme.footer_social_tiktok_enabled],
+      ['youtube', theme.footer_social_youtube_enabled],
+    ] as const
+  )
+    .filter(([net, on]) => on && (social[net] ?? '').trim())
+    .map(([net]) => ({ network: net, url: social[net]!.trim() }));
+  if (socialLinks.length > 0) socialLinksResolved.push(...socialLinks);
+
+  const rightCols = columns.length + (socialLinksResolved.length > 0 ? 1 : 0);
 
   return (
     <footer className="mt-16 border-t border-surface-border bg-footer text-footer-fg">
       <div className="mx-auto max-w-header px-4 py-10">
-        <div className="grid gap-8 md:grid-cols-[1.2fr_repeat(3,1fr)]">
+        <div
+          className="grid gap-8"
+          style={{ gridTemplateColumns: `minmax(0,1.2fr) repeat(${Math.max(rightCols, 1)}, minmax(0,1fr))` }}
+        >
           {/* Marca + contato */}
           <div className="flex flex-col gap-3">
             <Link href="/" aria-label={`${storeName} — início`}>
@@ -79,11 +99,10 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
                 {renderNote(theme.footer_note_text.trim())}
               </p>
             )}
-            <SocialIcons links={socialLinks} />
           </div>
 
           {/* Colunas de links */}
-          {columns.slice(0, 3).map((col) => (
+          {columns.map((col) => (
             <nav key={col.id} aria-label={col.label}>
               <h2 className="mb-2 text-sm font-semibold uppercase text-footer-fg">{col.label}</h2>
               <ul className="flex flex-col gap-1.5">
@@ -100,6 +119,14 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
               </ul>
             </nav>
           ))}
+
+          {/* Redes sociais */}
+          {socialLinksResolved.length > 0 && (
+            <div>
+              <h2 className="mb-2 text-sm font-semibold uppercase text-footer-fg">Siga-nos</h2>
+              <SocialIcons links={socialLinksResolved} />
+            </div>
+          )}
         </div>
 
         {/* Selos: pagamento / entrega / loja segura */}

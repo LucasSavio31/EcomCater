@@ -259,6 +259,39 @@ export function ThemeTab() {
                   </>
                 )}
               </div>
+
+              <div className="flex flex-col gap-3 border-t border-surface-border pt-4">
+                <span className="text-sm font-medium text-text">
+                  Redes sociais no rodapé (coluna “Siga-nos”)
+                </span>
+                <p className="text-xs text-text-muted">
+                  Ligue as que quiser exibir. A URL de cada rede é cadastrada em{' '}
+                  <b>Dados da loja → Redes sociais</b> — sem URL, a rede não aparece
+                  mesmo ligada.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Checkbox
+                    label="Instagram"
+                    checked={theme.footer_social_instagram_enabled}
+                    onChange={(v) => set('footer_social_instagram_enabled', v)}
+                  />
+                  <Checkbox
+                    label="Facebook"
+                    checked={theme.footer_social_facebook_enabled}
+                    onChange={(v) => set('footer_social_facebook_enabled', v)}
+                  />
+                  <Checkbox
+                    label="TikTok"
+                    checked={theme.footer_social_tiktok_enabled}
+                    onChange={(v) => set('footer_social_tiktok_enabled', v)}
+                  />
+                  <Checkbox
+                    label="YouTube"
+                    checked={theme.footer_social_youtube_enabled}
+                    onChange={(v) => set('footer_social_youtube_enabled', v)}
+                  />
+                </div>
+              </div>
             </Card>
 
             <Card variant="outline" className="flex flex-col gap-4">

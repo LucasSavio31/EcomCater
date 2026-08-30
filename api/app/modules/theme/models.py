@@ -108,6 +108,20 @@ class ThemeSettings(Base):
         String(9), default="#6B7280", server_default="#6B7280", nullable=False
     )
 
+    # Redes sociais no rodapé (URL vem de StoreSettings.social_json)
+    footer_social_instagram_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    footer_social_facebook_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    footer_social_tiktok_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    footer_social_youtube_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+
     # Banner principal (hero) da home
     hero_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     hero_mode: Mapped[str] = mapped_column(String(12), default="carousel", server_default="carousel", nullable=False)  # carousel | static

@@ -37,6 +37,12 @@ export interface ThemeSettings {
   footer_copyright_text: string;
   footer_copyright_bg_color: string;
   footer_copyright_text_color: string;
+  /** Redes sociais no rodapé (URL vem de social_json). */
+  footer_social_instagram_enabled: boolean;
+  footer_social_facebook_enabled: boolean;
+  footer_social_tiktok_enabled: boolean;
+  footer_social_youtube_enabled: boolean;
+  social_json?: Record<string, string> | null;
   free_shipping_threshold_cents?: number | null;
   whatsapp_number?: string | null;
   top_bar_message?: string | null;
@@ -183,6 +189,11 @@ export const NEUTRAL_THEME: ThemeSettings = {
   footer_copyright_text: '© {ano} {loja} — CNPJ {cnpj}. Todos os Direitos Reservados.',
   footer_copyright_bg_color: '#FFFFFF',
   footer_copyright_text_color: '#6B7280',
+  footer_social_instagram_enabled: false,
+  footer_social_facebook_enabled: false,
+  footer_social_tiktok_enabled: false,
+  footer_social_youtube_enabled: false,
+  social_json: null,
   top_bar_enabled: false,
   top_bar_message: null,
   top_bar_carousel: false,

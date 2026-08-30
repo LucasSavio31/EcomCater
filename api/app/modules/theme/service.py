@@ -27,6 +27,8 @@ _THEME_FIELDS = {
     "footer_note_text",
     "footer_copyright_enabled", "footer_copyright_text",
     "footer_copyright_bg_color", "footer_copyright_text_color",
+    "footer_social_instagram_enabled", "footer_social_facebook_enabled",
+    "footer_social_tiktok_enabled", "footer_social_youtube_enabled",
     "hero_enabled", "hero_mode", "hero_autoplay_seconds",
     "footer_seals_enabled", "footer_seals_json",
     "cart_redirect_after_add",
@@ -61,6 +63,8 @@ _THEME_FIELDS = {
 _BOOL_FIELDS = {
     "top_bar_enabled", "top_bar_carousel", "top_bar_centered",
     "footer_copyright_enabled",
+    "footer_social_instagram_enabled", "footer_social_facebook_enabled",
+    "footer_social_tiktok_enabled", "footer_social_youtube_enabled",
     "hero_enabled", "footer_seals_enabled", "cart_redirect_after_add",
     "mini_cart_enabled",
     "checkout_email_first", "checkout_show_coupon", "checkout_allow_qty_change",
