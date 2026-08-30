@@ -160,10 +160,10 @@ export function PdpBuyBox({ product, redirectAfterAdd = false }: PdpBuyBoxProps)
                   onClick={() =>
                     setSelected((prev) => ({ ...prev, [type.id]: value.id }))
                   }
-                  className={`relative flex h-11 min-w-[3rem] items-center justify-center rounded-card border px-3 text-sm font-medium transition ${
+                  className={`relative flex h-11 min-w-[3rem] items-center justify-center rounded-card border-2 px-3 text-sm font-medium transition ${
                     isSelected
-                      ? 'border-btn bg-btn text-btn-fg'
-                      : 'border-surface-border bg-surface hover:border-btn'
+                      ? 'border-var-border bg-var text-var-fg'
+                      : 'border-surface-border bg-surface hover:border-var-border'
                   } ${!available ? 'text-text-muted' : ''}`}
                 >
                   <span className={!available ? 'line-through decoration-2' : ''}>{value.value}</span>

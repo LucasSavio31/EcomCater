@@ -21,6 +21,11 @@
   --color-btn-fg: var(--color-primary-fg);
   --color-btn-hover: var(--color-primary);
 
+  /* Caixas de variação (PDP) + botão "calcular frete". */
+  --color-var-bg: #fde047;
+  --color-var-fg: #111111;
+  --color-var-border: #111111;
+
   /* Menu superior (header) e rodapé (footer) — editáveis no admin. */
   --color-header-bg: #ffffff;
   --color-header-fg: #111827;

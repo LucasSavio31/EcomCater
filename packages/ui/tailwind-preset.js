@@ -39,6 +39,11 @@ module.exports = {
           fg: 'var(--color-btn-fg)',
           hover: 'var(--color-btn-hover)',
         },
+        var: {
+          DEFAULT: 'var(--color-var-bg)',
+          fg: 'var(--color-var-fg)',
+          border: 'var(--color-var-border)',
+        },
         header: {
           DEFAULT: 'var(--color-header-bg)',
           fg: 'var(--color-header-fg)',

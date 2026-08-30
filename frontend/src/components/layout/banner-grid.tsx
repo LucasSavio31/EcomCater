@@ -28,30 +28,18 @@ export function BannerGrid({ banners, variant = 'hero', priority = false }: Bann
   return (
     <ul className={`grid gap-3 ${cols}`}>
       {banners.map((banner, i) => {
-        const desktop = resolveMediaUrl(banner.image_desktop_url);
-        const mobile = resolveMediaUrl(banner.image_mobile_url) ?? desktop;
+        const src = resolveMediaUrl(banner.image_url ?? banner.image_desktop_url);
         const alt = banner.alt ?? banner.title ?? 'Banner promocional';
         const inner = (
           <span className={`relative block w-full overflow-hidden rounded-card bg-bg-subtle ${aspect}`}>
-            {mobile && (
+            {src && (
               <Image
-                src={mobile}
+                src={src}
                 alt={alt}
                 fill
-                sizes="(min-width: 640px) 0px, 100vw"
+                sizes="(min-width: 640px) 100vw, 100vw"
                 priority={priority && i === 0}
-                className="object-cover sm:hidden"
-              />
-            )}
-            {desktop && (
-              <Image
-                src={desktop}
-                alt={mobile ? '' : alt}
-                aria-hidden={mobile ? true : undefined}
-                fill
-                sizes="(min-width: 640px) 100vw, 0px"
-                priority={priority && i === 0}
-                className="hidden object-cover sm:block"
+                className="object-cover"
               />
             )}
           </span>

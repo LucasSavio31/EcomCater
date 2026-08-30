@@ -58,7 +58,23 @@ const maskCpf = (v: string) => {
 
 const STEP_ORDER: CheckoutStepId[] = ['identify', 'profile', 'shipping', 'payment'];
 
-export function CheckoutView() {
+export interface CheckoutSettings {
+  emailFirst: boolean;
+  showCoupon: boolean;
+  itemsLayout: 'with_thumb' | 'simple';
+  allowQtyChange: boolean;
+  buttonColor: string;
+}
+
+const DEFAULT_SETTINGS: CheckoutSettings = {
+  emailFirst: false,
+  showCoupon: true,
+  itemsLayout: 'with_thumb',
+  allowQtyChange: true,
+  buttonColor: '#111111',
+};
+
+export function CheckoutView({ settings = DEFAULT_SETTINGS }: { settings?: CheckoutSettings }) {
   const router = useRouter();
   const { cart, loading, refresh, setZip, selectShipping } = useCart();
   const { customer } = useAuth();
@@ -186,9 +202,15 @@ export function CheckoutView() {
   }, [addr.zip, quoteShipping]);
 
   // ---- validações por etapa
-  const identifyValid = EMAIL_RE.test(email) && onlyDigits(cpf).length === 11;
+  const cpfOk = onlyDigits(cpf).length === 11;
+  const identifyValid = settings.emailFirst
+    ? EMAIL_RE.test(email)
+    : EMAIL_RE.test(email) && cpfOk;
   const profileValid =
-    firstName.trim().length > 1 && lastName.trim().length > 0 && onlyDigits(phone).length >= 10;
+    firstName.trim().length > 1 &&
+    lastName.trim().length > 0 &&
+    onlyDigits(phone).length >= 10 &&
+    (!settings.emailFirst || cpfOk);
   const addressValid =
     onlyDigits(addr.zip).length === 8 &&
     addr.street.trim() !== '' &&
@@ -225,19 +247,28 @@ export function CheckoutView() {
   }
 
   // ---- avançar etapas
-  async function advanceIdentify() {
-    if (!identifyValid) return;
-    identify({ email: email.trim(), externalId: onlyDigits(cpf) });
-    if (!customer) {
-      // "instant login": senha = CPF. Se falhar, segue como convidado.
+  function tryInstantLogin() {
+    if (!customer && EMAIL_RE.test(email) && cpfOk) {
+      // "instant login": a senha do cliente é o CPF. Falhou? segue como convidado.
       void customerApi.login({ email: email.trim(), password: onlyDigits(cpf) });
     }
-    if (!addr.recipient_name) setAddr((p) => ({ ...p, recipient_name: `${firstName} ${lastName}`.trim() }));
+  }
+
+  async function advanceIdentify() {
+    if (!identifyValid) return;
+    identify({ email: email.trim(), externalId: onlyDigits(cpf) || undefined });
+    if (!settings.emailFirst) tryInstantLogin();
     goto('profile');
   }
   function advanceProfile() {
     if (!profileValid) return;
-    identify({ firstName: firstName.trim(), lastName: lastName.trim(), phone: onlyDigits(phone) });
+    if (settings.emailFirst) tryInstantLogin();
+    identify({
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      phone: onlyDigits(phone),
+      externalId: onlyDigits(cpf) || undefined,
+    });
     setAddr((p) => ({ ...p, recipient_name: p.recipient_name || `${firstName} ${lastName}`.trim() }));
     goto('shipping');
   }
@@ -367,13 +398,15 @@ export function CheckoutView() {
           onEdit={() => goto('identify')}
           summary={
             <span>
-              {email} · CPF {maskCpf(cpf)}
+              {email}
+              {!settings.emailFirst && cpf ? ` · CPF ${maskCpf(cpf)}` : ''}
             </span>
           }
         >
           <p className="text-sm text-text-muted">
-            Informe seu e-mail e CPF. Usamos o e-mail para identificar a compra e enviar as
-            atualizações do pedido; <strong>sua senha de acesso é o próprio CPF</strong>.
+            {settings.emailFirst
+              ? 'Informe seu e-mail para começar. Usamos ele para identificar a compra e enviar as atualizações do pedido.'
+              : 'Informe seu e-mail e CPF. Usamos o e-mail para identificar a compra e enviar as atualizações; sua senha de acesso é o próprio CPF.'}
           </p>
           <Input
             label="E-mail"
@@ -383,14 +416,16 @@ export function CheckoutView() {
             onChange={(e) => setEmail(e.target.value)}
             error={email && !EMAIL_RE.test(email) ? 'E-mail inválido' : undefined}
           />
-          <Input
-            label="CPF"
-            inputMode="numeric"
-            required
-            value={cpf}
-            onChange={(e) => setCpf(maskCpf(e.target.value))}
-            error={cpf && onlyDigits(cpf).length !== 11 ? 'CPF incompleto' : undefined}
-          />
+          {!settings.emailFirst && (
+            <Input
+              label="CPF"
+              inputMode="numeric"
+              required
+              value={cpf}
+              onChange={(e) => setCpf(maskCpf(e.target.value))}
+              error={cpf && onlyDigits(cpf).length !== 11 ? 'CPF incompleto' : undefined}
+            />
+          )}
           <Button onClick={() => void advanceIdentify()} disabled={!identifyValid} className="self-start">
             Avançar
           </Button>
@@ -413,6 +448,17 @@ export function CheckoutView() {
             <Input label="Nome" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
             <Input label="Sobrenome" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
           </div>
+          {settings.emailFirst && (
+            <Input
+              label="CPF"
+              inputMode="numeric"
+              required
+              value={cpf}
+              onChange={(e) => setCpf(maskCpf(e.target.value))}
+              hint="Também é a sua senha de acesso à conta."
+              error={cpf && onlyDigits(cpf).length !== 11 ? 'CPF incompleto' : undefined}
+            />
+          )}
           <Input
             label="Telefone / WhatsApp"
             inputMode="numeric"
@@ -422,7 +468,7 @@ export function CheckoutView() {
             error={phone && onlyDigits(phone).length < 10 ? 'Telefone incompleto' : undefined}
           />
           <button type="button" onClick={() => goto('identify')} className="w-fit text-xs text-primary underline">
-            Trocar e-mail / CPF
+            {settings.emailFirst ? 'Trocar e-mail' : 'Trocar e-mail / CPF'}
           </button>
           <Button onClick={advanceProfile} disabled={!profileValid} className="self-start">
             Avançar
@@ -665,6 +711,7 @@ export function CheckoutView() {
             loading={submitting}
             disabled={!canPlaceOrder}
             onClick={() => void submit()}
+            style={{ background: settings.buttonColor }}
           >
             {method === 'pix'
               ? 'Gerar PIX'
@@ -675,7 +722,11 @@ export function CheckoutView() {
         </StepSection>
       </div>
 
-      <OrderSummary />
+      <OrderSummary
+        showCoupon={settings.showCoupon}
+        layout={settings.itemsLayout}
+        allowQtyChange={settings.allowQtyChange}
+      />
     </div>
   );
 }

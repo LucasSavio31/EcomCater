@@ -25,6 +25,11 @@ const BUTTON_FIELDS: ColorField[] = [
   { key: 'button_text_color', label: 'Texto do botão' },
   { key: 'button_hover_color', label: 'Botão (hover)' },
 ];
+const VARIATION_FIELDS: ColorField[] = [
+  { key: 'variation_bg_color', label: 'Fundo da caixa selecionada' },
+  { key: 'variation_text_color', label: 'Texto da caixa selecionada' },
+  { key: 'variation_border_color', label: 'Borda da caixa' },
+];
 const HEADER_FIELDS: ColorField[] = [
   { key: 'header_bg_color', label: 'Fundo do menu superior' },
   { key: 'header_text_color', label: 'Texto do menu superior' },
@@ -126,6 +131,19 @@ export function ThemeTab() {
               <h2 className="text-lg font-semibold">Botões</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 {BUTTON_FIELDS.map((f) => (
+                  <ColorRow key={f.key} f={f} />
+                ))}
+              </div>
+            </Card>
+
+            <Card variant="outline" className="flex flex-col gap-4">
+              <h2 className="text-lg font-semibold">Variações e caixas</h2>
+              <p className="text-xs text-muted">
+                Cor das caixas de numeração/cor na página do produto e do botão
+                <strong> Calcular frete</strong> — independente da cor dos botões.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {VARIATION_FIELDS.map((f) => (
                   <ColorRow key={f.key} f={f} />
                 ))}
               </div>
@@ -257,13 +275,8 @@ export function ThemeTab() {
                   label="Logo"
                   aspect="wide"
                   currentUrl={theme.logo_url ?? null}
+                  hint="Uma imagem só, usada em todas as telas."
                   onSelect={(file) => upload('logo', file)}
-                />
-                <ImageUploader
-                  label="Logo (mobile)"
-                  aspect="square"
-                  currentUrl={theme.logo_mobile_url ?? null}
-                  onSelect={(file) => upload('logo_mobile', file)}
                 />
                 <ImageUploader
                   label="Favicon"

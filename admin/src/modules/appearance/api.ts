@@ -15,6 +15,10 @@ export interface Theme {
   button_bg_color: string;
   button_text_color: string;
   button_hover_color: string;
+  /** Caixas de variação (PDP) + botão "calcular frete" */
+  variation_bg_color: string;
+  variation_text_color: string;
+  variation_border_color: string;
   /** Menu superior (header) */
   header_bg_color: string;
   header_text_color: string;
@@ -36,6 +40,21 @@ export interface Theme {
   footer_seals_json: FooterSeals;
   /** Após adicionar ao carrinho: ir para /carrinho (true) ou ficar na PDP (false) */
   cart_redirect_after_add: boolean;
+  /** Modelo do checkout (menu "Checkout") */
+  checkout_email_first: boolean;
+  checkout_container_width_px: number;
+  checkout_items_layout: 'with_thumb' | 'simple';
+  checkout_show_coupon: boolean;
+  checkout_allow_qty_change: boolean;
+  checkout_footer_note: string | null;
+  checkout_bg_color: string;
+  checkout_header_bg_color: string;
+  checkout_header_text_color: string;
+  checkout_button_color: string;
+  checkout_button_text_color: string;
+  checkout_accent_color: string;
+  checkout_footer_bg_color: string;
+  checkout_footer_text_color: string;
   logo_url?: string | null;
   logo_mobile_url?: string | null;
   favicon_url?: string | null;
@@ -105,8 +124,9 @@ export interface Banner {
   starts_at: string | null;
   ends_at: string | null;
   is_active: boolean;
+  /** Uma única imagem — redimensionada automaticamente para cada tela. */
+  image_url: string | null;
   image_desktop_url: string | null;
-  image_mobile_url: string | null;
 }
 
 export interface BannerInput {
@@ -184,9 +204,9 @@ export const appearanceApi = {
   deleteBanner: (id: string) => adminFetch<void>(`/api/admin/banners/${id}`, { method: 'DELETE' }),
 };
 
-/** Upload de imagem de banner com querystring `mobile`. */
-export function uploadBannerImage(id: string, file: File, mobile: boolean): Promise<ApiResult<Banner>> {
+/** Upload da imagem do banner (uma só; o front redimensiona por tela). */
+export function uploadBannerImage(id: string, file: File): Promise<ApiResult<Banner>> {
   const form = new FormData();
   form.append('file', file);
-  return uploadMultipart<Banner>(`/api/admin/banners/${id}/image?mobile=${mobile ? 'true' : 'false'}`, form);
+  return uploadMultipart<Banner>(`/api/admin/banners/${id}/image`, form);
 }

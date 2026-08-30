@@ -17,6 +17,7 @@ from app.shared.storage import storage
 _THEME_FIELDS = {
     "primary_color", "secondary_color", "accent_color", "text_color", "bg_color",
     "button_bg_color", "button_text_color", "button_hover_color",
+    "variation_bg_color", "variation_text_color", "variation_border_color",
     "header_bg_color", "header_text_color", "header_max_width_px",
     "footer_bg_color", "footer_text_color",
     "font_family", "free_shipping_threshold_cents", "whatsapp_number",
@@ -24,10 +25,16 @@ _THEME_FIELDS = {
     "hero_enabled", "hero_mode", "hero_autoplay_seconds",
     "footer_seals_enabled", "footer_seals_json",
     "cart_redirect_after_add",
+    "checkout_email_first", "checkout_container_width_px", "checkout_items_layout",
+    "checkout_show_coupon", "checkout_allow_qty_change", "checkout_footer_note",
+    "checkout_bg_color", "checkout_header_bg_color", "checkout_header_text_color",
+    "checkout_button_color", "checkout_button_text_color", "checkout_accent_color",
+    "checkout_footer_bg_color", "checkout_footer_text_color",
 }
 
 _BOOL_FIELDS = {
     "top_bar_enabled", "hero_enabled", "footer_seals_enabled", "cart_redirect_after_add",
+    "checkout_email_first", "checkout_show_coupon", "checkout_allow_qty_change",
 }
 
 
@@ -102,6 +109,10 @@ async def update_theme(db: AsyncSession, data: dict) -> ThemeSettings:
             raise ValidationError(f"Cor inválida em '{k}': use formato hexadecimal (#RRGGBB).")
         if k == "header_max_width_px":
             v = max(640, min(2560, int(v)))
+        if k == "checkout_container_width_px":
+            v = max(900, min(1600, int(v)))
+        if k == "checkout_items_layout":
+            v = "simple" if str(v) == "simple" else "with_thumb"
         if k == "hero_mode":
             v = "static" if str(v) == "static" else "carousel"
         if k == "hero_autoplay_seconds":

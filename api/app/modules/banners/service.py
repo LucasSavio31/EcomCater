@@ -23,12 +23,16 @@ def _uuid(v: str | uuid.UUID) -> uuid.UUID:
 
 
 def _out(b: Banner) -> dict:
+    # Uma única imagem: o `next/image` redimensiona para cada tela.
+    url = storage.url(b.image_desktop_key) if b.image_desktop_key else None
     return {
         "id": str(b.id),
         "slot": b.slot,
         "title": b.title,
-        "image_desktop_url": storage.url(b.image_desktop_key) if b.image_desktop_key else None,
-        "image_mobile_url": storage.url(b.image_mobile_key) if b.image_mobile_key else None,
+        "image_url": url,
+        # compat com clientes antigos que liam desktop/mobile
+        "image_desktop_url": url,
+        "image_mobile_url": url,
         "link_url": b.link_url,
         "alt": b.alt,
         "position": b.position,
@@ -83,15 +87,14 @@ async def delete(db: AsyncSession, banner_id: str) -> None:
     await db.delete(b)
 
 
-async def set_image(db: AsyncSession, banner_id: str, raw: bytes, filename: str, *, mobile: bool = False) -> Banner:
+async def set_image(db: AsyncSession, banner_id: str, raw: bytes, filename: str, **_ignored) -> Banner:
+    """Uma imagem só. `process_image` já gera variações WebP; o front escala."""
     b = await db.get(Banner, _uuid(banner_id))
     if not b:
         raise NotFoundError("Banner não encontrado.")
     processed = process_image(raw, filename, prefix="banners")
-    if mobile:
-        b.image_mobile_key = processed.zoom_key
-    else:
-        b.image_desktop_key = processed.zoom_key
+    b.image_desktop_key = processed.zoom_key
+    b.image_mobile_key = None
     return b
 
 

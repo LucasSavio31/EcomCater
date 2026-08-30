@@ -38,6 +38,11 @@ class ThemeSettings(Base):
     button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF")
     button_hover_color: Mapped[str] = mapped_column(String(9), default="#DC2626")
 
+    # caixas de variação (numeração/cor na PDP) + botão "calcular frete"
+    variation_bg_color: Mapped[str] = mapped_column(String(9), default="#FDE047", server_default="#FDE047", nullable=False)
+    variation_text_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    variation_border_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+
     # menu superior (header)
     header_bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF")
     header_text_color: Mapped[str] = mapped_column(String(9), default="#111827")
@@ -69,6 +74,23 @@ class ThemeSettings(Base):
     cart_redirect_after_add: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
     )
+
+    # Modelo do checkout (menu "Checkout" no admin)
+    checkout_email_first: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
+    checkout_container_width_px: Mapped[int] = mapped_column(Integer, default=1100, server_default="1100", nullable=False)
+    checkout_items_layout: Mapped[str] = mapped_column(String(12), default="with_thumb", server_default="with_thumb", nullable=False)  # with_thumb | simple
+    checkout_show_coupon: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    checkout_allow_qty_change: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    checkout_footer_note: Mapped[str | None] = mapped_column(String(240))
+    # cores próprias do checkout (menu "Checkout")
+    checkout_bg_color: Mapped[str] = mapped_column(String(9), default="#F7F7F7", server_default="#F7F7F7", nullable=False)
+    checkout_header_bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    checkout_header_text_color: Mapped[str] = mapped_column(String(9), default="#111827", server_default="#111827", nullable=False)
+    checkout_button_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    checkout_button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    checkout_accent_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    checkout_footer_bg_color: Mapped[str] = mapped_column(String(9), default="#111827", server_default="#111827", nullable=False)
+    checkout_footer_text_color: Mapped[str] = mapped_column(String(9), default="#E5E7EB", server_default="#E5E7EB", nullable=False)
 
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 

@@ -8,9 +8,15 @@ import { resolveMediaUrl } from '@/lib/media';
 import { formatBRL } from '@/lib/format';
 import { CouponField } from '@/components/cart/coupon-field';
 
-/** "Revise seu pedido": cupom recolhido + itens com miniatura + totais. */
-export function OrderSummary() {
-  const { cart } = useCart();
+interface Props {
+  showCoupon?: boolean;
+  layout?: 'with_thumb' | 'simple';
+  allowQtyChange?: boolean;
+}
+
+/** "Revise seu pedido": cupom recolhido + itens + totais. */
+export function OrderSummary({ showCoupon = true, layout = 'with_thumb', allowQtyChange = true }: Props) {
+  const { cart, updateItem } = useCart();
   const t = cart.totals;
   const shipping = !cart.selected_shipping
     ? 'A calcular'
@@ -20,23 +26,42 @@ export function OrderSummary() {
 
   const body = (
     <div className="flex flex-col gap-4">
-      <Coupon />
+      {showCoupon && <Coupon />}
 
       <ul className="flex flex-col gap-3">
         {cart.items.map((i) => {
           const img = resolveMediaUrl(i.image_url);
           return (
             <li key={i.id} className="flex gap-3">
-              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-card bg-bg-subtle">
-                {img && <Image src={img} alt="" fill sizes="56px" className="object-cover" />}
-                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-btn px-1 text-[10px] font-bold text-btn-fg">
-                  {i.quantity}
-                </span>
-              </div>
+              {layout === 'with_thumb' && (
+                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-card bg-bg-subtle">
+                  {img && <Image src={img} alt="" fill sizes="56px" className="object-cover" />}
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-btn px-1 text-[10px] font-bold text-btn-fg">
+                    {i.quantity}
+                  </span>
+                </div>
+              )}
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className="line-clamp-2 text-sm">{i.product_name}</span>
+                <span className="line-clamp-2 text-sm">
+                  {layout === 'simple' && <strong>{i.quantity}× </strong>}
+                  {i.product_name}
+                </span>
                 {i.variant_label && (
                   <span className="text-xs text-text-muted">{i.variant_label}</span>
+                )}
+                {layout === 'with_thumb' && allowQtyChange && i.max_qty > 1 && (
+                  <select
+                    value={i.quantity}
+                    onChange={(e) => void updateItem(i.id, Number(e.target.value))}
+                    className="mt-1 w-16 rounded-card border border-surface-border bg-surface px-1 text-xs"
+                    aria-label={`Quantidade de ${i.product_name}`}
+                  >
+                    {Array.from({ length: Math.min(i.max_qty, 10) }, (_, n) => n + 1).map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
                 )}
               </div>
               <span className="shrink-0 text-sm font-medium">{formatBRL(i.line_total_cents)}</span>
@@ -66,13 +91,11 @@ export function OrderSummary() {
 
   return (
     <>
-      {/* Desktop: card fixo */}
       <Card variant="outline" className="hidden lg:sticky lg:top-6 lg:flex lg:flex-col lg:gap-4 lg:self-start">
         <h2 className="text-base font-semibold">Revise seu pedido</h2>
         {body}
       </Card>
 
-      {/* Mobile: recolhível no topo */}
       <details className="rounded-card border border-surface-border bg-surface lg:hidden">
         <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm font-semibold">
           <span>Resumo do pedido</span>

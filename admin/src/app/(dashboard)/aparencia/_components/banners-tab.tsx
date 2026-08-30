@@ -147,9 +147,13 @@ export function BannersTab() {
                     {b.is_active ? <Badge tone="success">ativo</Badge> : <Badge tone="neutral">inativo</Badge>}
                   </div>
                   <div className="h-24 overflow-hidden rounded-card bg-bg-subtle">
-                    {b.image_desktop_url && (
+                    {(b.image_url ?? b.image_desktop_url) && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={b.image_desktop_url} alt={b.alt ?? ''} className="h-full w-full object-cover" />
+                      <img
+                        src={b.image_url ?? b.image_desktop_url ?? ''}
+                        alt={b.alt ?? ''}
+                        className="h-full w-full object-cover"
+                      />
                     )}
                   </div>
                   <p className="text-sm font-medium">{b.title ?? '(sem título)'}</p>
@@ -199,34 +203,23 @@ export function BannersTab() {
           <Checkbox label="Ativo" checked={form.is_active} onChange={(v) => set('is_active', v)} />
 
           {editing ? (
-            <div className="flex flex-wrap gap-6 border-t border-surface-border pt-4">
+            <div className="flex flex-col gap-2 border-t border-surface-border pt-4">
               <ImageUploader
-                label="Imagem desktop"
+                label="Imagem"
                 aspect="wide"
-                currentUrl={editing.image_desktop_url}
+                currentUrl={editing.image_url ?? editing.image_desktop_url}
+                hint="Uma imagem só — ela é redimensionada automaticamente para desktop e mobile."
                 onSelect={async (file) => {
-                  const r = await uploadBannerImage(editing.id, file, false);
+                  const r = await uploadBannerImage(editing.id, file);
                   if (!r.ok) throw new Error(r.error.message);
                   setEditing(r.data);
                   reload();
-                  toast.success('Imagem desktop enviada.');
-                }}
-              />
-              <ImageUploader
-                label="Imagem mobile"
-                aspect="square"
-                currentUrl={editing.image_mobile_url}
-                onSelect={async (file) => {
-                  const r = await uploadBannerImage(editing.id, file, true);
-                  if (!r.ok) throw new Error(r.error.message);
-                  setEditing(r.data);
-                  reload();
-                  toast.success('Imagem mobile enviada.');
+                  toast.success('Imagem enviada.');
                 }}
               />
             </div>
           ) : (
-            <p className="text-sm text-text-muted">Salve o banner para enviar as imagens.</p>
+            <p className="text-sm text-text-muted">Salve o banner para enviar a imagem.</p>
           )}
         </div>
       </Modal>

@@ -65,30 +65,18 @@ export function HeroBanner({ banners, mode, autoplaySeconds }: HeroBannerProps) 
       >
         <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${index * 100}%)` }}>
           {slides.map((banner, i) => {
-            const desktop = resolveMediaUrl(banner.image_desktop_url);
-            const mobile = resolveMediaUrl(banner.image_mobile_url) ?? desktop;
+            const src = resolveMediaUrl(banner.image_url ?? banner.image_desktop_url);
             const alt = banner.alt ?? banner.title ?? 'Banner promocional';
             const media = (
               <span className="relative block aspect-[4/5] w-full bg-bg-subtle sm:aspect-[2/1] lg:aspect-[64/21]">
-                {mobile && (
+                {src && (
                   <Image
-                    src={mobile}
+                    src={src}
                     alt={alt}
                     fill
                     sizes="100vw"
                     priority={i === 0}
-                    className="object-cover sm:hidden"
-                  />
-                )}
-                {desktop && (
-                  <Image
-                    src={desktop}
-                    alt={mobile ? '' : alt}
-                    aria-hidden={mobile ? true : undefined}
-                    fill
-                    sizes="100vw"
-                    priority={i === 0}
-                    className="hidden object-cover sm:block"
+                    className="object-cover"
                   />
                 )}
               </span>

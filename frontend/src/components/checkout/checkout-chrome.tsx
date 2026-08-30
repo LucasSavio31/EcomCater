@@ -8,8 +8,14 @@ import { FooterSealsBar } from '@/components/layout/footer-seals';
 export function CheckoutHeader({ theme, storeName }: { theme: ThemeSettings; storeName: string }) {
   const logo = resolveMediaUrl(theme.logo_url);
   return (
-    <header className="border-b border-surface-border bg-header text-header-fg">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4">
+    <header
+      className="border-b border-surface-border text-header-fg"
+      style={{ background: theme.checkout_header_bg_color }}
+    >
+      <div
+        className="mx-auto flex items-center justify-between gap-4 px-4 py-4"
+        style={{ maxWidth: `${theme.checkout_container_width_px}px` }}
+      >
         <Link href="/" aria-label={`${storeName} — início`} className="flex items-center gap-2">
           {logo ? (
             <span className="relative block h-8 w-[150px]">
@@ -35,11 +41,16 @@ export function CheckoutHeader({ theme, storeName }: { theme: ThemeSettings; sto
  * (Formas de Pagamento / Entrega / Loja Segura). Nada de menu ou copyright.
  */
 export function CheckoutFooter({ theme }: { theme: ThemeSettings }) {
-  if (!theme.footer_seals_enabled) return null;
+  const note = theme.checkout_footer_note?.trim();
+  if (!theme.footer_seals_enabled && !note) return null;
   return (
     <footer className="mt-10 border-t border-surface-border bg-footer text-footer-fg">
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        <FooterSealsBar seals={theme.footer_seals_json} />
+      <div
+        className="mx-auto px-4 py-6"
+        style={{ maxWidth: `${theme.checkout_container_width_px}px` }}
+      >
+        {theme.footer_seals_enabled && <FooterSealsBar seals={theme.footer_seals_json} />}
+        {note && <p className="mt-4 text-center text-xs text-footer-fg/70">{note}</p>}
       </div>
     </footer>
   );

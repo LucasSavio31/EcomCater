@@ -48,6 +48,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Loja',
     items: [
       { href: '/aparencia', label: 'Aparência', icon: '🎨' },
+      { href: '/checkout-modelo', label: 'Checkout', icon: '🛒' },
       { href: '/selos-rodape', label: 'Selos do rodapé', icon: '🛡️' },
       { href: '/menus', label: 'Menus', icon: '📑' },
     ],

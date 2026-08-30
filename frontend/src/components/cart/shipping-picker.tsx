@@ -75,7 +75,12 @@ export function ShippingPicker() {
           placeholder="00000-000"
           className="flex-1"
         />
-        <Button type="submit" variant="outline" loading={loading}>
+        <Button
+          type="submit"
+          variant="ghost"
+          loading={loading}
+          className="border-2 border-var-border bg-var text-var-fg hover:opacity-90"
+        >
           Calcular
         </Button>
       </form>

@@ -9,6 +9,10 @@ export interface ThemeSettings {
   button_bg_color: string;
   button_text_color: string;
   button_hover_color: string;
+  /** Caixas de variação (PDP) + botão "calcular frete". */
+  variation_bg_color: string;
+  variation_text_color: string;
+  variation_border_color: string;
   /** Menu superior (header). */
   header_bg_color: string;
   header_text_color: string;
@@ -34,6 +38,22 @@ export interface ThemeSettings {
   footer_seals_json: FooterSeals;
   /** Após adicionar ao carrinho: true = vai para /carrinho, false = fica na PDP. */
   cart_redirect_after_add: boolean;
+  /** Modelo do checkout (menu "Checkout" no admin). */
+  checkout_email_first: boolean;
+  checkout_container_width_px: number;
+  checkout_items_layout: 'with_thumb' | 'simple';
+  checkout_show_coupon: boolean;
+  checkout_allow_qty_change: boolean;
+  checkout_footer_note: string | null;
+  /** Cores próprias do checkout. */
+  checkout_bg_color: string;
+  checkout_header_bg_color: string;
+  checkout_header_text_color: string;
+  checkout_button_color: string;
+  checkout_button_text_color: string;
+  checkout_accent_color: string;
+  checkout_footer_bg_color: string;
+  checkout_footer_text_color: string;
   updated_at?: string | null;
 }
 
@@ -77,6 +97,9 @@ export const NEUTRAL_THEME: ThemeSettings = {
   button_bg_color: '#111111',
   button_text_color: '#FFFFFF',
   button_hover_color: '#DC2626',
+  variation_bg_color: '#FDE047',
+  variation_text_color: '#111111',
+  variation_border_color: '#111111',
   header_bg_color: '#FFFFFF',
   header_text_color: '#111827',
   header_max_width_px: 1280,
@@ -92,4 +115,18 @@ export const NEUTRAL_THEME: ThemeSettings = {
   footer_seals_enabled: true,
   footer_seals_json: DEFAULT_SEALS,
   cart_redirect_after_add: false,
+  checkout_email_first: false,
+  checkout_container_width_px: 1100,
+  checkout_items_layout: 'with_thumb',
+  checkout_show_coupon: true,
+  checkout_allow_qty_change: true,
+  checkout_footer_note: null,
+  checkout_bg_color: '#F7F7F7',
+  checkout_header_bg_color: '#FFFFFF',
+  checkout_header_text_color: '#111827',
+  checkout_button_color: '#111111',
+  checkout_button_text_color: '#FFFFFF',
+  checkout_accent_color: '#111111',
+  checkout_footer_bg_color: '#111827',
+  checkout_footer_text_color: '#E5E7EB',
 };

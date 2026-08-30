@@ -51,7 +51,12 @@ export function ShippingCalculator({ product }: { product: ProductDetail }) {
             className="min-h-touch w-full rounded-card border border-surface-border bg-surface px-3 text-sm"
           />
         </label>
-        <Button type="submit" loading={loading}>
+        <Button
+          type="submit"
+          variant="ghost"
+          loading={loading}
+          className="border-2 border-var-border bg-var text-var-fg hover:opacity-90"
+        >
           Calcular
         </Button>
         <a

@@ -1,7 +1,7 @@
 """Registro do módulo `banners` (toggleable)."""
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -50,10 +50,9 @@ async def upload_image(
     db: DbDep,
     _: EditorDep,
     file: Annotated[UploadFile, File()],
-    mobile: bool = Query(False),
 ) -> dict:
     raw = await file.read()
-    b = await service.set_image(db, banner_id, raw, file.filename or "banner.png", mobile=mobile)
+    b = await service.set_image(db, banner_id, raw, file.filename or "banner.png")
     return {"id": str(b.id)}
 
 
