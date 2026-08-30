@@ -87,6 +87,11 @@ export interface ThemeSettings {
   lead_popup_button_color: string;
   lead_popup_button_text_color: string;
   button_radius_px: number;
+  pdp_qty_selector_enabled: boolean;
+  wishlist_enabled: boolean;
+  card_hover_zoom_enabled: boolean;
+  card_buy_button_enabled: boolean;
+  card_buy_button_label: string;
   cookie_consent_enabled: boolean;
   cookie_consent_text: string;
   email_header_bg_color: string;
@@ -201,6 +206,11 @@ export const NEUTRAL_THEME: ThemeSettings = {
   lead_popup_button_color: '#F5B301',
   lead_popup_button_text_color: '#111111',
   button_radius_px: 12,
+  pdp_qty_selector_enabled: true,
+  wishlist_enabled: true,
+  card_hover_zoom_enabled: true,
+  card_buy_button_enabled: false,
+  card_buy_button_label: 'COMPRAR',
   cookie_consent_enabled: false,
   cookie_consent_text:
     'Usamos cookies para melhorar sua experiência. Ao continuar, você concorda com a nossa política de privacidade.',

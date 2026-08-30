@@ -18,6 +18,8 @@ interface PdpBuyBoxProps {
   /** Abrir o mini-carrinho lateral ao adicionar (tem precedência). */
   miniCart?: boolean;
   leadPopup?: LeadPopupConfig | null;
+  showQty?: boolean;
+  showWishlist?: boolean;
 }
 
 export function PdpBuyBox({
@@ -25,6 +27,8 @@ export function PdpBuyBox({
   redirectAfterAdd = false,
   miniCart = false,
   leadPopup = null,
+  showQty = true,
+  showWishlist = true,
 }: PdpBuyBoxProps) {
   const router = useRouter();
   const { addItem, openMiniCart } = useCart();
@@ -198,27 +202,29 @@ export function PdpBuyBox({
       {/* Quantidade + comprar */}
       <div className="flex flex-col gap-2">
         <div className="flex items-stretch gap-2">
-          <div className="flex items-center rounded-card border border-surface-border">
-            <button
-              type="button"
-              onClick={() => setQty((q) => Math.max(1, q - 1))}
-              aria-label="Diminuir quantidade"
-              className="flex h-12 w-11 items-center justify-center text-lg"
-            >
-              −
-            </button>
-            <span className="w-8 text-center text-sm font-medium" aria-live="polite">
-              {qty}
-            </span>
-            <button
-              type="button"
-              onClick={() => setQty((q) => Math.min(99, q + 1))}
-              aria-label="Aumentar quantidade"
-              className="flex h-12 w-11 items-center justify-center text-lg"
-            >
-              +
-            </button>
-          </div>
+          {showQty && (
+            <div className="flex items-center rounded-card border border-surface-border">
+              <button
+                type="button"
+                onClick={() => setQty((q) => Math.max(1, q - 1))}
+                aria-label="Diminuir quantidade"
+                className="flex h-12 w-11 items-center justify-center text-lg"
+              >
+                −
+              </button>
+              <span className="w-8 text-center text-sm font-medium" aria-live="polite">
+                {qty}
+              </span>
+              <button
+                type="button"
+                onClick={() => setQty((q) => Math.min(99, q + 1))}
+                aria-label="Aumentar quantidade"
+                className="flex h-12 w-11 items-center justify-center text-lg"
+              >
+                +
+              </button>
+            </div>
+          )}
           <Button
             block
             size="lg"
@@ -236,27 +242,29 @@ export function PdpBuyBox({
             )}
             {added ? 'Adicionado ✓' : 'Comprar'}
           </Button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!isWished(product.id)) {
-                track('add_to_wishlist', {
-                  value: priceCents / 100,
-                  items: [{ ...baseTrackItem(), price: priceCents / 100 }],
-                });
-              }
-              toggleWish(product.id);
-            }}
-            aria-pressed={isWished(product.id)}
-            aria-label={isWished(product.id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-            className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-card border ${
-              isWished(product.id)
-                ? 'border-accent text-accent'
-                : 'border-surface-border text-text-muted hover:text-text'
-            }`}
-          >
-            <HeartIcon className="h-5 w-5" />
-          </button>
+          {showWishlist && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!isWished(product.id)) {
+                  track('add_to_wishlist', {
+                    value: priceCents / 100,
+                    items: [{ ...baseTrackItem(), price: priceCents / 100 }],
+                  });
+                }
+                toggleWish(product.id);
+              }}
+              aria-pressed={isWished(product.id)}
+              aria-label={isWished(product.id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+              className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-card border ${
+                isWished(product.id)
+                  ? 'border-accent text-accent'
+                  : 'border-surface-border text-text-muted hover:text-text'
+              }`}
+            >
+              <HeartIcon className="h-5 w-5" />
+            </button>
+          )}
         </div>
         <button
           type="button"

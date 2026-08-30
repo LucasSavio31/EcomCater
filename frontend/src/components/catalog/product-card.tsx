@@ -11,6 +11,8 @@ interface ProductCardProps {
   /** Prioriza o LCP (primeiros itens da primeira dobra). */
   priority?: boolean;
   className?: string;
+  /** Rótulo do botão "Comprar" abaixo do card. Vazio/omitido = sem botão. */
+  buyButtonLabel?: string;
 }
 
 const CARD_SIZES =
@@ -21,7 +23,12 @@ const CARD_SIZES =
  * Imagem com troca no hover (CSS `group-hover`), badge de desconto, preço à
  * vista + parcelamento. Sempre `rounded-card`.
  */
-export function ProductCard({ product, priority = false, className }: ProductCardProps) {
+export function ProductCard({
+  product,
+  priority = false,
+  className,
+  buyButtonLabel,
+}: ProductCardProps) {
   const primary = resolveMediaUrl(product.primary_image_url);
   const hover = resolveMediaUrl(product.hover_image_url);
   const href = `/produto/${product.slug}`;
@@ -39,7 +46,7 @@ export function ProductCard({ product, priority = false, className }: ProductCar
               fill
               sizes={CARD_SIZES}
               priority={priority}
-              className={`object-contain transition-opacity duration-300 ${hover ? 'group-hover:opacity-0' : ''}`}
+              className={`ecom-card-img object-contain transition-opacity duration-300 ${hover ? 'group-hover:opacity-0' : ''}`}
             />
             {hover && (
               <Image
@@ -48,7 +55,7 @@ export function ProductCard({ product, priority = false, className }: ProductCar
                 aria-hidden="true"
                 fill
                 sizes={CARD_SIZES}
-                className="object-contain opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                className="ecom-card-img object-contain opacity-0 transition-opacity duration-300 group-hover:opacity-100"
               />
             )}
           </>
@@ -85,6 +92,14 @@ export function ProductCard({ product, priority = false, className }: ProductCar
           compareAtCents={product.compare_at_price_cents}
           installmentsMax={product.installments_max}
         />
+        {buyButtonLabel && (
+          <Link
+            href={href}
+            className="mt-2 inline-flex min-h-touch items-center justify-center rounded-btn bg-btn px-4 text-sm font-bold uppercase tracking-wide text-btn-fg hover:opacity-90"
+          >
+            {buyButtonLabel}
+          </Link>
+        )}
       </div>
     </article>
   );

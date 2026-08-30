@@ -6,6 +6,7 @@ interface ProductGridProps {
   /** Nº de itens que recebem `priority` (LCP da 1ª dobra). */
   priorityCount?: number;
   emptyMessage?: string;
+  buyButtonLabel?: string;
 }
 
 /** Grade responsiva: 2 col mobile / 3 col tablet / 4 col desktop. */
@@ -13,6 +14,7 @@ export function ProductGrid({
   products,
   priorityCount = 0,
   emptyMessage = 'Nenhum produto encontrado.',
+  buyButtonLabel,
 }: ProductGridProps) {
   if (products.length === 0) {
     return (
@@ -26,7 +28,12 @@ export function ProductGrid({
     <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 lg:gap-4">
       {products.map((product, i) => (
         <li key={product.id} className="flex">
-          <ProductCard product={product} priority={i < priorityCount} className="w-full" />
+          <ProductCard
+            product={product}
+            priority={i < priorityCount}
+            className="w-full"
+            buyButtonLabel={buyButtonLabel}
+          />
         </li>
       ))}
     </ul>

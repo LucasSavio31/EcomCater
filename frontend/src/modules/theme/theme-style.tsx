@@ -42,6 +42,11 @@ export function ThemeStyle({ theme }: { theme: ThemeSettings }) {
   if (!theme.discount_badge_enabled) {
     css += '.ecom-discount-badge{display:none !important;}';
   }
+  if (theme.card_hover_zoom_enabled) {
+    css +=
+      '.ecom-card-img{transition:transform .6s ease}' +
+      '.group:hover .ecom-card-img{transform:scale(1.045)}';
+  }
   return (
     <style
       id="ecom-theme"

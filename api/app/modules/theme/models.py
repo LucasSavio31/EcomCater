@@ -142,6 +142,13 @@ class ThemeSettings(Base):
         Integer, default=12, server_default="12", nullable=False
     )
 
+    # PDP / cards
+    pdp_qty_selector_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    wishlist_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    card_hover_zoom_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    card_buy_button_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
+    card_buy_button_label: Mapped[str] = mapped_column(String(40), default="COMPRAR", server_default="COMPRAR", nullable=False)
+
     # Aviso de cookies de terceiros
     cookie_consent_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False

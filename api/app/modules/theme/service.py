@@ -41,6 +41,8 @@ _THEME_FIELDS = {
     "newsletter_button_color", "newsletter_button_text_color",
     "discount_badge_enabled",
     "button_radius_px",
+    "pdp_qty_selector_enabled", "wishlist_enabled",
+    "card_hover_zoom_enabled", "card_buy_button_enabled", "card_buy_button_label",
     "cookie_consent_enabled", "cookie_consent_text",
     "email_header_bg_color", "email_header_text_color",
     "email_body_bg_color", "email_text_color",
@@ -61,6 +63,8 @@ _BOOL_FIELDS = {
     "newsletter_enabled", "discount_badge_enabled",
     "cookie_consent_enabled",
     "lead_popup_enabled", "lead_capture_enabled",
+    "pdp_qty_selector_enabled", "wishlist_enabled",
+    "card_hover_zoom_enabled", "card_buy_button_enabled",
 }
 
 

@@ -19,6 +19,7 @@ export interface InfiniteQuery {
 interface Props {
   initial: PagedProducts;
   query: InfiniteQuery;
+  buyButtonLabel?: string;
 }
 
 function buildUrl(q: InfiniteQuery, page: number): string {
@@ -36,7 +37,7 @@ function buildUrl(q: InfiniteQuery, page: number): string {
 }
 
 /** Grade com rolagem infinita: carrega a próxima página ao chegar perto do fim. */
-export function InfiniteProductGrid({ initial, query }: Props) {
+export function InfiniteProductGrid({ initial, query, buyButtonLabel }: Props) {
   const [items, setItems] = useState<ProductListItem[]>(initial.items);
   const [page, setPage] = useState(initial.page);
   const [pages, setPages] = useState(initial.pages);
@@ -88,6 +89,7 @@ export function InfiniteProductGrid({ initial, query }: Props) {
         products={items}
         priorityCount={4}
         emptyMessage="Nenhum produto encontrado com os filtros selecionados."
+        buyButtonLabel={buyButtonLabel}
       />
       <div ref={sentinel} aria-hidden="true" className="h-1" />
       <p className="py-2 text-center text-sm text-text-muted">

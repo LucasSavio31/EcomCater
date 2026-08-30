@@ -58,6 +58,8 @@ export function PdpMain({ product, redirectAfterAdd, miniCart, theme }: PdpMainP
           redirectAfterAdd={redirectAfterAdd}
           miniCart={miniCart}
           leadPopup={leadPopup}
+          showQty={theme.pdp_qty_selector_enabled}
+          showWishlist={theme.wishlist_enabled}
         />
 
         <div className="rounded-card border border-surface-border p-4">

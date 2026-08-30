@@ -111,7 +111,13 @@ export default async function HomePage() {
           <h2 id="vitrine-title" className="text-lg font-semibold sm:text-xl">
             Mais buscados
           </h2>
-          <ProductGrid products={featured} priorityCount={4} />
+          <ProductGrid
+            products={featured}
+            priorityCount={4}
+            buyButtonLabel={
+              theme.card_buy_button_enabled ? theme.card_buy_button_label : undefined
+            }
+          />
         </section>
       )}
 

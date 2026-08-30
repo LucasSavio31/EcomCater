@@ -256,6 +256,40 @@ export function ThemeTab() {
             </Card>
 
             <Card variant="outline" className="flex flex-col gap-4">
+              <h2 className="text-lg font-semibold">Página do produto e cards</h2>
+              <Checkbox
+                label="Mostrar seletor de quantidade na página do produto"
+                hint="Desligado: o botão Comprar ocupa toda a largura."
+                checked={theme.pdp_qty_selector_enabled}
+                onChange={(v) => set('pdp_qty_selector_enabled', v)}
+              />
+              <Checkbox
+                label="Ativar favoritos (coração + menu)"
+                checked={theme.wishlist_enabled}
+                onChange={(v) => set('wishlist_enabled', v)}
+              />
+              <Checkbox
+                label="Zoom suave na imagem do card ao passar o mouse"
+                checked={theme.card_hover_zoom_enabled}
+                onChange={(v) => set('card_hover_zoom_enabled', v)}
+              />
+              <Checkbox
+                label="Botão de compra abaixo do card na vitrine"
+                hint="Segue a cor do botão de comprar, sem o ícone do carrinho."
+                checked={theme.card_buy_button_enabled}
+                onChange={(v) => set('card_buy_button_enabled', v)}
+              />
+              {theme.card_buy_button_enabled && (
+                <Input
+                  label="Texto do botão do card"
+                  value={theme.card_buy_button_label}
+                  onChange={(e) => set('card_buy_button_label', e.target.value)}
+                  className="w-48"
+                />
+              )}
+            </Card>
+
+            <Card variant="outline" className="flex flex-col gap-4">
               <h2 className="text-lg font-semibold">Aviso de cookies</h2>
               <Checkbox
                 label="Exibir aviso de cookies de terceiros no site"

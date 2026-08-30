@@ -89,6 +89,11 @@ export interface Theme {
   lead_popup_button_text_color: string;
   /** Raio das bordas dos botões (px) */
   button_radius_px: number;
+  pdp_qty_selector_enabled: boolean;
+  wishlist_enabled: boolean;
+  card_hover_zoom_enabled: boolean;
+  card_buy_button_enabled: boolean;
+  card_buy_button_label: string;
   /** Aviso de cookies de terceiros */
   cookie_consent_enabled: boolean;
   cookie_consent_text: string;

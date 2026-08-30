@@ -196,6 +196,9 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
           <PlpSort total={result.total} />
           <InfiniteProductGrid
             initial={result}
+            buyButtonLabel={
+              theme.card_buy_button_enabled ? theme.card_buy_button_label : undefined
+            }
             query={{
               category: path,
               sort: search.sort,

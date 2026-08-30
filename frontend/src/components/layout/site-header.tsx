@@ -127,13 +127,15 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
           >
             <SearchIcon />
           </button>
-          <Link
-            href="/minha-conta/favoritos"
-            aria-label="Favoritos"
-            className="hidden min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10 sm:inline-flex"
-          >
-            <HeartIcon />
-          </Link>
+          {theme.wishlist_enabled && (
+            <Link
+              href="/minha-conta/favoritos"
+              aria-label="Favoritos"
+              className="hidden min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10 sm:inline-flex"
+            >
+              <HeartIcon />
+            </Link>
+          )}
           {wa ? (
             <a
               href={wa}
