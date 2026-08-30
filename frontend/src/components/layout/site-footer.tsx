@@ -76,37 +76,81 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
 
   const rightCols = columns.length + (socialLinksResolved.length > 0 ? 1 : 0);
 
+  const brand = (
+    <div className="flex flex-col gap-3">
+      <Link href="/" aria-label={`${storeName} — início`}>
+        {logo ? (
+          <span className="relative block h-9 w-[150px]">
+            <Image src={logo} alt={storeName} fill sizes="150px" className="object-contain object-left" />
+          </span>
+        ) : (
+          <span className="text-lg font-bold">{storeName}</span>
+        )}
+      </Link>
+      {theme.footer_note_text?.trim() && (
+        <p className="text-xs leading-relaxed text-footer-fg/70">
+          {renderNote(theme.footer_note_text.trim())}
+        </p>
+      )}
+    </div>
+  );
+
+  const linksOf = (col: (typeof columns)[number]) =>
+    col.children.length > 0 ? col.children : [col];
+
   return (
     <footer className="mt-16 border-t border-surface-border bg-footer text-footer-fg">
       <div className="mx-auto max-w-header px-4 py-10">
-        <div
-          className="grid gap-8"
-          style={{ gridTemplateColumns: `minmax(0,1.2fr) repeat(${Math.max(rightCols, 1)}, minmax(0,1fr))` }}
-        >
-          {/* Marca + contato */}
-          <div className="flex flex-col gap-3">
-            <Link href="/" aria-label={`${storeName} — início`}>
-              {logo ? (
-                <span className="relative block h-9 w-[150px]">
-                  <Image src={logo} alt={storeName} fill sizes="150px" className="object-contain object-left" />
-                </span>
-              ) : (
-                <span className="text-lg font-bold">{storeName}</span>
-              )}
-            </Link>
-            {theme.footer_note_text?.trim() && (
-              <p className="text-xs leading-relaxed text-footer-fg/70">
-                {renderNote(theme.footer_note_text.trim())}
-              </p>
+        {/* MOBILE: marca + menus em sanfona */}
+        <div className="flex flex-col gap-6 sm:hidden">
+          {brand}
+          <div className="divide-y divide-footer-fg/15 border-y border-footer-fg/15">
+            {columns.map((col) => (
+              <details key={col.id} className="group">
+                <summary className="flex cursor-pointer list-none items-center justify-between py-3.5 text-sm font-semibold uppercase text-footer-fg [&::-webkit-details-marker]:hidden">
+                  {col.label}
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 opacity-70 transition-transform group-open:rotate-180">
+                    <path d="M5 7l5 6 5-6z" />
+                  </svg>
+                </summary>
+                <ul className="flex flex-col gap-2 pb-4">
+                  {linksOf(col).map((link) => (
+                    <li key={link.id}>
+                      <Link href={link.url} className="text-sm text-footer-fg/70 hover:text-footer-fg">
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ))}
+            {socialLinksResolved.length > 0 && (
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center justify-between py-3.5 text-sm font-semibold uppercase text-footer-fg [&::-webkit-details-marker]:hidden">
+                  Siga-nos
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 opacity-70 transition-transform group-open:rotate-180">
+                    <path d="M5 7l5 6 5-6z" />
+                  </svg>
+                </summary>
+                <div className="pb-4">
+                  <SocialIcons links={socialLinksResolved} />
+                </div>
+              </details>
             )}
           </div>
+        </div>
 
-          {/* Colunas de links */}
+        {/* DESKTOP: marca + colunas lado a lado */}
+        <div
+          className="hidden gap-8 sm:grid"
+          style={{ gridTemplateColumns: `minmax(0,1.2fr) repeat(${Math.max(rightCols, 1)}, minmax(0,1fr))` }}
+        >
+          {brand}
           {columns.map((col) => (
             <nav key={col.id} aria-label={col.label}>
               <h2 className="mb-2 text-sm font-semibold uppercase text-footer-fg">{col.label}</h2>
               <ul className="flex flex-col gap-1.5">
-                {(col.children.length > 0 ? col.children : [col]).map((link) => (
+                {linksOf(col).map((link) => (
                   <li key={link.id}>
                     <Link
                       href={link.url}
@@ -119,8 +163,6 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
               </ul>
             </nav>
           ))}
-
-          {/* Redes sociais */}
           {socialLinksResolved.length > 0 && (
             <div>
               <h2 className="mb-2 text-sm font-semibold uppercase text-footer-fg">Siga-nos</h2>
