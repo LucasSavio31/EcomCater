@@ -30,6 +30,8 @@ export default function FiltrosPage() {
       filter_size_enabled: theme.filter_size_enabled,
       filter_price_enabled: theme.filter_price_enabled,
       filter_category_enabled: theme.filter_category_enabled,
+      filter_color_enabled: theme.filter_color_enabled,
+      filter_material_enabled: theme.filter_material_enabled,
     });
     setSaving(false);
     if (!res.ok) {
@@ -68,6 +70,18 @@ export default function FiltrosPage() {
               hint="Marcações por numeração/tamanho disponível."
               checked={theme.filter_size_enabled}
               onChange={(v) => set('filter_size_enabled', v)}
+            />
+            <Checkbox
+              label="Filtro de cor"
+              hint="Cores dos produtos (nome da cor no cadastro)."
+              checked={theme.filter_color_enabled}
+              onChange={(v) => set('filter_color_enabled', v)}
+            />
+            <Checkbox
+              label="Filtro de material"
+              hint="Valores do eixo de variação chamado “Material”."
+              checked={theme.filter_material_enabled}
+              onChange={(v) => set('filter_material_enabled', v)}
             />
             <div className="flex items-center gap-3">
               <Button loading={saving} onClick={() => void save()}>

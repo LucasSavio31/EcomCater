@@ -43,6 +43,14 @@ def _uuid(v: str | uuid.UUID | None) -> uuid.UUID | None:
         raise ValidationError("id inválido") from exc
 
 
+def _looks_uuid(v: str) -> bool:
+    try:
+        uuid.UUID(str(v))
+        return True
+    except ValueError:
+        return False
+
+
 def _discount_pct(price: int, compare_at: int | None) -> int | None:
     if compare_at and compare_at > price > 0:
         return round((compare_at - price) / compare_at * 100)
@@ -307,6 +315,9 @@ async def list_products(
     price_min: int | None = None,
     price_max: int | None = None,
     option_values: list[str] | None = None,
+    sizes: list[str] | None = None,
+    materials: list[str] | None = None,
+    colors: list[str] | None = None,
     in_stock: bool | None = None,
     sort: str = "relevancia",
     page: int = 1,
@@ -343,14 +354,35 @@ async def list_products(
         conds.append(Product.price_cents <= price_max)
 
     if option_values:
-        ov_ids = [_uuid(v) for v in option_values]
-        conds.append(
-            Product.id.in_(
-                select(ProductVariant.product_id)
-                .join(ProductVariant.option_values)
-                .where(VariantOptionValue.id.in_(ov_ids))
+        ov_ids = [_uuid(v) for v in option_values if _looks_uuid(v)]
+        if ov_ids:
+            conds.append(
+                Product.id.in_(
+                    select(ProductVariant.product_id)
+                    .join(ProductVariant.option_values)
+                    .where(VariantOptionValue.id.in_(ov_ids))
+                )
             )
+
+    def _axis_cond(is_size: bool | None, name_ilike: str | None, values: list[str]):
+        q = (
+            select(ProductVariant.product_id)
+            .join(ProductVariant.option_values)
+            .join(VariantOptionType, VariantOptionType.id == VariantOptionValue.option_type_id)
+            .where(func.lower(VariantOptionValue.value).in_([v.lower() for v in values]))
         )
+        if is_size is not None:
+            q = q.where(VariantOptionType.is_size.is_(is_size))
+        if name_ilike:
+            q = q.where(func.lower(VariantOptionType.name) == name_ilike.lower())
+        return Product.id.in_(q)
+
+    if sizes:
+        conds.append(_axis_cond(True, None, sizes))
+    if materials:
+        conds.append(_axis_cond(None, "Material", materials))
+    if colors:
+        conds.append(func.lower(Product.color_name).in_([c.lower() for c in colors]))
 
     base = select(Product).where(and_(*conds)) if conds else select(Product)
     total = int(await db.scalar(select(func.count()).select_from(base.subquery())) or 0)
@@ -404,22 +436,42 @@ async def _facets(db: AsyncSession, where) -> dict:
 
     from app.modules.products.models import ProductVariantOption
 
-    size_rows = await db.execute(
-        select(VariantOptionValue.value, func.count(func.distinct(ProductVariant.product_id)))
-        .select_from(VariantOptionValue)
-        .join(VariantOptionType, VariantOptionType.id == VariantOptionValue.option_type_id)
-        .join(ProductVariantOption, ProductVariantOption.option_value_id == VariantOptionValue.id)
-        .join(ProductVariant, ProductVariant.id == ProductVariantOption.variant_id)
-        .where(VariantOptionType.is_size.is_(True))
-        .where(ProductVariant.product_id.in_(product_ids))
-        .group_by(VariantOptionValue.value, VariantOptionValue.position)
-        .order_by(VariantOptionValue.position)
-    )
+    def _axis_facet(is_size: bool | None, name_eq: str | None):
+        q = (
+            select(VariantOptionValue.value, func.count(func.distinct(ProductVariant.product_id)))
+            .select_from(VariantOptionValue)
+            .join(VariantOptionType, VariantOptionType.id == VariantOptionValue.option_type_id)
+            .join(ProductVariantOption, ProductVariantOption.option_value_id == VariantOptionValue.id)
+            .join(ProductVariant, ProductVariant.id == ProductVariantOption.variant_id)
+            .where(ProductVariant.product_id.in_(product_ids))
+            .group_by(VariantOptionValue.value, VariantOptionValue.position)
+            .order_by(VariantOptionValue.position)
+        )
+        if is_size is not None:
+            q = q.where(VariantOptionType.is_size.is_(is_size))
+        if name_eq:
+            q = q.where(func.lower(VariantOptionType.name) == name_eq.lower())
+        return q
+
+    size_rows = await db.execute(_axis_facet(True, None))
     sizes = [{"value": v, "count": int(n or 0)} for v, n in size_rows.all()]
+
+    material_rows = await db.execute(_axis_facet(None, "Material"))
+    materials = [{"value": v, "count": int(n or 0)} for v, n in material_rows.all()]
+
+    color_rows = await db.execute(
+        select(Product.color_name, func.count(Product.id))
+        .where(Product.id.in_(product_ids), Product.color_name.is_not(None))
+        .group_by(Product.color_name)
+        .order_by(Product.color_name)
+    )
+    colors = [{"value": v, "count": int(n or 0)} for v, n in color_rows.all() if v]
 
     return {
         "price": {"min": int(pmin or 0), "max": int(pmax or 0)},
         "sizes": sizes,
+        "materials": materials,
+        "colors": colors,
     }
 
 

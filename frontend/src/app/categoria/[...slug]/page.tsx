@@ -24,7 +24,11 @@ const VALID_SORTS: ProductSort[] = ['relevancia', 'menor-preco', 'maior-preco', 
 function parseSearch(raw: RawSearchParams) {
   const first = (v: string | string[] | undefined): string | undefined =>
     Array.isArray(v) ? v[0] : v;
-  const sizes = raw.size ? (Array.isArray(raw.size) ? raw.size : [raw.size]) : [];
+  const asList = (v: string | string[] | undefined) =>
+    v ? (Array.isArray(v) ? v : [v]) : [];
+  const sizes = asList(raw.size);
+  const materials = asList(raw.material);
+  const colors = asList(raw.color);
   const sortRaw = first(raw.sort);
   const sort = VALID_SORTS.includes(sortRaw as ProductSort)
     ? (sortRaw as ProductSort)
@@ -34,6 +38,8 @@ function parseSearch(raw: RawSearchParams) {
   const priceMax = first(raw.price_max);
   return {
     sizes,
+    materials,
+    colors,
     sort,
     page,
     price_min: priceMin ? Number.parseInt(priceMin, 10) || undefined : undefined,
@@ -89,6 +95,8 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
       page: search.page,
       page_size: 24,
       sizes: search.sizes,
+      materials: search.materials,
+      colors: search.colors,
       price_min: search.price_min,
       price_max: search.price_max,
     }),
@@ -99,8 +107,15 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
     size: theme.filter_size_enabled,
     price: theme.filter_price_enabled,
     category: theme.filter_category_enabled,
+    color: theme.filter_color_enabled,
+    material: theme.filter_material_enabled,
   };
-  const anyFilter = filterShow.size || filterShow.price || filterShow.category;
+  const anyFilter =
+    filterShow.size ||
+    filterShow.price ||
+    filterShow.category ||
+    filterShow.color ||
+    filterShow.material;
 
   // "filtro de categoria": subcategorias da atual; se não houver, as irmãs.
   function nodeAt(nodes: CategoryNode[], p: string): CategoryNode | null {
@@ -185,6 +200,8 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
               category: path,
               sort: search.sort,
               sizes: search.sizes,
+              materials: search.materials,
+              colors: search.colors,
               price_min: search.price_min,
               price_max: search.price_max,
               page_size: 24,

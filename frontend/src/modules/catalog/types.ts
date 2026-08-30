@@ -30,6 +30,8 @@ export interface SizeFacet {
 export interface ProductFacets {
   price: PriceFacet;
   sizes: SizeFacet[];
+  materials: SizeFacet[];
+  colors: SizeFacet[];
 }
 
 export interface PagedProducts {
@@ -193,6 +195,8 @@ export interface ProductQuery {
   price_min?: number;
   price_max?: number;
   sizes?: string[];
+  materials?: string[];
+  colors?: string[];
   sort?: ProductSort;
   page?: number;
   page_size?: number;

@@ -42,6 +42,8 @@ export interface ThemeSettings {
   mini_cart_enabled: boolean;
   /** Filtros da vitrine (menu "Filtros" no admin). */
   filter_size_enabled: boolean;
+  filter_color_enabled: boolean;
+  filter_material_enabled: boolean;
   filter_price_enabled: boolean;
   filter_category_enabled: boolean;
   /** Modelo do checkout (menu "Checkout" no admin). */
@@ -148,6 +150,8 @@ export const NEUTRAL_THEME: ThemeSettings = {
   cart_redirect_after_add: false,
   mini_cart_enabled: true,
   filter_size_enabled: true,
+  filter_color_enabled: true,
+  filter_material_enabled: true,
   filter_price_enabled: true,
   filter_category_enabled: true,
   checkout_email_first: false,

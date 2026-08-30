@@ -15,7 +15,7 @@ const EMPTY_PAGE: PagedProducts = {
   page: 1,
   page_size: 24,
   pages: 0,
-  facets: { price: { min: 0, max: 0 }, sizes: [] },
+  facets: { price: { min: 0, max: 0 }, sizes: [], materials: [], colors: [] },
 };
 
 /** Vitrine de destaques da home. Degrada para `[]` se a API estiver fora. */
@@ -42,6 +42,8 @@ export async function getProducts(params: ProductQuery): Promise<PagedProducts> 
     if (value !== undefined && value !== null && value !== '') search.set(key, String(value));
   }
   for (const size of params.sizes ?? []) search.append('size', size);
+  for (const m of params.materials ?? []) search.append('material', m);
+  for (const c of params.colors ?? []) search.append('color', c);
 
   const res = await apiFetch<PagedProducts>(`/api/products?${search.toString()}`, {
     next: { tags: ['products'], revalidate: 120 },

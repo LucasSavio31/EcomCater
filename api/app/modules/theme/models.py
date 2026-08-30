@@ -83,6 +83,8 @@ class ThemeSettings(Base):
     filter_size_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     filter_price_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     filter_category_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    filter_color_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    filter_material_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
 
     # Modelo do checkout (menu "Checkout" no admin)
     checkout_email_first: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)

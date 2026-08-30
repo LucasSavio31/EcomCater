@@ -44,6 +44,8 @@ export interface Theme {
   mini_cart_enabled: boolean;
   /** Filtros da vitrine (menu "Filtros") */
   filter_size_enabled: boolean;
+  filter_color_enabled: boolean;
+  filter_material_enabled: boolean;
   filter_price_enabled: boolean;
   filter_category_enabled: boolean;
   /** Modelo do checkout (menu "Checkout") */

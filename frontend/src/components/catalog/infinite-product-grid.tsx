@@ -9,6 +9,8 @@ export interface InfiniteQuery {
   category?: string;
   sort?: string;
   sizes?: string[];
+  materials?: string[];
+  colors?: string[];
   price_min?: number;
   price_max?: number;
   page_size: number;
@@ -26,6 +28,8 @@ function buildUrl(q: InfiniteQuery, page: number): string {
   if (q.price_min) s.set('price_min', String(q.price_min));
   if (q.price_max) s.set('price_max', String(q.price_max));
   for (const sz of q.sizes ?? []) s.append('size', sz);
+  for (const m of q.materials ?? []) s.append('material', m);
+  for (const c of q.colors ?? []) s.append('color', c);
   s.set('page', String(page));
   s.set('page_size', String(q.page_size));
   return `${API_BASE_URL}/api/products?${s.toString()}`;
