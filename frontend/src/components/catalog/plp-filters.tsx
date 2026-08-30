@@ -23,6 +23,19 @@ const ALL_VISIBLE: FilterVisibility = {
   material: true,
 };
 
+/** Classe do <input type=range> transparente (só o thumb visível). */
+const RANGE_CLS = [
+  'pointer-events-none absolute inset-0 m-0 h-6 w-full cursor-pointer appearance-none bg-transparent',
+  '[&::-webkit-slider-runnable-track]:h-6 [&::-webkit-slider-runnable-track]:bg-transparent',
+  '[&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:mt-1 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4',
+  '[&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full',
+  '[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-primary [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow',
+  '[&::-moz-range-track]:h-6 [&::-moz-range-track]:bg-transparent',
+  '[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4',
+  '[&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:rounded-full',
+  '[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-primary [&::-moz-range-thumb]:bg-white',
+].join(' ');
+
 interface PlpFiltersProps {
   facets: ProductFacets;
   show?: FilterVisibility;
@@ -49,17 +62,15 @@ function useFilterActions() {
 export function PlpFilters({ facets, show = ALL_VISIBLE, categoryLinks = [] }: PlpFiltersProps) {
   const { params, push } = useFilterActions();
 
-  // faixa de preço (em centavos) — barra deslizante
-  const bounds = {
-    min: facets.price.min,
-    max: Math.max(facets.price.max, facets.price.min + 1),
-  };
-  const step = Math.max(100, Math.ceil((bounds.max - bounds.min) / 200 / 100) * 100);
-  const clampLo = (v: number) => Math.min(Math.max(v, bounds.min), bounds.max);
-  const [lo, setLo] = useState(() => clampLo(Number(params.get('price_min')) || bounds.min));
+  // faixa de preço (em centavos) — barra deslizante de R$0 até o maior preço
+  const STEP = 5000; // R$ 50
+  const priceMax = Math.max(Math.ceil((facets.price.max || 0) / STEP) * STEP, STEP);
+  const bounds = { min: 0, max: priceMax };
+  const clamp = (v: number) => Math.min(Math.max(v, bounds.min), bounds.max);
+  const [lo, setLo] = useState(() => clamp(Number(params.get('price_min')) || 0));
   const [hi, setHi] = useState(() => {
     const raw = Number(params.get('price_max'));
-    return raw > 0 ? Math.min(raw, bounds.max) : bounds.max;
+    return raw > 0 ? clamp(raw) : bounds.max;
   });
 
   const commitPrice = (nlo: number, nhi: number) => {
@@ -162,7 +173,7 @@ export function PlpFilters({ facets, show = ALL_VISIBLE, categoryLinks = [] }: P
 
   return (
     <div className="flex flex-col gap-4">
-      {show.price && bounds.max > bounds.min && (
+      {show.price && (
         <fieldset className="flex flex-col gap-3">
           <legend className="mb-1 text-sm font-semibold">Faixa de preço</legend>
           <p className="text-sm">
@@ -171,52 +182,55 @@ export function PlpFilters({ facets, show = ALL_VISIBLE, categoryLinks = [] }: P
             <span className="font-medium">{formatBRL(hi)}</span>
           </p>
 
-          <div className="relative h-5 select-none">
-            <div className="absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-surface-border" />
+          <div className="relative h-6 select-none">
+            <div className="pointer-events-none absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-surface-border" />
             <div
-              className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary"
+              className="pointer-events-none absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary"
               style={{
-                left: `${((lo - bounds.min) / (bounds.max - bounds.min)) * 100}%`,
-                right: `${100 - ((hi - bounds.min) / (bounds.max - bounds.min)) * 100}%`,
+                left: `${(lo / bounds.max) * 100}%`,
+                right: `${100 - (hi / bounds.max) * 100}%`,
               }}
             />
-            {(
-              [
-                ['Preço mínimo', lo, (v: number) => {
-                  const n = Math.min(v, hi - step);
-                  setLo(n);
-                  return n;
-                }, (n: number) => commitPrice(n, hi)],
-                ['Preço máximo', hi, (v: number) => {
-                  const n = Math.max(v, lo + step);
-                  setHi(n);
-                  return n;
-                }, (n: number) => commitPrice(lo, n)],
-              ] as const
-            ).map(([label, value, onDrag, onCommit], i) => (
-              <input
-                key={i}
-                type="range"
-                aria-label={label}
-                min={bounds.min}
-                max={bounds.max}
-                step={step}
-                value={value}
-                onChange={(e) => onDrag(Number(e.target.value))}
-                onPointerUp={(e) => onCommit(Number((e.target as HTMLInputElement).value))}
-                onKeyUp={(e) => onCommit(Number((e.target as HTMLInputElement).value))}
-                onTouchEnd={(e) => onCommit(Number((e.target as HTMLInputElement).value))}
-                className={[
-                  'pointer-events-none absolute inset-x-0 top-1/2 h-0 w-full -translate-y-1/2 appearance-none bg-transparent',
-                  '[&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4',
-                  '[&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full',
-                  '[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-primary [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow',
-                  '[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4',
-                  '[&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:rounded-full',
-                  '[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-primary [&::-moz-range-thumb]:bg-white',
-                ].join(' ')}
-              />
-            ))}
+            <input
+              type="range"
+              aria-label="Preço mínimo"
+              min={0}
+              max={bounds.max}
+              step={STEP}
+              value={lo}
+              onChange={(e) => setLo(Math.min(Number(e.target.value), hi - STEP))}
+              onPointerUp={(e) =>
+                commitPrice(Math.min(Number(e.currentTarget.value), hi - STEP), hi)
+              }
+              onKeyUp={(e) =>
+                commitPrice(Math.min(Number(e.currentTarget.value), hi - STEP), hi)
+              }
+              onTouchEnd={(e) =>
+                commitPrice(Math.min(Number(e.currentTarget.value), hi - STEP), hi)
+              }
+              className={RANGE_CLS}
+              style={{ zIndex: lo >= bounds.max - STEP ? 5 : 3 }}
+            />
+            <input
+              type="range"
+              aria-label="Preço máximo"
+              min={0}
+              max={bounds.max}
+              step={STEP}
+              value={hi}
+              onChange={(e) => setHi(Math.max(Number(e.target.value), lo + STEP))}
+              onPointerUp={(e) =>
+                commitPrice(lo, Math.max(Number(e.currentTarget.value), lo + STEP))
+              }
+              onKeyUp={(e) =>
+                commitPrice(lo, Math.max(Number(e.currentTarget.value), lo + STEP))
+              }
+              onTouchEnd={(e) =>
+                commitPrice(lo, Math.max(Number(e.currentTarget.value), lo + STEP))
+              }
+              className={RANGE_CLS}
+              style={{ zIndex: 4 }}
+            />
           </div>
         </fieldset>
       )}

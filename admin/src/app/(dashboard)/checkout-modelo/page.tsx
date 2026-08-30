@@ -64,6 +64,7 @@ export default function CheckoutModeloPage() {
     setSaving(true);
     const body: Partial<Theme> = {
       checkout_email_first: theme.checkout_email_first,
+      checkout_require_terms: theme.checkout_require_terms,
       checkout_container_width_px: theme.checkout_container_width_px,
       checkout_items_layout: theme.checkout_items_layout,
       checkout_show_coupon: theme.checkout_show_coupon,
@@ -107,6 +108,12 @@ export default function CheckoutModeloPage() {
                 hint="O checkout pede apenas o e-mail na 1ª etapa; CPF, nome e telefone vêm depois."
                 checked={theme.checkout_email_first}
                 onChange={(v) => set('checkout_email_first', v)}
+              />
+              <Checkbox
+                label="Exigir aceite das políticas"
+                hint='Mostra "Li e concordo com a política de vendas e a política de privacidade" e só libera o botão de pagar com a caixa marcada.'
+                checked={theme.checkout_require_terms}
+                onChange={(v) => set('checkout_require_terms', v)}
               />
               <Checkbox
                 label="Exibir campo de cupom no resumo"

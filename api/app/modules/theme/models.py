@@ -149,6 +149,10 @@ class ThemeSettings(Base):
 
     # Modelo do checkout (menu "Checkout" no admin)
     checkout_email_first: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
+    # exigir o aceite "Li e concordo com a política de vendas / privacidade"
+    checkout_require_terms: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
     checkout_container_width_px: Mapped[int] = mapped_column(Integer, default=1100, server_default="1100", nullable=False)
     checkout_items_layout: Mapped[str] = mapped_column(String(12), default="with_thumb", server_default="with_thumb", nullable=False)  # with_thumb | simple
     checkout_show_coupon: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)

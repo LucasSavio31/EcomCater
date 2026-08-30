@@ -73,6 +73,8 @@ const STEP_ORDER: CheckoutStepId[] = ['identify', 'profile', 'shipping', 'paymen
 
 export interface CheckoutSettings {
   emailFirst: boolean;
+  /** Exigir o aceite "Li e concordo com as políticas". */
+  requireTerms: boolean;
   showCoupon: boolean;
   itemsLayout: 'with_thumb' | 'simple';
   allowQtyChange: boolean;
@@ -96,6 +98,7 @@ export interface OrderBumpProduct {
 
 const DEFAULT_SETTINGS: CheckoutSettings = {
   emailFirst: false,
+  requireTerms: true,
   showCoupon: true,
   itemsLayout: 'with_thumb',
   allowQtyChange: true,
@@ -282,7 +285,7 @@ export function CheckoutView({
     profileValid &&
     shippingStepValid &&
     cardValid &&
-    agree &&
+    (!settings.requireTerms || agree) &&
     cart.items.length > 0;
 
   const maxInstallments = methods?.max_installments ?? 1;
@@ -945,20 +948,22 @@ export function CheckoutView({
             className="rounded-card border border-surface-border bg-surface p-3 text-sm"
           />
 
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5" />
-            <span>
-              Li e concordo com a{' '}
-              <Link href="/pagina/politica-de-vendas" className="underline">
-                política de vendas
-              </Link>{' '}
-              e a{' '}
-              <Link href="/pagina/politica-de-privacidade" className="underline">
-                política de privacidade
-              </Link>
-              .
-            </span>
-          </label>
+          {settings.requireTerms && (
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5" />
+              <span>
+                Li e concordo com a{' '}
+                <Link href="/pagina/politica-de-vendas" className="underline">
+                  política de vendas
+                </Link>{' '}
+                e a{' '}
+                <Link href="/pagina/politica-de-privacidade" className="underline">
+                  política de privacidade
+                </Link>
+                .
+              </span>
+            </label>
+          )}
 
           {error && <p className="text-sm text-danger">{error}</p>}
 

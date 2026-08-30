@@ -66,6 +66,7 @@ export interface Theme {
   filter_category_enabled: boolean;
   /** Modelo do checkout (menu "Checkout") */
   checkout_email_first: boolean;
+  checkout_require_terms: boolean;
   checkout_container_width_px: number;
   checkout_items_layout: 'with_thumb' | 'simple';
   checkout_show_coupon: boolean;

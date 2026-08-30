@@ -73,6 +73,7 @@ export interface ThemeSettings {
   filter_category_enabled: boolean;
   /** Modelo do checkout (menu "Checkout" no admin). */
   checkout_email_first: boolean;
+  checkout_require_terms: boolean;
   checkout_container_width_px: number;
   checkout_items_layout: 'with_thumb' | 'simple';
   checkout_show_coupon: boolean;
@@ -219,6 +220,7 @@ export const NEUTRAL_THEME: ThemeSettings = {
   filter_price_enabled: true,
   filter_category_enabled: true,
   checkout_email_first: false,
+  checkout_require_terms: true,
   checkout_container_width_px: 1100,
   checkout_items_layout: 'with_thumb',
   checkout_show_coupon: true,

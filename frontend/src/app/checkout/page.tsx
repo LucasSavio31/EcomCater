@@ -58,6 +58,7 @@ export default async function CheckoutPage() {
           orderBumps={orderBumps}
           settings={{
             emailFirst: theme.checkout_email_first,
+            requireTerms: theme.checkout_require_terms,
             showCoupon: theme.checkout_show_coupon,
             itemsLayout: theme.checkout_items_layout,
             allowQtyChange: theme.checkout_allow_qty_change,
