@@ -216,15 +216,25 @@ async def get_by_number(db: AsyncSession, number: str, *, email: str | None = No
     return order
 
 
+_ORDER_STATUSES = (
+    "pending_payment", "paid", "processing", "shipped", "delivered", "canceled", "refunded",
+)
+
+
 async def transition(
     db: AsyncSession, order: Order, new_status: str, *, actor_type: str = "admin",
     actor_id: str | None = None, message: str | None = None,
 ) -> Order:
+    if new_status not in _ORDER_STATUSES:
+        raise ValidationError(f"Status inválido: {new_status}.")
     if new_status == order.status:
         return order
-    allowed = _TRANSITIONS.get(order.status, set())
-    if new_status not in allowed:
-        raise ValidationError(f"Transição inválida: {order.status} → {new_status}.")
+    # O admin pode mover o pedido para QUALQUER status, quantas vezes precisar;
+    # o fluxo automático (system) continua restrito às transições válidas.
+    if actor_type != "admin":
+        allowed = _TRANSITIONS.get(order.status, set())
+        if new_status not in allowed:
+            raise ValidationError(f"Transição inválida: {order.status} → {new_status}.")
     prev = order.status
     order.status = new_status
 
@@ -237,7 +247,8 @@ async def transition(
     elif new_status == "delivered":
         order.fulfillment_status = "fulfilled"
     elif new_status in ("canceled", "refunded"):
-        await _restore_stock(db, order)
+        if prev not in ("canceled", "refunded"):
+            await _restore_stock(db, order)
         order.payment_status = "refunded" if new_status == "refunded" else order.payment_status
 
     await record_event(

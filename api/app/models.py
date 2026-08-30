@@ -69,6 +69,12 @@ from app.modules.theme.models import Page, ThemeSettings  # noqa: F401
 # --- newsletter ---
 from app.modules.newsletter.models import NewsletterSubscriber  # noqa: F401
 
+# --- cart recovery ---
+from app.modules.cart_recovery.models import (  # noqa: F401
+    AbandonedCart,
+    RecoveryMessage,
+)
+
 # --- analytics ---
 from app.modules.analytics.models import AnalyticsSettings  # noqa: F401
 

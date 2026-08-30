@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     public_api_url: str = "http://localhost:8000"
     site_url: str = "http://localhost:3000"
     admin_url: str = "http://localhost:3001/administracao"
+    # token para o cron externo disparar o envio de recuperação de carrinho
+    recovery_cron_token: str = "dev-recovery-token"
 
     # seed admin
     admin_email: str = "admin@loja.local"

@@ -69,6 +69,14 @@ async def _on_created(payload: dict) -> None:
                 "boleto_url": pay.boleto_url if pay else None,
             },
         )
+        # Marca carrinho abandonado como recuperado
+        try:
+            from app.modules.cart_recovery.module import mark_recovered
+
+            await mark_recovered(db, email=order.email, order_id=order.id)
+        except Exception:  # noqa: BLE001
+            logger.exception("falha ao marcar carrinho recuperado de %s", order.email)
+
         # Comprador entra na lista de leads (para campanhas)
         try:
             from app.modules.newsletter.module import upsert_lead

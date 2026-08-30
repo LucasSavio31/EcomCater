@@ -14,7 +14,17 @@ import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { formatBRL, formatDateTime } from '@/lib/format';
 import { ordersApi, type OrderEditPayload } from '@/modules/orders/api';
-import { ORDER_TRANSITIONS, type OrderDetail, type OrderStatus } from '@/modules/orders/types';
+import { type OrderDetail, type OrderStatus } from '@/modules/orders/types';
+
+const ALL_STATUSES: OrderStatus[] = [
+  'pending_payment',
+  'paid',
+  'processing',
+  'shipped',
+  'delivered',
+  'canceled',
+  'refunded',
+];
 
 const ADDR_FIELDS: { key: keyof NonNullable<OrderEditPayload['shipping_address']>; label: string }[] = [
   { key: 'recipient_name', label: 'Destinatário' },
@@ -156,7 +166,7 @@ export default function PedidoDetalhePage() {
     if (data) setEdit(buildDraft(data));
   }, [data]);
 
-  const transitions = data ? ORDER_TRANSITIONS[data.status] : [];
+  const transitions = data ? ALL_STATUSES.filter((s) => s !== data.status) : [];
 
   async function applyStatus(): Promise<void> {
     if (!nextStatus) return;
@@ -521,12 +531,11 @@ export default function PedidoDetalhePage() {
 
               <Card variant="outline" className="flex flex-col gap-3">
                 <h2 className="text-lg font-semibold">Mudar status</h2>
-                {transitions.length === 0 ? (
-                  <p className="text-sm text-text-muted">
-                    Nenhuma transição disponível a partir de “{orderStatusLabel(data.status)}”.
-                  </p>
-                ) : (
-                  <>
+                <p className="text-xs text-text-muted">
+                  Status atual: <b>{orderStatusLabel(data.status)}</b>. Você pode mudar para
+                  qualquer status quantas vezes precisar — cada mudança fica na linha do tempo.
+                </p>
+                <>
                     <Select
                       label="Novo status"
                       value={nextStatus}
@@ -543,8 +552,7 @@ export default function PedidoDetalhePage() {
                     <Button loading={busy} disabled={!nextStatus} onClick={() => void applyStatus()}>
                       Aplicar
                     </Button>
-                  </>
-                )}
+                </>
               </Card>
 
               <Card variant="outline" className="flex flex-col gap-3">

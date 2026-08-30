@@ -81,6 +81,11 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         "<p>O reembolso do pedido <b>{{ number }}</b> foi processado. "
         "O prazo de estorno depende do meio de pagamento.</p>",
     ),
+    "cart_recovery": (
+        "{{ subject }}",
+        "<div>{{ body | e | replace('\n', '<br>'|safe) }}</div>"
+        "<p style='margin-top:18px'><a href='{{ cta_url }}' class='btn'>Voltar para o meu carrinho</a></p>",
+    ),
     "campaign": (
         "{{ subject }}",
         "<div>{{ body | e | replace('\n', '<br>'|safe) }}</div>"

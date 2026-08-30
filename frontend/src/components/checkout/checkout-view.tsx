@@ -11,6 +11,7 @@ import { checkoutApi } from '@/modules/checkout/api';
 import type { CardPayload, CheckoutPayload, PaymentMethods } from '@/modules/checkout/types';
 import type { ShippingOption } from '@/modules/cart/types';
 import { cartApi } from '@/modules/cart/api';
+import { apiFetch } from '@/lib/api-client';
 import { formatBRL } from '@/lib/format';
 import { isValidCpf } from '@/lib/cpf';
 import { lookupCep } from '@/lib/viacep';
@@ -287,6 +288,14 @@ export function CheckoutView({
     if (!identifyValid) return;
     identify({ email: email.trim(), externalId: onlyDigits(cpf) || undefined });
     if (!settings.emailFirst) tryInstantLogin();
+    // recuperação de carrinho: registra o e-mail assim que informado
+    if (EMAIL_RE.test(email)) {
+      void apiFetch('/api/cart-recovery/capture', {
+        method: 'POST',
+        credentials: 'include',
+        body: { email: email.trim() },
+      });
+    }
     goto('profile');
   }
   function advanceProfile() {
