@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Badge, Button, Card, Input, Modal } from '@ecom/ui';
-import { Checkbox } from '@/components/form-controls';
+import { Checkbox, Select } from '@/components/form-controls';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { ImageUploader } from '@/components/image-uploader';
 import { AsyncBoundary } from '@/components/async-boundary';
@@ -192,7 +192,16 @@ export function BannersTab() {
       >
         <div className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Slot" value={form.slot} onChange={(e) => set('slot', e.target.value)} hint="ex.: hero, showcase, top_bar" />
+            <Select
+              label="Tipo de banner (slot)"
+              value={form.slot}
+              onChange={(e) => set('slot', e.target.value)}
+              options={[
+                { value: 'hero', label: 'Hero (banner principal da home)' },
+                { value: 'showcase', label: 'Showcase (faixa/vitrine da home)' },
+                { value: 'top_bar', label: 'Top bar (tarja acima do menu)' },
+              ]}
+            />
             <Input label="Posição" inputMode="numeric" value={form.position} onChange={(e) => set('position', e.target.value)} />
             <Input label="Título" value={form.title} onChange={(e) => set('title', e.target.value)} />
             <Input label="Texto alternativo" value={form.alt} onChange={(e) => set('alt', e.target.value)} />

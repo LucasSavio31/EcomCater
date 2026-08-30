@@ -43,12 +43,18 @@ async def register(
 ) -> tuple[User, dict]:
     if await db.scalar(select(User).where(User.email == email)):
         raise ConflictError("Já existe uma conta com esse e-mail.")
+    from app.core.errors import ValidationError
+    from app.shared.cpf import is_valid_cpf, only_digits
+
+    cpf_digits = only_digits(cpf) if cpf else ""
+    if cpf_digits and not is_valid_cpf(cpf_digits):
+        raise ValidationError("CPF inválido.")
     user = User(
         full_name=full_name,
         email=email,
         password_hash=hash_password(password),
         phone=phone,
-        cpf="".join(filter(str.isdigit, cpf)) or None if cpf else None,
+        cpf=cpf_digits or None,
         is_active=True,
     )
     db.add(user)
@@ -105,6 +111,14 @@ async def update_profile(db: AsyncSession, user: User, data: dict) -> User:
         ):
             raise AuthError("Senha atual incorreta.")
         user.password_hash = hash_password(data["new_password"])
+    if data.get("cpf") is not None:
+        from app.core.errors import ValidationError
+        from app.shared.cpf import is_valid_cpf, only_digits
+
+        digits = only_digits(data["cpf"])
+        if digits and not is_valid_cpf(digits):
+            raise ValidationError("CPF inválido.")
+        data = {**data, "cpf": digits or None}
     for field in ("full_name", "phone", "cpf"):
         if data.get(field) is not None:
             setattr(user, field, data[field])

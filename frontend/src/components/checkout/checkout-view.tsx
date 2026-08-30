@@ -12,6 +12,7 @@ import type { CardPayload, CheckoutPayload, PaymentMethods } from '@/modules/che
 import type { ShippingOption } from '@/modules/cart/types';
 import { cartApi } from '@/modules/cart/api';
 import { formatBRL } from '@/lib/format';
+import { isValidCpf } from '@/lib/cpf';
 import { lookupCep } from '@/lib/viacep';
 import { track, identify, cartToTrackItems } from '@/modules/analytics';
 import { CheckoutStepsTimeline, type CheckoutStepId } from './checkout-steps';
@@ -230,7 +231,7 @@ export function CheckoutView({
   }, [addr.zip, quoteShipping]);
 
   // ---- validações por etapa
-  const cpfOk = onlyDigits(cpf).length === 11;
+  const cpfOk = isValidCpf(cpf);
   const identifyValid = settings.emailFirst
     ? EMAIL_RE.test(email)
     : EMAIL_RE.test(email) && cpfOk;
@@ -530,7 +531,13 @@ export function CheckoutView({
               required
               value={cpf}
               onChange={(e) => setCpf(maskCpf(e.target.value))}
-              error={cpf && onlyDigits(cpf).length !== 11 ? 'CPF incompleto' : undefined}
+              error={
+                cpf && onlyDigits(cpf).length === 11 && !cpfOk
+                  ? 'CPF inválido'
+                  : cpf && onlyDigits(cpf).length > 0 && onlyDigits(cpf).length < 11
+                    ? 'CPF incompleto'
+                    : undefined
+              }
             />
           )}
           <Button onClick={() => void advanceIdentify()} disabled={!identifyValid} className="self-start">
@@ -563,7 +570,13 @@ export function CheckoutView({
               value={cpf}
               onChange={(e) => setCpf(maskCpf(e.target.value))}
               hint="Também é a sua senha de acesso à conta."
-              error={cpf && onlyDigits(cpf).length !== 11 ? 'CPF incompleto' : undefined}
+              error={
+                cpf && onlyDigits(cpf).length === 11 && !cpfOk
+                  ? 'CPF inválido'
+                  : cpf && onlyDigits(cpf).length > 0 && onlyDigits(cpf).length < 11
+                    ? 'CPF incompleto'
+                    : undefined
+              }
             />
           )}
           <Input

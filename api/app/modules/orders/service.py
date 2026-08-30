@@ -87,6 +87,11 @@ async def create_from_cart(
     idempotency_key: str | None = None,
 ) -> Order:
     from app.modules.cart.service import compute_totals
+    from app.shared.cpf import is_valid_cpf, only_digits
+
+    cpf = only_digits(cpf) or None
+    if cpf and not is_valid_cpf(cpf):
+        raise ValidationError("CPF inválido.")
 
     if not cart.items:
         raise ValidationError("Carrinho vazio.")
@@ -473,8 +478,12 @@ async def edit_order(db: AsyncSession, number: str, data: dict) -> Order:
     if data.get("email"):
         order.email = str(data["email"]).strip()
     if "cpf" in data:
-        digits = "".join(ch for ch in str(data["cpf"] or "") if ch.isdigit())
-        order.cpf = digits[:11] or None
+        from app.shared.cpf import is_valid_cpf, only_digits
+
+        digits = only_digits(str(data["cpf"] or ""))[:11]
+        if digits and not is_valid_cpf(digits):
+            raise ValidationError("CPF inválido.")
+        order.cpf = digits or None
     if data.get("customer_note") is not None:
         order.customer_note = str(data["customer_note"]).strip() or None
     if isinstance(data.get("shipping_address"), dict):

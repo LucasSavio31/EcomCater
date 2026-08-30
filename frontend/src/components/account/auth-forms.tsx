@@ -5,15 +5,9 @@ import { Button, Card, Input } from '@ecom/ui';
 import { useAuth } from '@/modules/customer/auth-context';
 import { useCart } from '@/modules/cart/cart-context';
 import { track } from '@/modules/analytics';
+import { isValidCpf, maskCpf, onlyDigits as digits } from '@/lib/cpf';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const digits = (v: string) => v.replace(/\D/g, '');
-const maskCpf = (v: string) =>
-  digits(v)
-    .slice(0, 11)
-    .replace(/^(\d{3})(\d)/, '$1.$2')
-    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
-    .replace(/\.(\d{3})(\d)/, '.$1-$2');
 
 /**
  * Login + cadastro do cliente. Por decisão de projeto, a **senha é o CPF** —
@@ -30,10 +24,10 @@ export function AuthForms({ onDone }: { onDone?: () => void }) {
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const cpfDigits = digits(form.cpf);
 
+  // no login o CPF é só a senha (11 dígitos basta); no cadastro validamos os DV
+  const cpfOk = mode === 'login' ? cpfDigits.length === 11 : isValidCpf(cpfDigits);
   const valid =
-    EMAIL_RE.test(form.email) &&
-    cpfDigits.length === 11 &&
-    (mode === 'login' || form.full_name.trim().length >= 2);
+    EMAIL_RE.test(form.email) && cpfOk && (mode === 'login' || form.full_name.trim().length >= 2);
 
   async function submit() {
     if (!valid) return;
@@ -109,7 +103,13 @@ export function AuthForms({ onDone }: { onDone?: () => void }) {
           value={form.cpf}
           onChange={(e) => set('cpf', maskCpf(e.target.value))}
           hint={mode === 'login' ? 'Seu CPF é a sua senha de acesso.' : 'Ele será a sua senha de acesso.'}
-          error={form.cpf && cpfDigits.length !== 11 ? 'CPF incompleto' : undefined}
+          error={
+            form.cpf && cpfDigits.length === 11 && !cpfOk
+              ? 'CPF inválido'
+              : form.cpf && cpfDigits.length > 0 && cpfDigits.length < 11
+                ? 'CPF incompleto'
+                : undefined
+          }
         />
         {mode === 'register' && (
           <Input
