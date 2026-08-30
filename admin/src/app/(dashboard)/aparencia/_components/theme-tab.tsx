@@ -49,24 +49,47 @@ const EMAIL_FIELDS: ColorFieldDef[] = [
 ];
 
 
+const SOCIAL_NETS = ['instagram', 'facebook', 'tiktok', 'youtube'] as const;
+type SocialNet = (typeof SOCIAL_NETS)[number];
+const SOCIAL_ENABLED_KEY: Record<SocialNet, keyof Theme> = {
+  instagram: 'footer_social_instagram_enabled',
+  facebook: 'footer_social_facebook_enabled',
+  tiktok: 'footer_social_tiktok_enabled',
+  youtube: 'footer_social_youtube_enabled',
+};
+const SOCIAL_LABEL: Record<SocialNet, string> = {
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+};
+
 export function ThemeTab() {
   const toast = useToast();
   const { data, loading, error, reload, setData } = useResource(() => appearanceApi.getTheme());
+  const settingsRes = useResource(() => appearanceApi.getSettings());
   const [draft, setDraft] = useState<Theme | null>(null);
+  const [socialDraft, setSocialDraft] = useState<Record<string, string> | null>(null);
   const [saving, setSaving] = useState(false);
 
   const theme = draft ?? data;
-  const dirty = draft !== null;
+  const dirty = draft !== null || socialDraft !== null;
   const set = <K extends keyof Theme>(k: K, v: Theme[K]): void => {
     if (!theme) return;
     setDraft({ ...theme, [k]: v });
   };
+  const social = socialDraft ?? settingsRes.data?.social_json ?? {};
+  const setSocial = (net: SocialNet, url: string): void =>
+    setSocialDraft({ ...social, [net]: url });
 
 
   async function save(): Promise<void> {
     if (!theme) return;
     setSaving(true);
     const result = await appearanceApi.putTheme(theme);
+    if (result.ok && socialDraft) {
+      await appearanceApi.putSettings({ social_json: socialDraft });
+    }
     setSaving(false);
     if (!result.ok) {
       toast.error(result.error.message);
@@ -76,6 +99,8 @@ export function ThemeTab() {
     toast.success('Tema salvo e aplicado na loja.');
     setData(result.data);
     setDraft(null);
+    setSocialDraft(null);
+    settingsRes.reload();
   }
 
   async function upload(kind: ThemeImageKind, file: File): Promise<void> {
@@ -265,32 +290,28 @@ export function ThemeTab() {
                   Redes sociais no rodapé (coluna “Siga-nos”)
                 </span>
                 <p className="text-xs text-text-muted">
-                  Ligue as que quiser exibir. A URL de cada rede é cadastrada em{' '}
-                  <b>Dados da loja → Redes sociais</b> — sem URL, a rede não aparece
-                  mesmo ligada.
+                  Ligue as que quiser exibir e informe o link. Sem link, a rede não
+                  aparece mesmo ligada.
                 </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Checkbox
-                    label="Instagram"
-                    checked={theme.footer_social_instagram_enabled}
-                    onChange={(v) => set('footer_social_instagram_enabled', v)}
-                  />
-                  <Checkbox
-                    label="Facebook"
-                    checked={theme.footer_social_facebook_enabled}
-                    onChange={(v) => set('footer_social_facebook_enabled', v)}
-                  />
-                  <Checkbox
-                    label="TikTok"
-                    checked={theme.footer_social_tiktok_enabled}
-                    onChange={(v) => set('footer_social_tiktok_enabled', v)}
-                  />
-                  <Checkbox
-                    label="YouTube"
-                    checked={theme.footer_social_youtube_enabled}
-                    onChange={(v) => set('footer_social_youtube_enabled', v)}
-                  />
-                </div>
+                {SOCIAL_NETS.map((net) => {
+                  const on = Boolean(theme[SOCIAL_ENABLED_KEY[net]]);
+                  return (
+                    <div key={net} className="flex flex-col gap-1.5">
+                      <Checkbox
+                        label={SOCIAL_LABEL[net]}
+                        checked={on}
+                        onChange={(v) => set(SOCIAL_ENABLED_KEY[net], v as never)}
+                      />
+                      {on && (
+                        <Input
+                          placeholder={`https://${net}.com/sua-loja`}
+                          value={social[net] ?? ''}
+                          onChange={(e) => setSocial(net, e.target.value)}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </Card>
 
