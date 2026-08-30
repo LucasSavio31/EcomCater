@@ -7,6 +7,7 @@ import { getAnalyticsConfig } from '@/modules/analytics/get-config';
 import { AnalyticsHeadScripts, AnalyticsBodyNoScript } from '@/modules/analytics/scripts';
 import { AnalyticsRouteTracker } from '@/modules/analytics/route-tracker';
 import { ServiceWorker } from '@/components/service-worker';
+import { ScrollToTop } from '@/components/scroll-to-top';
 import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
 import { StorefrontShell } from '@/components/layout/storefront-shell';
@@ -57,6 +58,7 @@ export default async function RootLayout({
         <Suspense fallback={null}>
           <AnalyticsRouteTracker />
         </Suspense>
+        <ScrollToTop />
 
         {/* CSS vars do tema — antes do primeiro paint (sem FOUC). */}
         <ThemeStyle theme={theme} />

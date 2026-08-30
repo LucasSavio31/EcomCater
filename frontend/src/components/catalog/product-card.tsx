@@ -95,7 +95,7 @@ export function ProductCard({
         {buyButtonLabel && (
           <Link
             href={href}
-            className="mt-2 inline-flex min-h-touch items-center justify-center rounded-btn bg-btn px-4 text-sm font-bold uppercase tracking-wide text-btn-fg hover:opacity-90"
+            className="mt-2 inline-flex min-h-touch items-center justify-center rounded-btn bg-btn px-4 text-sm font-black uppercase tracking-wide text-black hover:opacity-90"
           >
             {buyButtonLabel}
           </Link>
