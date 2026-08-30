@@ -29,13 +29,13 @@ export function CheckoutStepsTimeline({
   const maxIdx = idx(furthest);
 
   return (
-    <ol className="mb-6 flex items-center gap-2 text-sm">
+    <ol className="mb-6 flex min-w-0 items-center gap-2 text-sm">
       {steps.map((step, i) => {
         const done = i < curIdx;
         const active = i === curIdx;
         const reachable = i <= maxIdx;
         return (
-          <li key={step} className="flex flex-1 items-center gap-2">
+          <li key={step} className="flex min-w-0 flex-1 items-center gap-2">
             <button
               type="button"
               disabled={!reachable || !onJump}

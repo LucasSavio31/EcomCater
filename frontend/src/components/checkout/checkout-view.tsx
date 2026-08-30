@@ -547,8 +547,14 @@ export function CheckoutView({
   }
 
   return (
-    <div className={reviewOnSide ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]' : 'flex flex-col gap-6'}>
-      <div className="flex flex-col gap-4">
+    <div
+      className={
+        reviewOnSide
+          ? 'grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]'
+          : 'flex flex-col gap-6'
+      }
+    >
+      <div className="flex min-w-0 flex-col gap-4">
         <CheckoutStepsTimeline current={step} furthest={furthest} onJump={goto} />
 
         {settings.showReview && settings.reviewPosition === 'top' && (
@@ -621,11 +627,11 @@ export function CheckoutView({
             </span>
           }
         >
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input label="Nome" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
             <Input label="Sobrenome" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {settings.emailFirst && (
               <Input
                 label="CPF"
@@ -679,7 +685,7 @@ export function CheckoutView({
             </span>
           }
         >
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input
               label="CEP"
               inputMode="numeric"
@@ -693,7 +699,7 @@ export function CheckoutView({
           </div>
           <Input label="Rua / logradouro" required value={addr.street} onChange={(e) => setAddrField('street', e.target.value)} />
           <Input label="Complemento (opcional)" value={addr.complement} onChange={(e) => setAddrField('complement', e.target.value)} />
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input label="Bairro" required value={addr.district} onChange={(e) => setAddrField('district', e.target.value)} />
             <Input label="Cidade" required value={addr.city} onChange={(e) => setAddrField('city', e.target.value)} />
           </div>
@@ -818,7 +824,7 @@ export function CheckoutView({
                             value={card.holder_name}
                             onChange={(e) => setCard((c) => ({ ...c, holder_name: e.target.value }))}
                           />
-                          <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <Input
                               label="Validade (MM/AA)"
                               placeholder="MM/AA"
@@ -965,12 +971,14 @@ export function CheckoutView({
       </div>
 
       {reviewOnSide && (
-        <OrderSummary
-          position="side"
-          showCoupon={settings.showCoupon}
-          layout={settings.itemsLayout}
-          allowQtyChange={settings.allowQtyChange}
-        />
+        <div className="min-w-0">
+          <OrderSummary
+            position="side"
+            showCoupon={settings.showCoupon}
+            layout={settings.itemsLayout}
+            allowQtyChange={settings.allowQtyChange}
+          />
+        </div>
       )}
     </div>
   );
