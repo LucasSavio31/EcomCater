@@ -11,6 +11,7 @@ import { useResource } from '@/lib/use-resource';
 import { formatDate } from '@/lib/format';
 import {
   appearanceApi,
+  removeBannerImage,
   uploadBannerImage,
   type Banner,
   type BannerInput,
@@ -212,23 +213,56 @@ export function BannersTab() {
           <Checkbox label="Ativo" checked={form.is_active} onChange={(v) => set('is_active', v)} />
 
           {editing ? (
-            <div className="flex flex-col gap-2 border-t border-surface-border pt-4">
+            <div className="grid gap-4 border-t border-surface-border pt-4 sm:grid-cols-2">
               <ImageUploader
-                label="Imagem"
+                label="Imagem — PC (desktop)"
                 aspect="wide"
-                currentUrl={editing.image_url ?? editing.image_desktop_url}
-                hint="Uma imagem só — ela é redimensionada automaticamente para desktop e mobile."
+                currentUrl={editing.image_desktop_url ?? editing.image_url}
+                hint="Aparece só em telas grandes. Sem esta imagem, o banner não aparece no PC."
                 onSelect={async (file) => {
-                  const r = await uploadBannerImage(editing.id, file);
+                  const r = await uploadBannerImage(editing.id, file, 'desktop');
                   if (!r.ok) throw new Error(r.error.message);
                   setEditing(r.data);
                   reload();
-                  toast.success('Imagem enviada.');
+                  toast.success('Imagem de desktop enviada.');
                 }}
+                onRemove={
+                  editing.image_desktop_url
+                    ? async () => {
+                        const r = await removeBannerImage(editing.id, 'desktop');
+                        if (!r.ok) throw new Error(r.error.message);
+                        setEditing({ ...editing, image_desktop_url: null, image_url: null });
+                        reload();
+                      }
+                    : undefined
+                }
+              />
+              <ImageUploader
+                label="Imagem — Mobile (retrato)"
+                aspect="portrait"
+                currentUrl={editing.image_mobile_url}
+                hint="Aparece só no celular. Sem esta imagem, o banner não aparece no mobile."
+                onSelect={async (file) => {
+                  const r = await uploadBannerImage(editing.id, file, 'mobile');
+                  if (!r.ok) throw new Error(r.error.message);
+                  setEditing(r.data);
+                  reload();
+                  toast.success('Imagem de mobile enviada.');
+                }}
+                onRemove={
+                  editing.image_mobile_url
+                    ? async () => {
+                        const r = await removeBannerImage(editing.id, 'mobile');
+                        if (!r.ok) throw new Error(r.error.message);
+                        setEditing({ ...editing, image_mobile_url: null });
+                        reload();
+                      }
+                    : undefined
+                }
               />
             </div>
           ) : (
-            <p className="text-sm text-text-muted">Salve o banner para enviar a imagem.</p>
+            <p className="text-sm text-text-muted">Salve o banner para enviar as imagens.</p>
           )}
         </div>
       </Modal>

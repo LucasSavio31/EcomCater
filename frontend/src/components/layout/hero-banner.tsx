@@ -10,6 +10,13 @@ interface HeroBannerProps {
   banners: Banner[];
   mode: 'carousel' | 'static';
   autoplaySeconds: number;
+  /** Qual imagem usar. 'mobile' só entra em telas pequenas; 'desktop' nas grandes. */
+  viewport?: 'desktop' | 'mobile';
+}
+
+function bannerSrc(b: Banner, viewport: 'desktop' | 'mobile'): string | null {
+  if (viewport === 'mobile') return b.image_mobile_url ?? null;
+  return b.image_desktop_url ?? b.image_url ?? null;
 }
 
 /**
@@ -18,8 +25,10 @@ interface HeroBannerProps {
  *  - `static`: mostra só o primeiro banner
  *  - `carousel`: setas, bullets, arrastar e autoplay opcional
  */
-export function HeroBanner({ banners, mode, autoplaySeconds }: HeroBannerProps) {
-  const slides = mode === 'static' ? banners.slice(0, 1) : banners.slice(0, 8);
+export function HeroBanner({ banners, mode, autoplaySeconds, viewport = 'desktop' }: HeroBannerProps) {
+  // só banners que têm imagem para este viewport — sem imagem, não aparece
+  const usable = banners.filter((b) => bannerSrc(b, viewport));
+  const slides = mode === 'static' ? usable.slice(0, 1) : usable.slice(0, 8);
   const [index, setIndex] = useState(0);
   const touchX = useRef<number | null>(null);
   const indexRef = useRef(0);
@@ -65,10 +74,12 @@ export function HeroBanner({ banners, mode, autoplaySeconds }: HeroBannerProps) 
       >
         <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${index * 100}%)` }}>
           {slides.map((banner, i) => {
-            const src = resolveMediaUrl(banner.image_url ?? banner.image_desktop_url);
+            const src = resolveMediaUrl(bannerSrc(banner, viewport));
             const alt = banner.alt ?? banner.title ?? 'Banner promocional';
+            const aspect =
+              viewport === 'mobile' ? 'aspect-[3/4]' : 'aspect-[2/1] lg:aspect-[64/21]';
             const media = (
-              <span className="relative block aspect-[4/5] w-full bg-bg-subtle sm:aspect-[2/1] lg:aspect-[64/21]">
+              <span className={`relative block ${aspect} w-full bg-bg-subtle`}>
                 {src && (
                   <Image
                     src={src}

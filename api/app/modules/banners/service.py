@@ -23,16 +23,16 @@ def _uuid(v: str | uuid.UUID) -> uuid.UUID:
 
 
 def _out(b: Banner) -> dict:
-    # Uma única imagem: o `next/image` redimensiona para cada tela.
-    url = storage.url(b.image_desktop_key) if b.image_desktop_key else None
+    desktop = storage.url(b.image_desktop_key) if b.image_desktop_key else None
+    mobile = storage.url(b.image_mobile_key) if b.image_mobile_key else None
     return {
         "id": str(b.id),
         "slot": b.slot,
         "title": b.title,
-        "image_url": url,
-        # compat com clientes antigos que liam desktop/mobile
-        "image_desktop_url": url,
-        "image_mobile_url": url,
+        # `image_url` = desktop (compat); telas usam desktop/mobile explicitamente
+        "image_url": desktop,
+        "image_desktop_url": desktop,
+        "image_mobile_url": mobile,
         "link_url": b.link_url,
         "alt": b.alt,
         "position": b.position,
@@ -99,21 +99,41 @@ def _is_animated_gif(raw: bytes) -> bool:
         return False
 
 
-async def set_image(db: AsyncSession, banner_id: str, raw: bytes, filename: str, **_ignored) -> Banner:
+async def set_image(
+    db: AsyncSession, banner_id: str, raw: bytes, filename: str,
+    *, variant: str = "desktop", **_ignored,
+) -> Banner:
     """Aceita qualquer formato de imagem. GIF animado é mantido como GIF
-    (preserva a animação); os demais viram WebP pelo pipeline padrão."""
+    (preserva a animação); os demais viram WebP pelo pipeline padrão.
+    `variant` = "desktop" (padrão) ou "mobile" — a imagem mobile só aparece
+    em telas pequenas e a desktop só em telas grandes."""
     b = await db.get(Banner, _uuid(banner_id))
     if not b:
         raise NotFoundError("Banner não encontrado.")
+    field = "image_mobile_key" if variant == "mobile" else "image_desktop_key"
 
+    old = getattr(b, field)
     if _is_animated_gif(raw):
         key = f"banners/{uuid.uuid4().hex}/banner.gif"
         storage.save(key, raw, "image/gif")
-        b.image_desktop_key = key
     else:
         processed = process_image(raw, filename, prefix="banners")
-        b.image_desktop_key = processed.zoom_key
-    b.image_mobile_key = None
+        key = processed.zoom_key
+    setattr(b, field, key)
+    if old and old != key:
+        storage.delete(old)
+    return b
+
+
+async def clear_image(db: AsyncSession, banner_id: str, variant: str = "desktop") -> Banner:
+    b = await db.get(Banner, _uuid(banner_id))
+    if not b:
+        raise NotFoundError("Banner não encontrado.")
+    field = "image_mobile_key" if variant == "mobile" else "image_desktop_key"
+    old = getattr(b, field)
+    if old:
+        storage.delete(old)
+    setattr(b, field, None)
     return b
 
 

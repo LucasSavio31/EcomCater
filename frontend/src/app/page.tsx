@@ -62,11 +62,24 @@ export default async function HomePage() {
   return (
     <div className="flex flex-col gap-10">
       {showHero && (
-        <HeroBanner
-          banners={hero}
-          mode={theme.hero_mode}
-          autoplaySeconds={theme.hero_autoplay_seconds}
-        />
+        <>
+          <div className="hidden sm:block">
+            <HeroBanner
+              banners={hero}
+              viewport="desktop"
+              mode={theme.hero_mode}
+              autoplaySeconds={theme.hero_autoplay_seconds}
+            />
+          </div>
+          <div className="sm:hidden">
+            <HeroBanner
+              banners={hero}
+              viewport="mobile"
+              mode={theme.hero_mode}
+              autoplaySeconds={theme.hero_autoplay_seconds}
+            />
+          </div>
+        </>
       )}
 
       {theme.filter_size_enabled && (

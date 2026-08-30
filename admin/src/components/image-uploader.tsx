@@ -13,7 +13,7 @@ interface ImageUploaderProps {
   onRemove?: () => Promise<void>;
   disabled?: boolean;
   /** Proporção do quadro de preview. */
-  aspect?: 'square' | 'wide';
+  aspect?: 'square' | 'wide' | 'portrait';
 }
 
 export function ImageUploader({
@@ -59,7 +59,9 @@ export function ImageUploader({
       <div
         className={cn(
           'flex items-center justify-center overflow-hidden rounded-card border border-dashed border-surface-border bg-bg-subtle',
-          aspect === 'square' ? 'h-40 w-40' : 'h-32 w-full max-w-md',
+          aspect === 'square' && 'h-40 w-40',
+          aspect === 'wide' && 'h-32 w-full max-w-md',
+          aspect === 'portrait' && 'h-56 w-40',
         )}
       >
         {shown ? (

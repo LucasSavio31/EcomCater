@@ -190,9 +190,11 @@ export interface Banner {
   starts_at: string | null;
   ends_at: string | null;
   is_active: boolean;
-  /** Uma única imagem — redimensionada automaticamente para cada tela. */
   image_url: string | null;
+  /** Imagem para telas grandes (PC). */
   image_desktop_url: string | null;
+  /** Imagem para telas pequenas (mobile) — retrato. */
+  image_mobile_url: string | null;
 }
 
 export interface BannerInput {
@@ -271,9 +273,21 @@ export const appearanceApi = {
   deleteBanner: (id: string) => adminFetch<void>(`/api/admin/banners/${id}`, { method: 'DELETE' }),
 };
 
-/** Upload da imagem do banner (uma só; o front redimensiona por tela). */
-export function uploadBannerImage(id: string, file: File): Promise<ApiResult<Banner>> {
+/** Upload da imagem do banner. variant "desktop" (PC) ou "mobile" (retrato). */
+export function uploadBannerImage(
+  id: string,
+  file: File,
+  variant: 'desktop' | 'mobile' = 'desktop',
+): Promise<ApiResult<Banner>> {
   const form = new FormData();
   form.append('file', file);
+  form.append('variant', variant);
   return uploadMultipart<Banner>(`/api/admin/banners/${id}/image`, form);
+}
+
+export function removeBannerImage(
+  id: string,
+  variant: 'desktop' | 'mobile' = 'desktop',
+): Promise<ApiResult<void>> {
+  return adminFetch<void>(`/api/admin/banners/${id}/image?variant=${variant}`, { method: 'DELETE' });
 }
