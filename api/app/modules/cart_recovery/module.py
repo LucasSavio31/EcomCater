@@ -52,10 +52,14 @@ async def capture(
 ) -> dict:
     if not cart_token:
         return {"ok": False}
+    from sqlalchemy.orm import selectinload
+
     from app.modules.cart.models import Cart
 
     cart = await db.scalar(
-        select(Cart).where(Cart.session_token == cart_token)
+        select(Cart)
+        .where(Cart.session_token == cart_token)
+        .options(selectinload(Cart.items))
     )
     if not cart:
         return {"ok": False}
