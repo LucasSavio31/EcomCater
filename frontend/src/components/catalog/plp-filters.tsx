@@ -48,8 +48,28 @@ function useFilterActions() {
 /** Formulário de filtros (categoria + preço + tamanho + cor + material). Reflete e altera a URL. */
 export function PlpFilters({ facets, show = ALL_VISIBLE, categoryLinks = [] }: PlpFiltersProps) {
   const { params, push } = useFilterActions();
-  const [priceMin, setPriceMin] = useState(params.get('price_min') ?? '');
-  const [priceMax, setPriceMax] = useState(params.get('price_max') ?? '');
+
+  // faixa de preço (em centavos) — barra deslizante
+  const bounds = {
+    min: facets.price.min,
+    max: Math.max(facets.price.max, facets.price.min + 1),
+  };
+  const step = Math.max(100, Math.ceil((bounds.max - bounds.min) / 200 / 100) * 100);
+  const clampLo = (v: number) => Math.min(Math.max(v, bounds.min), bounds.max);
+  const [lo, setLo] = useState(() => clampLo(Number(params.get('price_min')) || bounds.min));
+  const [hi, setHi] = useState(() => {
+    const raw = Number(params.get('price_max'));
+    return raw > 0 ? Math.min(raw, bounds.max) : bounds.max;
+  });
+
+  const commitPrice = (nlo: number, nhi: number) => {
+    push((next) => {
+      if (nlo > bounds.min) next.set('price_min', String(nlo));
+      else next.delete('price_min');
+      if (nhi < bounds.max) next.set('price_max', String(nhi));
+      else next.delete('price_max');
+    });
+  };
 
   const MULTI_KEYS = ['size', 'material', 'color'] as const;
   const hasActiveFilters =
@@ -68,18 +88,9 @@ export function PlpFilters({ facets, show = ALL_VISIBLE, categoryLinks = [] }: P
     });
   };
 
-  const applyPrice = () => {
-    push((next) => {
-      if (priceMin) next.set('price_min', String(Math.max(0, Number(priceMin) * 100)));
-      else next.delete('price_min');
-      if (priceMax) next.set('price_max', String(Math.max(0, Number(priceMax) * 100)));
-      else next.delete('price_max');
-    });
-  };
-
   const clearAll = () => {
-    setPriceMin('');
-    setPriceMax('');
+    setLo(bounds.min);
+    setHi(bounds.max);
     push((next) => {
       for (const k of MULTI_KEYS) next.delete(k);
       next.delete('price_min');
@@ -151,44 +162,62 @@ export function PlpFilters({ facets, show = ALL_VISIBLE, categoryLinks = [] }: P
 
   return (
     <div className="flex flex-col gap-4">
-      {show.price && (
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-semibold">Faixas de preço</legend>
-          <p className="text-xs text-text-muted">
-            {formatBRL(facets.price.min)} – {formatBRL(facets.price.max)}
+      {show.price && bounds.max > bounds.min && (
+        <fieldset className="flex flex-col gap-3">
+          <legend className="mb-1 text-sm font-semibold">Faixa de preço</legend>
+          <p className="text-sm">
+            <span className="font-medium">{formatBRL(lo)}</span>
+            <span className="text-text-muted"> – </span>
+            <span className="font-medium">{formatBRL(hi)}</span>
           </p>
-          <div className="flex items-center gap-2">
-            <label className="flex-1">
-              <span className="sr-only">Preço mínimo (R$)</span>
+
+          <div className="relative h-5 select-none">
+            <div className="absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-surface-border" />
+            <div
+              className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary"
+              style={{
+                left: `${((lo - bounds.min) / (bounds.max - bounds.min)) * 100}%`,
+                right: `${100 - ((hi - bounds.min) / (bounds.max - bounds.min)) * 100}%`,
+              }}
+            />
+            {(
+              [
+                ['Preço mínimo', lo, (v: number) => {
+                  const n = Math.min(v, hi - step);
+                  setLo(n);
+                  return n;
+                }, (n: number) => commitPrice(n, hi)],
+                ['Preço máximo', hi, (v: number) => {
+                  const n = Math.max(v, lo + step);
+                  setHi(n);
+                  return n;
+                }, (n: number) => commitPrice(lo, n)],
+              ] as const
+            ).map(([label, value, onDrag, onCommit], i) => (
               <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                placeholder="mín"
-                value={priceMin}
-                onChange={(e) => setPriceMin(e.target.value)}
-                className="min-h-touch w-full rounded-card border border-surface-border bg-surface px-2 text-sm"
+                key={i}
+                type="range"
+                aria-label={label}
+                min={bounds.min}
+                max={bounds.max}
+                step={step}
+                value={value}
+                onChange={(e) => onDrag(Number(e.target.value))}
+                onPointerUp={(e) => onCommit(Number((e.target as HTMLInputElement).value))}
+                onKeyUp={(e) => onCommit(Number((e.target as HTMLInputElement).value))}
+                onTouchEnd={(e) => onCommit(Number((e.target as HTMLInputElement).value))}
+                className={[
+                  'pointer-events-none absolute inset-x-0 top-1/2 h-0 w-full -translate-y-1/2 appearance-none bg-transparent',
+                  '[&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4',
+                  '[&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full',
+                  '[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-primary [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow',
+                  '[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4',
+                  '[&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:rounded-full',
+                  '[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-primary [&::-moz-range-thumb]:bg-white',
+                ].join(' ')}
               />
-            </label>
-            <span aria-hidden="true" className="text-text-muted">
-              –
-            </span>
-            <label className="flex-1">
-              <span className="sr-only">Preço máximo (R$)</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                placeholder="máx"
-                value={priceMax}
-                onChange={(e) => setPriceMax(e.target.value)}
-                className="min-h-touch w-full rounded-card border border-surface-border bg-surface px-2 text-sm"
-              />
-            </label>
+            ))}
           </div>
-          <Button size="sm" variant="outline" onClick={applyPrice} className="self-start">
-            Aplicar preço
-          </Button>
         </fieldset>
       )}
 
