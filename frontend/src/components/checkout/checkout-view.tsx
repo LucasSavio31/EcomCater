@@ -644,12 +644,6 @@ export function CheckoutView({
             </span>
           }
         >
-          <Input
-            label="Nome de quem recebe"
-            required
-            value={addr.recipient_name}
-            onChange={(e) => setAddrField('recipient_name', e.target.value)}
-          />
           <div className="grid gap-3 sm:grid-cols-2">
             <Input
               label="CEP"
