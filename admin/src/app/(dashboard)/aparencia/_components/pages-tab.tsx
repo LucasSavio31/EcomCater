@@ -148,7 +148,12 @@ export function PagesTab() {
             placeholder={slugify(form.title) || 'gerado do título'}
           />
         </div>
-        <RichTextarea label="Conteúdo" value={form.body} onChange={(v) => set('body', v)} hint="HTML." />
+        <RichTextarea
+          label="Conteúdo"
+          value={form.body}
+          onChange={(v) => set('body', v)}
+          hint="Escreva normalmente e formate pela barra (negrito, título, lista, link, fonte, tamanho)."
+        />
         <Checkbox label="Publicada" checked={form.is_published} onChange={(v) => set('is_published', v)} />
         <div className="grid gap-4 sm:grid-cols-2">
           <Input label="Título SEO" value={form.seo_title} onChange={(e) => set('seo_title', e.target.value)} />
