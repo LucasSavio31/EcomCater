@@ -171,6 +171,10 @@ export default function PedidoDetalhePage() {
 
   const [nextStatus, setNextStatus] = useState<OrderStatus | ''>('');
   const [statusMsg, setStatusMsg] = useState('');
+  // o dropdown sempre reflete o último status salvo do pedido
+  useEffect(() => {
+    if (data?.status) setNextStatus(data.status as OrderStatus);
+  }, [data?.status]);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -182,7 +186,24 @@ export default function PedidoDetalhePage() {
     if (data) setEdit(buildDraft(data));
   }, [data]);
 
-  const transitions = data ? ALL_STATUSES.filter((s) => s !== data.status) : [];
+  // Atualiza o pedido (status + linha do tempo) sozinho, sem refresh e sem
+  // piscar a tela. Pausa durante edição ou enquanto uma ação está em curso.
+  useEffect(() => {
+    const tick = async (): Promise<void> => {
+      if (editMode || busy || document.visibilityState !== 'visible') return;
+      const res = await ordersApi.get(number);
+      if (res.ok) setData(res.data);
+    };
+    const id = window.setInterval(() => void tick(), 15_000);
+    const onFocus = (): void => void tick();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [number, editMode, busy, setData]);
+
+  const transitions = ALL_STATUSES;
 
   async function applyStatus(): Promise<void> {
     if (!nextStatus) return;
@@ -191,9 +212,8 @@ export default function PedidoDetalhePage() {
     setBusy(false);
     if (!result.ok) return toast.error(result.error.message);
     toast.success('Status atualizado.');
-    setNextStatus('');
     setStatusMsg('');
-    setData(result.data);
+    setData(result.data); // o dropdown segue o novo status via efeito
   }
 
   async function addNote(): Promise<void> {
@@ -580,8 +600,13 @@ export default function PedidoDetalhePage() {
                     <Select
                       label="Novo status"
                       value={nextStatus}
-                      placeholder="Selecione"
-                      options={transitions.map((s) => ({ value: s, label: orderStatusLabel(s) }))}
+                      options={transitions.map((s) => ({
+                        value: s,
+                        label:
+                          s === data.status
+                            ? `${orderStatusLabel(s)} (atual)`
+                            : orderStatusLabel(s),
+                      }))}
                       onChange={(e) => setNextStatus(e.target.value as OrderStatus | '')}
                     />
                     <Textarea

@@ -6,6 +6,7 @@ import { Button, Card, Input } from '@ecom/ui';
 import { useAuth } from '@/modules/customer/auth-context';
 import { customerApi } from '@/modules/customer/api';
 import { maskPhone } from '@/lib/phone';
+import { maskCpf } from '@/lib/cpf';
 
 export function AccountDashboard() {
   const { customer, logout, reload } = useAuth();
@@ -13,7 +14,7 @@ export function AccountDashboard() {
   const [form, setForm] = useState({
     full_name: customer?.full_name ?? '',
     phone: customer?.phone ? maskPhone(customer.phone) : '',
-    cpf: customer?.cpf ?? '',
+    cpf: customer?.cpf ? maskCpf(customer.cpf) : '',
   });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -92,11 +93,11 @@ export function AccountDashboard() {
             </div>
             <div className="flex gap-2">
               <dt className="text-text-muted">Telefone:</dt>
-              <dd>{customer.phone || '—'}</dd>
+              <dd>{customer.phone ? maskPhone(customer.phone) : '—'}</dd>
             </div>
             <div className="flex gap-2">
               <dt className="text-text-muted">CPF:</dt>
-              <dd>{customer.cpf || '—'}</dd>
+              <dd>{customer.cpf ? maskCpf(customer.cpf) : '—'}</dd>
             </div>
           </dl>
         ) : (
@@ -112,19 +113,22 @@ export function AccountDashboard() {
               value={form.full_name}
               onChange={(e) => setForm((p) => ({ ...p, full_name: e.target.value }))}
             />
-            <Input
-              label="Telefone"
-              inputMode="numeric"
-              placeholder="(11) 99999-9999"
-              value={form.phone}
-              onChange={(e) => setForm((p) => ({ ...p, phone: maskPhone(e.target.value) }))}
-            />
-            <Input
-              label="CPF"
-              inputMode="numeric"
-              value={form.cpf}
-              onChange={(e) => setForm((p) => ({ ...p, cpf: e.target.value.replace(/\D/g, '').slice(0, 11) }))}
-            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                label="Telefone"
+                inputMode="numeric"
+                placeholder="(11) 99999-9999"
+                value={form.phone}
+                onChange={(e) => setForm((p) => ({ ...p, phone: maskPhone(e.target.value) }))}
+              />
+              <Input
+                label="CPF"
+                inputMode="numeric"
+                placeholder="000.000.000-00"
+                value={form.cpf}
+                onChange={(e) => setForm((p) => ({ ...p, cpf: maskCpf(e.target.value) }))}
+              />
+            </div>
             {msg && <p className="text-sm text-danger">{msg}</p>}
             <div className="flex gap-2">
               <Button type="submit" loading={busy}>
