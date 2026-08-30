@@ -135,11 +135,39 @@ async def seed_content(db: AsyncSession) -> None:
         logger.info("banners de exemplo criados")
 
 
+_DEFAULT_RECOVERY_BODY = (
+    "Olá {nome}, notamos que você deixou alguns itens no carrinho.\n\n"
+    "Eles ainda estão reservados para você — mas por pouco tempo. "
+    "Retome sua compra de onde parou: é rápido e 100% seguro.\n\n"
+    "Se tiver qualquer dúvida sobre pagamento, frete ou os produtos, é só responder este e-mail."
+)
+
+
+async def seed_recovery(db: AsyncSession) -> None:
+    """Primeira mensagem de recuperação de carrinho, no padrão dos e-commerces
+    (enviada 30 min após o abandono). O lojista cadastra as demais."""
+    from app.modules.cart_recovery.models import RecoveryMessage
+
+    if await db.scalar(select(RecoveryMessage).limit(1)):
+        return
+    db.add(
+        RecoveryMessage(
+            position=0,
+            delay_minutes=30,
+            subject="{nome}, você esqueceu produtos no seu carrinho",
+            body=_DEFAULT_RECOVERY_BODY,
+            is_active=True,
+        )
+    )
+    logger.info("mensagem de recuperação padrão criada (30 min)")
+
+
 async def run_all(db: AsyncSession) -> None:
     await seed_admin(db)
     await seed_singletons(db)
     await seed_modules(db)
     await seed_menus(db)
     await seed_content(db)
+    await seed_recovery(db)
     await db.commit()
     logger.info("seed concluído.")

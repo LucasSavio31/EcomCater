@@ -31,6 +31,36 @@ export default function CartRecoveryPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [del, setDel] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmCarts, setConfirmCarts] = useState(false);
+
+  const cartRows = carts.data ?? [];
+  const allChecked = cartRows.length > 0 && cartRows.every((c) => selected.has(c.id));
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const toggleAll = () =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (allChecked) cartRows.forEach((c) => n.delete(c.id));
+      else cartRows.forEach((c) => n.add(c.id));
+      return n;
+    });
+
+  async function deleteSelectedCarts() {
+    setBusy(true);
+    const res = await cartRecoveryApi.deleteCarts([...selected]);
+    setBusy(false);
+    setConfirmCarts(false);
+    if (!res.ok) return toast.error(res.error.message);
+    toast.success(`${res.data.deleted} carrinho(s) excluído(s).`);
+    setSelected(new Set());
+    carts.reload();
+  }
 
   const set = <K extends keyof RecoveryMessageInput>(k: K, v: RecoveryMessageInput[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -178,12 +208,27 @@ export default function CartRecoveryPage() {
         </div>
       </AsyncBoundary>
 
-      <h2 className="text-lg font-semibold">Carrinhos abandonados</h2>
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-lg font-semibold">Carrinhos abandonados</h2>
+        {selected.size > 0 && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-danger"
+            onClick={() => setConfirmCarts(true)}
+          >
+            Excluir selecionados ({selected.size})
+          </Button>
+        )}
+      </div>
       <AsyncBoundary loading={carts.loading} error={carts.error} onRetry={carts.reload}>
         <div className="overflow-x-auto rounded-card border border-surface-border">
           <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-bg-subtle text-left text-xs uppercase tracking-wide text-text-muted">
               <tr>
+                <th className="w-10 px-3 py-2">
+                  <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Selecionar todos" />
+                </th>
                 <th className="px-3 py-2">E-mail</th>
                 <th className="px-3 py-2">Itens</th>
                 <th className="px-3 py-2">Valor</th>
@@ -193,15 +238,23 @@ export default function CartRecoveryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-border">
-              {(carts.data ?? []).length === 0 && (
+              {cartRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-text-muted">
+                  <td colSpan={7} className="px-3 py-8 text-center text-text-muted">
                     Nenhum carrinho abandonado.
                   </td>
                 </tr>
               )}
-              {(carts.data ?? []).map((c) => (
+              {cartRows.map((c) => (
                 <tr key={c.id}>
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(c.id)}
+                      onChange={() => toggle(c.id)}
+                      aria-label={`Selecionar ${c.email}`}
+                    />
+                  </td>
                   <td className="px-3 py-2">{c.email}</td>
                   <td className="px-3 py-2">{c.items_count}</td>
                   <td className="px-3 py-2">{formatBRL(c.total_cents)}</td>
@@ -222,6 +275,17 @@ export default function CartRecoveryPage() {
           </table>
         </div>
       </AsyncBoundary>
+
+      <ConfirmDialog
+        open={confirmCarts}
+        title="Excluir carrinhos abandonados"
+        description={`Excluir ${selected.size} carrinho(s)? Não afeta os pedidos já feitos.`}
+        confirmLabel="Excluir"
+        tone="danger"
+        loading={busy}
+        onConfirm={() => void deleteSelectedCarts()}
+        onCancel={() => setConfirmCarts(false)}
+      />
 
       <ConfirmDialog
         open={del !== null}

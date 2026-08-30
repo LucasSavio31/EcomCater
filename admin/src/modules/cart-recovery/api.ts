@@ -28,6 +28,11 @@ const BASE = '/api/admin/cart-recovery';
 
 export const cartRecoveryApi = {
   listCarts: () => adminFetch<AbandonedCart[]>(`${BASE}/carts`),
+  deleteCarts: (ids: string[]) =>
+    adminFetch<{ ok: boolean; deleted: number }>(`${BASE}/carts/delete`, {
+      method: 'POST',
+      body: { ids },
+    }),
   listMessages: () => adminFetch<RecoveryMessage[]>(`${BASE}/messages`),
   createMessage: (body: RecoveryMessageInput) =>
     adminFetch<RecoveryMessage>(`${BASE}/messages`, { method: 'POST', body }),

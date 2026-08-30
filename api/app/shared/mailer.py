@@ -83,6 +83,7 @@ TEMPLATES: dict[str, tuple[str, str]] = {
     ),
     "cart_recovery": (
         "{{ subject }}",
+        "<h2 style='margin:0 0 12px;font-size:18px;text-transform:uppercase;letter-spacing:.5px'>{{ subject }}</h2>"
         "<div>{{ body | e | replace('\n', '<br>'|safe) }}</div>"
         "<p style='margin-top:18px'><a href='{{ cta_url }}' class='btn'>Voltar para o meu carrinho</a></p>",
     ),
@@ -151,40 +152,57 @@ _EMAIL_DEFAULTS = {
 
 
 async def _email_theme(db: AsyncSession) -> dict:
+    out = dict(_EMAIL_DEFAULTS)
+    out["logo_url"] = None
+    out["store_name"] = None
     try:
+        from app.modules.admin.models import StoreSettings
         from app.modules.theme.models import ThemeSettings
+        from app.shared.storage import storage
 
         row = await db.get(ThemeSettings, 1)
         if row:
-            return {
-                "header_bg": row.email_header_bg_color,
-                "header_fg": row.email_header_text_color,
-                "body_bg": row.email_body_bg_color,
-                "text": row.email_text_color,
-                "btn_bg": row.email_button_color,
-                "btn_fg": row.email_button_text_color,
-                "footer": row.email_footer_text or "",
-            }
+            out.update(
+                header_bg=row.email_header_bg_color,
+                header_fg=row.email_header_text_color,
+                body_bg=row.email_body_bg_color,
+                text=row.email_text_color,
+                btn_bg=row.email_button_color,
+                btn_fg=row.email_button_text_color,
+                footer=row.email_footer_text or "",
+            )
+            if row.logo_key:
+                out["logo_url"] = storage.url(row.logo_key)
+        store = await db.get(StoreSettings, 1)
+        if store and store.store_name:
+            out["store_name"] = store.store_name
     except Exception:  # noqa: BLE001
         pass
-    return dict(_EMAIL_DEFAULTS)
+    return out
 
 
 def _wrap_html(inner: str, subject: str, t: dict, store_name: str) -> str:
-    """Molde visual do e-mail (cabeçalho colorido + corpo + rodapé)."""
+    """Molde visual do e-mail (cabeçalho com logo/nome da loja + corpo + rodapé)."""
+    name = t.get("store_name") or store_name
     style_btn = (
         f"a[href],.btn{{background:{t['btn_bg']};color:{t['btn_fg']} !important;"
-        "text-decoration:none;border-radius:8px;padding:12px 20px;display:inline-block}}"
+        "text-decoration:none;border-radius:8px;padding:12px 20px;display:inline-block;font-weight:bold}}"
     )
     footer = (
         f"<p style='margin:16px 0 0;font-size:12px;color:#9aa0a6'>{t['footer']}</p>"
         if t["footer"]
         else ""
     )
+    logo = t.get("logo_url")
+    header_inner = (
+        f"<img src='{logo}' alt='{name}' style='max-height:40px;vertical-align:middle'>"
+        if logo
+        else name
+    )
     return (
         f"<div style='margin:0;padding:24px;background:#f1f1f1;font-family:Arial,Helvetica,sans-serif'>"
         f"<div style='max-width:560px;margin:0 auto;background:{t['body_bg']};border-radius:12px;overflow:hidden'>"
-        f"<div style='background:{t['header_bg']};color:{t['header_fg']};padding:18px 24px;font-weight:bold;font-size:16px'>{store_name}</div>"
+        f"<div style='background:{t['header_bg']};color:{t['header_fg']};padding:16px 24px;font-weight:bold;font-size:16px'>{header_inner}</div>"
         f"<div style='padding:24px;color:{t['text']};font-size:14px;line-height:1.55'>"
         f"<style>{style_btn}</style>{inner}{footer}</div>"
         f"</div></div>"

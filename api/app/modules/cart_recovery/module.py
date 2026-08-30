@@ -186,6 +186,21 @@ async def run_cron(db: DbDep, token: str = Query(...)) -> dict:
 
 
 # --------------------------------------------------------------------- admin
+@admin_router.post("/carts/delete")
+async def delete_carts(db: DbDep, _: EditorDep, ids: list[str] = Body(..., embed=True)) -> dict:
+    import uuid as _uuid
+
+    uids = []
+    for i in ids:
+        try:
+            uids.append(_uuid.UUID(i))
+        except ValueError:
+            continue
+    if uids:
+        await db.execute(AbandonedCart.__table__.delete().where(AbandonedCart.id.in_(uids)))
+    return {"ok": True, "deleted": len(uids)}
+
+
 @admin_router.get("/carts")
 async def list_carts(db: DbDep, _: AdminDep) -> list[dict]:
     rows = await db.scalars(
