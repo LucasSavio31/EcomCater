@@ -1,62 +1,91 @@
 'use client';
 
-// TODO: substituir por GET /api/admin/customers quando o backend expuser um
-// endpoint dedicado de clientes. Hoje a lista é derivada de GET /api/admin/orders.
-
+import { adminFetch } from '@/lib/admin-api-client';
 import { ordersApi } from '@/modules/orders/api';
-import type { ApiResult } from '@/lib/admin-api-client';
-import type { OrderListItem } from '@/modules/orders/types';
 
-export interface CustomerSummary {
+export interface CustomerListItem {
+  id: string;
   email: string;
+  full_name: string;
+  phone: string | null;
+  cpf: string | null;
+  is_active: boolean;
+  created_at: string | null;
   orders_count: number;
   total_spent_cents: number;
-  last_order_at: string;
-  last_status: string;
 }
 
-/** Varre as páginas de /orders e agrupa por e-mail. */
-export async function fetchCustomers(): Promise<ApiResult<CustomerSummary[]>> {
-  const pageSize = 100;
-  let page = 1;
-  const all: OrderListItem[] = [];
-
-  // Limite defensivo de 20 páginas (2000 pedidos) para não varrer indefinidamente.
-  for (let i = 0; i < 20; i += 1) {
-    const result = await ordersApi.list({ page, page_size: pageSize });
-    if (!result.ok) return result;
-    all.push(...result.data.items);
-    if (all.length >= result.data.total || result.data.items.length === 0) break;
-    page += 1;
-  }
-
-  const map = new Map<string, CustomerSummary>();
-  for (const order of all) {
-    const key = order.email.toLowerCase();
-    const orderAt = order.placed_at ?? order.created_at;
-    const existing = map.get(key);
-    if (existing) {
-      existing.orders_count += 1;
-      existing.total_spent_cents += order.grand_total_cents;
-      if (orderAt > existing.last_order_at) {
-        existing.last_order_at = orderAt;
-        existing.last_status = order.status;
-      }
-    } else {
-      map.set(key, {
-        email: order.email,
-        orders_count: 1,
-        total_spent_cents: order.grand_total_cents,
-        last_order_at: orderAt,
-        last_status: order.status,
-      });
-    }
-  }
-
-  const list = [...map.values()].sort((a, b) => b.total_spent_cents - a.total_spent_cents);
-  return { ok: true, data: list, status: 200 };
+export interface CustomerAddress {
+  id: string;
+  label: string;
+  recipient_name: string;
+  zip: string;
+  street: string;
+  number: string;
+  complement: string | null;
+  district: string;
+  city: string;
+  state: string;
+  country: string;
+  is_default: boolean;
 }
+
+export type CustomerAddressInput = Omit<CustomerAddress, 'id'>;
+
+export interface CustomerOrderRef {
+  number: string;
+  status: string;
+  payment_status: string;
+  grand_total_cents: number;
+  created_at: string | null;
+  active: boolean;
+}
+
+export interface CustomerDetail {
+  id: string;
+  email: string;
+  full_name: string;
+  phone: string | null;
+  cpf: string | null;
+  is_active: boolean;
+  created_at: string | null;
+  addresses: CustomerAddress[];
+  orders: CustomerOrderRef[];
+}
+
+export interface CustomerPatch {
+  full_name?: string;
+  email?: string;
+  phone?: string | null;
+  cpf?: string | null;
+  is_active?: boolean;
+}
+
+interface Paginated<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+const BASE = '/api/admin/customers';
 
 export const customersApi = {
+  list: (q: string, page: number) =>
+    adminFetch<Paginated<CustomerListItem>>(BASE, {
+      query: { q: q || undefined, page, page_size: 25 },
+    }),
+  get: (id: string) => adminFetch<CustomerDetail>(`${BASE}/${id}`),
+  update: (id: string, body: CustomerPatch) =>
+    adminFetch<CustomerDetail & { orders_updated: number }>(`${BASE}/${id}`, {
+      method: 'PATCH',
+      body,
+    }),
+  addAddress: (id: string, body: CustomerAddressInput) =>
+    adminFetch<CustomerAddress>(`${BASE}/${id}/addresses`, { method: 'POST', body }),
+  updateAddress: (id: string, aid: string, body: CustomerAddressInput) =>
+    adminFetch<CustomerAddress>(`${BASE}/${id}/addresses/${aid}`, { method: 'PATCH', body }),
+  deleteAddress: (id: string, aid: string) =>
+    adminFetch<void>(`${BASE}/${id}/addresses/${aid}`, { method: 'DELETE' }),
   ordersByEmail: (email: string) => ordersApi.list({ q: email, page_size: 100 }),
 };

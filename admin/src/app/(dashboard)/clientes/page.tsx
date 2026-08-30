@@ -1,97 +1,107 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { DataTable, type Column } from '@/components/data-table';
 import { AsyncBoundary } from '@/components/async-boundary';
-import { StatusBadge } from '@/components/status-badge';
 import { useResource } from '@/lib/use-resource';
 import { formatBRL, formatDateTime } from '@/lib/format';
-import { fetchCustomers, customersApi, type CustomerSummary } from '@/modules/customers/api';
+import { customersApi, type CustomerListItem } from '@/modules/customers/api';
+
+const PAGE_SIZE = 25;
+
+function fmtCpf(cpf: string | null): string {
+  if (!cpf) return '—';
+  const d = cpf.replace(/\D/g, '');
+  return d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : cpf;
+}
 
 export default function ClientesPage() {
-  const { data, loading, error, reload } = useResource(() => fetchCustomers());
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
+  const router = useRouter();
+  const [qInput, setQInput] = useState('');
+  const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
 
-  const filtered = useMemo(() => {
-    const list = data ?? [];
-    const term = search.trim().toLowerCase();
-    return term ? list.filter((c) => c.email.toLowerCase().includes(term)) : list;
-  }, [data, search]);
+  const fetcher = useCallback(() => customersApi.list(q, page), [q, page]);
+  const { data, loading, error, reload } = useResource(fetcher, [q, page]);
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
-  const columns: Array<Column<CustomerSummary>> = [
-    { key: 'email', header: 'E-mail', primary: true, cell: (c) => c.email },
+  const columns: Array<Column<CustomerListItem>> = [
+    { key: 'name', header: 'Nome', primary: true, cell: (c) => c.full_name || '—' },
+    { key: 'email', header: 'E-mail', cell: (c) => c.email },
+    { key: 'phone', header: 'Telefone', cell: (c) => c.phone ?? '—' },
+    { key: 'cpf', header: 'CPF', cell: (c) => fmtCpf(c.cpf) },
     { key: 'orders', header: 'Pedidos', cell: (c) => c.orders_count },
     { key: 'total', header: 'Total gasto', cell: (c) => formatBRL(c.total_spent_cents) },
-    { key: 'last', header: 'Último pedido', cell: (c) => formatDateTime(c.last_order_at) },
-    { key: 'status', header: 'Último status', cell: (c) => <StatusBadge kind="order" value={c.last_status} /> },
+    {
+      key: 'created',
+      header: 'Cadastro',
+      cell: (c) => (c.created_at ? formatDateTime(c.created_at) : '—'),
+    },
   ];
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Clientes"
-        description="Derivado dos pedidos (agrupado por e-mail). Um endpoint dedicado virá depois."
+        description="Cadastro dos clientes da loja. Editar dados aqui atualiza também os pedidos ativos."
       />
 
       <Card variant="outline">
-        <Input
-          label="Buscar por e-mail"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="cliente@email.com"
-        />
+        <form
+          className="flex flex-col gap-3 sm:flex-row sm:items-end"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setPage(1);
+            setQ(qInput.trim());
+          }}
+        >
+          <Input
+            label="Buscar"
+            value={qInput}
+            onChange={(e) => setQInput(e.target.value)}
+            placeholder="Nome, e-mail ou CPF"
+            className="flex-1"
+          />
+          <Button type="submit" variant="outline">
+            Buscar
+          </Button>
+        </form>
       </Card>
 
       <AsyncBoundary loading={loading} error={error} onRetry={reload}>
         <DataTable
           columns={columns}
-          rows={filtered}
-          rowKey={(c) => c.email}
-          emptyMessage="Nenhum cliente ainda."
-          onRowClick={(c) => setSelected((prev) => (prev === c.email ? null : c.email))}
+          rows={data?.items ?? []}
+          rowKey={(c) => c.id}
+          emptyMessage="Nenhum cliente encontrado."
+          onRowClick={(c) => router.push(`/clientes/${c.id}`)}
         />
       </AsyncBoundary>
 
-      {selected && <CustomerOrders email={selected} onClose={() => setSelected(null)} />}
+      {data && data.total > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-text-muted">{data.total} clientes</span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              Anterior
+            </Button>
+            <span>
+              Página {page} de {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Próxima
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
-  );
-}
-
-function CustomerOrders({ email, onClose }: { email: string; onClose: () => void }) {
-  const { data, loading, error, reload } = useResource(() => customersApi.ordersByEmail(email), [email]);
-
-  return (
-    <Card variant="elevated" className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Pedidos de {email}</h2>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          Fechar
-        </Button>
-      </div>
-      <AsyncBoundary
-        loading={loading}
-        error={error}
-        onRetry={reload}
-        empty={(data?.items.length ?? 0) === 0}
-        emptyMessage="Nenhum pedido."
-      >
-        <ul className="flex flex-col divide-y divide-surface-border">
-          {(data?.items ?? []).map((o) => (
-            <li key={o.number} className="flex items-center justify-between gap-3 py-2 text-sm">
-              <Link href={`/pedidos/${o.number}`} className="font-medium text-accent hover:underline">
-                {o.number}
-              </Link>
-              <StatusBadge kind="order" value={o.status} />
-              <span>{formatBRL(o.grand_total_cents)}</span>
-              <span className="text-text-muted">{formatDateTime(o.placed_at)}</span>
-            </li>
-          ))}
-        </ul>
-      </AsyncBoundary>
-    </Card>
   );
 }
