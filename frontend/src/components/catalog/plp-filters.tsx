@@ -62,45 +62,45 @@ function useFilterActions() {
 export function PlpFilters({ facets, show = ALL_VISIBLE, categoryLinks = [] }: PlpFiltersProps) {
   const { params, push } = useFilterActions();
 
-  // faixa de preço (em centavos) — barra deslizante de R$0 até o maior preço
+  // faixa de preço (em centavos) — barra deslizante de R$0 até o maior preço.
+  // Truque do range duplo: dois valores INDEPENDENTES (a, b); a faixa exibida
+  // é [min(a,b), max(a,b)]. Assim nenhum controle "briga" com o outro ao arrastar.
   const STEP = 5000; // R$ 50
   const priceMax = Math.max(Math.ceil((facets.price.max || 0) / STEP) * STEP, STEP);
-  const clamp = (v: number) => Math.min(Math.max(v, 0), priceMax);
-  const [lo, setLo] = useState(() => clamp(Number(params.get('price_min')) || 0));
-  const [hi, setHi] = useState(() => {
+  const cap = (v: number) => Math.min(Math.max(Math.round(v), 0), priceMax);
+  const [a, setA] = useState(() => cap(Number(params.get('price_min')) || 0));
+  const [b, setB] = useState(() => {
     const raw = Number(params.get('price_max'));
-    return raw > 0 ? clamp(raw) : priceMax;
+    return raw > 0 ? cap(raw) : priceMax;
   });
-  // valores sempre dentro da faixa atual (evita barra "estourada" ao trocar de categoria)
-  const sLo = Math.min(clamp(lo), priceMax - STEP);
-  const sHi = Math.max(clamp(hi), sLo + STEP);
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
 
-  const commitPrice = (nlo: number, nhi: number) => {
-    push((next) => {
-      if (nlo > 0) next.set('price_min', String(nlo));
-      else next.delete('price_min');
-      if (nhi < priceMax) next.set('price_max', String(nhi));
-      else next.delete('price_max');
-    });
-  };
-
-  // reajusta os controles quando a faixa da categoria muda
+  // reajusta ao trocar de categoria (novo teto de preço)
   useEffect(() => {
-    setLo((v) => Math.min(Math.max(v, 0), priceMax));
-    setHi((v) => (v > priceMax || v <= 0 ? priceMax : v));
+    setA((v) => cap(v));
+    setB((v) => (v <= 0 || v >= priceMax ? priceMax : cap(v)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [priceMax]);
 
-  // FILTRO AUTOMÁTICO: aplica ~300ms depois de parar de mexer no slider
+  // FILTRO AUTOMÁTICO: ~350ms depois de parar de mexer, aplica na URL
   const firstRun = useRef(true);
   useEffect(() => {
     if (firstRun.current) {
       firstRun.current = false;
       return;
     }
-    const t = setTimeout(() => commitPrice(sLo, sHi), 300);
+    const t = setTimeout(() => {
+      push((next) => {
+        if (lo > 0) next.set('price_min', String(lo));
+        else next.delete('price_min');
+        if (hi < priceMax) next.set('price_max', String(hi));
+        else next.delete('price_max');
+      });
+    }, 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sLo, sHi]);
+  }, [lo, hi, priceMax]);
 
   const MULTI_KEYS = ['size', 'material', 'color'] as const;
   const hasActiveFilters =
@@ -121,8 +121,8 @@ export function PlpFilters({ facets, show = ALL_VISIBLE, categoryLinks = [] }: P
 
   const clearAll = () => {
     firstRun.current = true; // não deixa o debounce re-aplicar preço logo depois
-    setLo(0);
-    setHi(priceMax);
+    setA(0);
+    setB(priceMax);
     push((next) => {
       for (const k of MULTI_KEYS) next.delete(k);
       next.delete('price_min');
@@ -198,42 +198,42 @@ export function PlpFilters({ facets, show = ALL_VISIBLE, categoryLinks = [] }: P
         <fieldset className="flex flex-col gap-3">
           <legend className="mb-1 text-sm font-semibold">Faixa de preço</legend>
           <p className="text-sm">
-            <span className="font-medium">{formatBRL(sLo)}</span>
+            <span className="font-medium">{formatBRL(lo)}</span>
             <span className="text-text-muted"> – </span>
             <span className="font-medium">
-              {formatBRL(sHi)}
-              {sHi >= priceMax ? '+' : ''}
+              {formatBRL(hi)}
+              {hi >= priceMax ? '+' : ''}
             </span>
           </p>
 
-          <div className="relative h-6 select-none overflow-hidden">
+          <div className="relative h-6 select-none">
             <div className="pointer-events-none absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-surface-border" />
             <div
               className="pointer-events-none absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary"
               style={{
-                left: `${Math.max(0, Math.min(100, (sLo / priceMax) * 100))}%`,
-                width: `${Math.max(0, Math.min(100, ((sHi - sLo) / priceMax) * 100))}%`,
+                left: `${Math.max(0, Math.min(100, (lo / priceMax) * 100))}%`,
+                width: `${Math.max(0, Math.min(100, ((hi - lo) / priceMax) * 100))}%`,
               }}
             />
             <input
               type="range"
-              aria-label="Preço mínimo"
+              aria-label="Preço (controle 1)"
               min={0}
               max={priceMax}
               step={STEP}
-              value={sLo}
-              onChange={(e) => setLo(Math.min(Number(e.target.value), sHi - STEP))}
+              value={a}
+              onChange={(e) => setA(cap(Number(e.target.value)))}
               className={RANGE_CLS}
-              style={{ zIndex: sLo >= priceMax - STEP ? 5 : 3 }}
+              style={{ zIndex: a > priceMax / 2 ? 5 : 3 }}
             />
             <input
               type="range"
-              aria-label="Preço máximo"
+              aria-label="Preço (controle 2)"
               min={0}
               max={priceMax}
               step={STEP}
-              value={sHi}
-              onChange={(e) => setHi(Math.max(Number(e.target.value), sLo + STEP))}
+              value={b}
+              onChange={(e) => setB(cap(Number(e.target.value)))}
               className={RANGE_CLS}
               style={{ zIndex: 4 }}
             />
