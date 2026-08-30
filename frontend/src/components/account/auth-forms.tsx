@@ -7,21 +7,32 @@ import { useCart } from '@/modules/cart/cart-context';
 import { track } from '@/modules/analytics';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const digits = (v: string) => v.replace(/\D/g, '');
+const maskCpf = (v: string) =>
+  digits(v)
+    .slice(0, 11)
+    .replace(/^(\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1-$2');
 
-/** Login + cadastro em uma aba só. Ao autenticar, refunde o carrinho de convidado. */
+/**
+ * Login + cadastro do cliente. Por decisão de projeto, a **senha é o CPF** —
+ * o cliente entra com e-mail + CPF. Ao autenticar, funde o carrinho de convidado.
+ */
 export function AuthForms({ onDone }: { onDone?: () => void }) {
   const { login, register } = useAuth();
   const { refresh: refreshCart } = useCart();
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [form, setForm] = useState({ full_name: '', email: '', password: '', phone: '' });
+  const [form, setForm] = useState({ full_name: '', email: '', cpf: '', phone: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const cpfDigits = digits(form.cpf);
 
   const valid =
     EMAIL_RE.test(form.email) &&
-    form.password.length >= 8 &&
+    cpfDigits.length === 11 &&
     (mode === 'login' || form.full_name.trim().length >= 2);
 
   async function submit() {
@@ -30,11 +41,12 @@ export function AuthForms({ onDone }: { onDone?: () => void }) {
     setError(null);
     const res =
       mode === 'login'
-        ? await login(form.email.trim(), form.password)
+        ? await login(form.email.trim(), cpfDigits)
         : await register({
             full_name: form.full_name.trim(),
             email: form.email.trim(),
-            password: form.password,
+            password: cpfDigits,
+            cpf: cpfDigits,
             phone: form.phone.trim() || undefined,
           });
     setBusy(false);
@@ -91,13 +103,13 @@ export function AuthForms({ onDone }: { onDone?: () => void }) {
           error={form.email && !EMAIL_RE.test(form.email) ? 'E-mail inválido' : undefined}
         />
         <Input
-          label="Senha"
-          type="password"
+          label="CPF"
+          inputMode="numeric"
           required
-          value={form.password}
-          onChange={(e) => set('password', e.target.value)}
-          hint={mode === 'register' ? 'Mínimo de 8 caracteres.' : undefined}
-          error={form.password && form.password.length < 8 ? 'Mínimo de 8 caracteres' : undefined}
+          value={form.cpf}
+          onChange={(e) => set('cpf', maskCpf(e.target.value))}
+          hint={mode === 'login' ? 'Seu CPF é a sua senha de acesso.' : 'Ele será a sua senha de acesso.'}
+          error={form.cpf && cpfDigits.length !== 11 ? 'CPF incompleto' : undefined}
         />
         {mode === 'register' && (
           <Input

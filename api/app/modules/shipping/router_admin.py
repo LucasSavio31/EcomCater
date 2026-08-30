@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_admin, require_role
 from app.modules.admin.models import AdminUser
@@ -23,6 +24,10 @@ AdminRoleDep = Annotated[AdminUser, Depends(require_role("admin"))]
 @router.get("/config")
 async def get_config(db: DbDep, _: AdminDep) -> dict:
     cfg = await service.load_config(db)
+    base = settings.public_api_url.rstrip("/")
+    webhook_url = f"{base}/api/webhooks/shipping/melhor-envio"
+    if cfg.webhook_token:
+        webhook_url += f"?token={cfg.webhook_token}"
     return {
         "active_provider": cfg.active_provider,
         "origin_zip": cfg.origin_zip,
@@ -30,6 +35,8 @@ async def get_config(db: DbDep, _: AdminDep) -> dict:
         "has_token": bool(cfg.melhor_envio_token),
         "default_package": cfg.default_package.model_dump(),
         "free_shipping_services": cfg.free_shipping_services,
+        # URL que o lojista cadastra no painel do Melhor Envio (inclui o token)
+        "webhook_url": webhook_url,
     }
 
 

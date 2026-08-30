@@ -46,8 +46,13 @@ async function authFetch<T>(
 }
 
 export const customerApi = {
-  register: (body: { full_name: string; email: string; password: string; phone?: string }) =>
-    apiFetch<TokenOut>(`${BASE}/auth/register`, { method: 'POST', body }),
+  register: (body: {
+    full_name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    cpf?: string;
+  }) => apiFetch<TokenOut>(`${BASE}/auth/register`, { method: 'POST', body }),
 
   login: (body: { email: string; password: string }) =>
     apiFetch<TokenOut>(`${BASE}/auth/login`, { method: 'POST', body }),

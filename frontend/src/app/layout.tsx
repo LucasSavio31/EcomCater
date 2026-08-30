@@ -9,6 +9,7 @@ import { AnalyticsRouteTracker } from '@/modules/analytics/route-tracker';
 import { ServiceWorker } from '@/components/service-worker';
 import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
+import { StorefrontShell } from '@/components/layout/storefront-shell';
 import { CartProvider } from '@/modules/cart/cart-context';
 import { AuthProvider } from '@/modules/customer/auth-context';
 import { SITE_NAME, SITE_URL, jsonLdScript, organizationJsonLd, webSiteJsonLd } from '@/lib/seo';
@@ -63,13 +64,12 @@ export default async function RootLayout({
 
         <AuthProvider>
           <CartProvider>
-            <SiteHeader theme={theme} menu={headerMenu} storeName={SITE_NAME} />
-
-            <main id="conteudo" className="mx-auto w-full max-w-header px-4 py-6 sm:py-8">
+            <StorefrontShell
+              header={<SiteHeader theme={theme} menu={headerMenu} storeName={SITE_NAME} />}
+              footer={<SiteFooter theme={theme} menu={footerMenu} storeName={SITE_NAME} />}
+            >
               {children}
-            </main>
-
-            <SiteFooter theme={theme} menu={footerMenu} storeName={SITE_NAME} />
+            </StorefrontShell>
           </CartProvider>
         </AuthProvider>
 

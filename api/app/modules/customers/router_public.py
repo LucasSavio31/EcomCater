@@ -40,7 +40,7 @@ async def register(
 ):
     _, pair = await service.register(
         db, full_name=body.full_name, email=body.email,
-        password=body.password, phone=body.phone,
+        password=body.password, phone=body.phone, cpf=body.cpf,
     )
     return TokenOut(**pair)
 

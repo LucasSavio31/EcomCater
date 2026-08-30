@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_admin, require_role
 from app.modules.admin.models import AdminUser
@@ -24,12 +25,15 @@ AdminRoleDep = Annotated[AdminUser, Depends(require_role("admin"))]
 @router.get("/config")
 async def get_config(db: DbDep, _: AdminDep) -> dict:
     cfg = await service.load_config(db)
+    base = settings.public_api_url.rstrip("/")
     return {
         "active_provider": cfg.active_provider,
         "appmax_sandbox": cfg.appmax_sandbox,
         "has_token": bool(cfg.appmax_access_token),
         "methods": cfg.methods.model_dump(),
         "max_installments": cfg.max_installments,
+        # URL que o lojista cadastra no painel do gateway
+        "webhook_url": f"{base}/api/webhooks/payment/{cfg.active_provider}",
     }
 
 

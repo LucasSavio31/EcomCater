@@ -23,6 +23,7 @@ interface AuthState {
     email: string;
     password: string;
     phone?: string;
+    cpf?: string;
   }) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   reload: () => Promise<void>;

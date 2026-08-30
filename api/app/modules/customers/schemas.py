@@ -9,6 +9,7 @@ class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     phone: str | None = None
+    cpf: str | None = Field(default=None, min_length=11, max_length=14)
 
 
 class LoginIn(BaseModel):

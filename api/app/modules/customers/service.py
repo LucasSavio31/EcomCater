@@ -33,7 +33,13 @@ async def _store_refresh(db: AsyncSession, user_id: str, pair: dict) -> None:
 
 
 async def register(
-    db: AsyncSession, *, full_name: str, email: str, password: str, phone: str | None
+    db: AsyncSession,
+    *,
+    full_name: str,
+    email: str,
+    password: str,
+    phone: str | None,
+    cpf: str | None = None,
 ) -> tuple[User, dict]:
     if await db.scalar(select(User).where(User.email == email)):
         raise ConflictError("Já existe uma conta com esse e-mail.")
@@ -42,6 +48,7 @@ async def register(
         email=email,
         password_hash=hash_password(password),
         phone=phone,
+        cpf="".join(filter(str.isdigit, cpf)) or None if cpf else None,
         is_active=True,
     )
     db.add(user)
