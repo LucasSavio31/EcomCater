@@ -10,6 +10,7 @@ import { ServiceWorker } from '@/components/service-worker';
 import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
 import { StorefrontShell } from '@/components/layout/storefront-shell';
+import { CookieConsent } from '@/components/layout/cookie-consent';
 import { CartProvider } from '@/modules/cart/cart-context';
 import { MiniCartDrawer } from '@/components/cart/mini-cart-drawer';
 import { AuthProvider } from '@/modules/customer/auth-context';
@@ -77,6 +78,10 @@ export default async function RootLayout({
           </CartProvider>
         </AuthProvider>
 
+        <CookieConsent
+          enabled={theme.cookie_consent_enabled}
+          text={theme.cookie_consent_text}
+        />
         <ServiceWorker />
       </body>
     </html>

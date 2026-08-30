@@ -120,6 +120,33 @@ class ThemeSettings(Base):
         Boolean, default=True, server_default=true(), nullable=False
     )
 
+    # Raio das bordas dos botões (px) — CSS var --radius-btn
+    button_radius_px: Mapped[int] = mapped_column(
+        Integer, default=12, server_default="12", nullable=False
+    )
+
+    # Aviso de cookies de terceiros
+    cookie_consent_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    cookie_consent_text: Mapped[str] = mapped_column(
+        String(400),
+        default="Usamos cookies para melhorar sua experiência. Ao continuar, você concorda com a nossa política de privacidade.",
+        server_default="Usamos cookies para melhorar sua experiência. Ao continuar, você concorda com a nossa política de privacidade.",
+        nullable=False,
+    )
+
+    # Identidade visual dos e-mails transacionais
+    email_header_bg_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    email_header_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    email_body_bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    email_text_color: Mapped[str] = mapped_column(String(9), default="#111827", server_default="#111827", nullable=False)
+    email_button_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    email_button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    email_footer_text: Mapped[str] = mapped_column(
+        String(300), default="", server_default="", nullable=False
+    )
+
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

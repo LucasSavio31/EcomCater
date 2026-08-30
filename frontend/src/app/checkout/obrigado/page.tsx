@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import { Spinner } from '@ecom/ui';
 import { getTheme } from '@/modules/theme';
 import { ThankYouView } from '@/components/checkout/thank-you-view';
-import { CheckoutHeader, CheckoutFooter } from '@/components/checkout/checkout-chrome';
+import { CheckoutHeader } from '@/components/checkout/checkout-chrome';
 import { CheckoutThemeStyle } from '@/components/checkout/checkout-theme-style';
 import { buildMetadata, SITE_NAME } from '@/lib/seo';
 
@@ -33,7 +33,6 @@ export default async function CheckoutObrigadoPage() {
           <ThankYouView />
         </Suspense>
       </main>
-      <CheckoutFooter theme={theme} />
     </div>
   );
 }

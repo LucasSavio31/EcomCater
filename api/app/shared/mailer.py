@@ -127,6 +127,53 @@ async def _smtp_conf(db: AsyncSession) -> dict:
     }
 
 
+_EMAIL_DEFAULTS = {
+    "header_bg": "#111111", "header_fg": "#FFFFFF", "body_bg": "#FFFFFF",
+    "text": "#111827", "btn_bg": "#111111", "btn_fg": "#FFFFFF", "footer": "",
+}
+
+
+async def _email_theme(db: AsyncSession) -> dict:
+    try:
+        from app.modules.theme.models import ThemeSettings
+
+        row = await db.get(ThemeSettings, 1)
+        if row:
+            return {
+                "header_bg": row.email_header_bg_color,
+                "header_fg": row.email_header_text_color,
+                "body_bg": row.email_body_bg_color,
+                "text": row.email_text_color,
+                "btn_bg": row.email_button_color,
+                "btn_fg": row.email_button_text_color,
+                "footer": row.email_footer_text or "",
+            }
+    except Exception:  # noqa: BLE001
+        pass
+    return dict(_EMAIL_DEFAULTS)
+
+
+def _wrap_html(inner: str, subject: str, t: dict, store_name: str) -> str:
+    """Molde visual do e-mail (cabeçalho colorido + corpo + rodapé)."""
+    style_btn = (
+        f"a[href],.btn{{background:{t['btn_bg']};color:{t['btn_fg']} !important;"
+        "text-decoration:none;border-radius:8px;padding:12px 20px;display:inline-block}}"
+    )
+    footer = (
+        f"<p style='margin:16px 0 0;font-size:12px;color:#9aa0a6'>{t['footer']}</p>"
+        if t["footer"]
+        else ""
+    )
+    return (
+        f"<div style='margin:0;padding:24px;background:#f1f1f1;font-family:Arial,Helvetica,sans-serif'>"
+        f"<div style='max-width:560px;margin:0 auto;background:{t['body_bg']};border-radius:12px;overflow:hidden'>"
+        f"<div style='background:{t['header_bg']};color:{t['header_fg']};padding:18px 24px;font-weight:bold;font-size:16px'>{store_name}</div>"
+        f"<div style='padding:24px;color:{t['text']};font-size:14px;line-height:1.55'>"
+        f"<style>{style_btn}</style>{inner}{footer}</div>"
+        f"</div></div>"
+    )
+
+
 async def send(
     db: AsyncSession,
     *,
@@ -137,8 +184,10 @@ async def send(
 ) -> bool:
     subj_tpl, body_tpl = TEMPLATES.get(template, ("Notificação", "<p>{{ message|default('') }}</p>"))
     subject = _env.from_string(subj_tpl).render(**context)
-    html = _env.from_string(body_tpl).render(**context)
+    inner = _env.from_string(body_tpl).render(**context)
     conf = await _smtp_conf(db)
+    et = await _email_theme(db)
+    html = _wrap_html(inner, subject, et, conf["from_name"] or "Loja")
 
     msg = EmailMessage()
     msg["From"] = f"{conf['from_name']} <{conf['from_email']}>"

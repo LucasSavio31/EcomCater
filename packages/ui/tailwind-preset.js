@@ -74,6 +74,8 @@ module.exports = {
       borderRadius: {
         // Cards e superfícies são sempre arredondados — nunca `rounded-none`.
         card: 'var(--radius-card)',
+        // Raio dos botões, configurável no admin (fallback = raio de card).
+        btn: 'var(--radius-btn, 0.75rem)',
       },
       maxWidth: {
         // Largura do menu superior / conteúdo, controlada no admin.

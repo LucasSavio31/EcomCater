@@ -20,6 +20,7 @@ export function themeToCssVars(theme: ThemeSettings): Record<string, string> {
     '--color-footer-bg': theme.footer_bg_color,
     '--color-footer-fg': theme.footer_text_color,
     '--header-max-width': `${theme.header_max_width_px}px`,
+    '--radius-btn': `${theme.button_radius_px ?? 12}px`,
     '--font-family': theme.font_family,
   };
 }

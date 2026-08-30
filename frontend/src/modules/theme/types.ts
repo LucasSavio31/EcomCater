@@ -74,6 +74,16 @@ export interface ThemeSettings {
   newsletter_button_color: string;
   newsletter_button_text_color: string;
   discount_badge_enabled: boolean;
+  button_radius_px: number;
+  cookie_consent_enabled: boolean;
+  cookie_consent_text: string;
+  email_header_bg_color: string;
+  email_header_text_color: string;
+  email_body_bg_color: string;
+  email_text_color: string;
+  email_button_color: string;
+  email_button_text_color: string;
+  email_footer_text: string;
   updated_at?: string | null;
 }
 
@@ -166,4 +176,15 @@ export const NEUTRAL_THEME: ThemeSettings = {
   newsletter_button_color: '#111111',
   newsletter_button_text_color: '#FFFFFF',
   discount_badge_enabled: true,
+  button_radius_px: 12,
+  cookie_consent_enabled: false,
+  cookie_consent_text:
+    'Usamos cookies para melhorar sua experiência. Ao continuar, você concorda com a nossa política de privacidade.',
+  email_header_bg_color: '#111111',
+  email_header_text_color: '#FFFFFF',
+  email_body_bg_color: '#FFFFFF',
+  email_text_color: '#111827',
+  email_button_color: '#111111',
+  email_button_text_color: '#FFFFFF',
+  email_footer_text: '',
 };

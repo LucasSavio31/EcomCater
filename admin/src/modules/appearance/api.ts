@@ -75,6 +75,19 @@ export interface Theme {
   newsletter_button_color: string;
   newsletter_button_text_color: string;
   discount_badge_enabled: boolean;
+  /** Raio das bordas dos botões (px) */
+  button_radius_px: number;
+  /** Aviso de cookies de terceiros */
+  cookie_consent_enabled: boolean;
+  cookie_consent_text: string;
+  /** Identidade visual dos e-mails transacionais */
+  email_header_bg_color: string;
+  email_header_text_color: string;
+  email_body_bg_color: string;
+  email_text_color: string;
+  email_button_color: string;
+  email_button_text_color: string;
+  email_footer_text: string;
   logo_url?: string | null;
   logo_mobile_url?: string | null;
   favicon_url?: string | null;

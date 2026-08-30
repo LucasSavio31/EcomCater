@@ -38,6 +38,14 @@ const FOOTER_FIELDS: ColorField[] = [
   { key: 'footer_bg_color', label: 'Fundo do rodapé' },
   { key: 'footer_text_color', label: 'Texto do rodapé' },
 ];
+const EMAIL_FIELDS: ColorField[] = [
+  { key: 'email_header_bg_color', label: 'Fundo do cabeçalho' },
+  { key: 'email_header_text_color', label: 'Texto do cabeçalho' },
+  { key: 'email_body_bg_color', label: 'Fundo do corpo' },
+  { key: 'email_text_color', label: 'Texto do corpo' },
+  { key: 'email_button_color', label: 'Fundo do botão (CTA)' },
+  { key: 'email_button_text_color', label: 'Texto do botão (CTA)' },
+];
 
 const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
@@ -129,6 +137,16 @@ export function ThemeTab() {
 
             <Card variant="outline" className="flex flex-col gap-4">
               <h2 className="text-lg font-semibold">Botões</h2>
+              <Input
+                label="Raio das bordas (px)"
+                inputMode="numeric"
+                hint="0 = quadrado. Aplica-se a todos os botões da loja."
+                value={String(theme.button_radius_px ?? 12)}
+                onChange={(e) =>
+                  set('button_radius_px', Math.max(0, Math.min(40, Number(e.target.value) || 0)))
+                }
+                className="w-40"
+              />
               <div className="grid gap-4 sm:grid-cols-2">
                 {BUTTON_FIELDS.map((f) => (
                   <ColorRow key={f.key} f={f} />
@@ -234,6 +252,38 @@ export function ThemeTab() {
                 hint="Calculado do preço 'de' x preço promocional, na PDP e nos cards."
                 checked={theme.discount_badge_enabled}
                 onChange={(v) => set('discount_badge_enabled', v)}
+              />
+            </Card>
+
+            <Card variant="outline" className="flex flex-col gap-4">
+              <h2 className="text-lg font-semibold">Aviso de cookies</h2>
+              <Checkbox
+                label="Exibir aviso de cookies de terceiros no site"
+                checked={theme.cookie_consent_enabled}
+                onChange={(v) => set('cookie_consent_enabled', v)}
+              />
+              <Input
+                label="Texto do aviso"
+                value={theme.cookie_consent_text}
+                onChange={(e) => set('cookie_consent_text', e.target.value)}
+              />
+            </Card>
+
+            <Card variant="outline" className="flex flex-col gap-4">
+              <h2 className="text-lg font-semibold">E-mails transacionais</h2>
+              <p className="text-xs text-muted">
+                Identidade visual dos e-mails (nova conta, pedido, pagamento, status). O envio usa o
+                SMTP configurado.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {EMAIL_FIELDS.map((f) => (
+                  <ColorRow key={f.key} f={f} />
+                ))}
+              </div>
+              <Input
+                label="Texto do rodapé do e-mail"
+                value={theme.email_footer_text}
+                onChange={(e) => set('email_footer_text', e.target.value)}
               />
             </Card>
 
