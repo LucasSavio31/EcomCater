@@ -95,7 +95,11 @@ class ThemeSettings(Base):
     checkout_show_review: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     checkout_review_position: Mapped[str] = mapped_column(String(8), default="side", server_default="side", nullable=False)  # side | top
     checkout_orderbump_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
-    checkout_orderbump_product_id: Mapped[str | None] = mapped_column(String(200))  # slug do produto
+    checkout_orderbump_product_id: Mapped[str | None] = mapped_column(String(200))  # legado (1 slug)
+    # Order bump: lista de ids/slugs de produtos oferecidos no checkout
+    checkout_orderbump_product_ids: Mapped[list] = mapped_column(
+        JSONB, default=list, server_default="[]", nullable=False
+    )
     # cores próprias do checkout (menu "Checkout")
     checkout_bg_color: Mapped[str] = mapped_column(String(9), default="#F7F7F7", server_default="#F7F7F7", nullable=False)
     checkout_header_bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)

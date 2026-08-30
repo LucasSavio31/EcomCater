@@ -5,6 +5,7 @@ import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { AsyncBoundary } from '@/components/async-boundary';
 import { Checkbox, Select } from '@/components/form-controls';
+import { ProductPicker } from '@/components/product-picker';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { appearanceApi, type Theme } from '@/modules/appearance/api';
@@ -69,6 +70,7 @@ export default function CheckoutModeloPage() {
       checkout_review_position: theme.checkout_review_position,
       checkout_orderbump_enabled: theme.checkout_orderbump_enabled,
       checkout_orderbump_product_id: theme.checkout_orderbump_product_id ?? '',
+      checkout_orderbump_product_ids: theme.checkout_orderbump_product_ids ?? [],
       ...Object.fromEntries(COLOR_FIELDS.map((f) => [f.key, theme[f.key]])),
     };
     const res = await appearanceApi.putTheme(body);
@@ -204,15 +206,45 @@ export default function CheckoutModeloPage() {
                 onChange={(v) => set('checkout_orderbump_enabled', v)}
               />
               {theme.checkout_orderbump_enabled && (
-                <Select
-                  label="Produto oferecido"
-                  value={theme.checkout_orderbump_product_id ?? ''}
-                  options={[
-                    { value: '', label: '— selecione —' },
-                    ...products.map((p) => ({ value: p.slug, label: p.name })),
-                  ]}
-                  onChange={(e) => set('checkout_orderbump_product_id', e.target.value || null)}
-                />
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm font-medium">Produtos oferecidos</span>
+                  {(theme.checkout_orderbump_product_ids ?? []).length === 0 ? (
+                    <p className="text-sm text-text-muted">Nenhum produto selecionado.</p>
+                  ) : (
+                    <ul className="flex flex-wrap gap-2">
+                      {(theme.checkout_orderbump_product_ids ?? []).map((slug) => (
+                        <li
+                          key={slug}
+                          className="flex items-center gap-2 rounded-card border border-surface-border px-2 py-1 text-sm"
+                        >
+                          {products.find((p) => p.slug === slug)?.name ?? slug}
+                          <button
+                            type="button"
+                            aria-label="Remover"
+                            className="text-text-muted hover:text-danger"
+                            onClick={() =>
+                              set(
+                                'checkout_orderbump_product_ids',
+                                (theme.checkout_orderbump_product_ids ?? []).filter((s) => s !== slug),
+                              )
+                            }
+                          >
+                            ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <ProductPicker
+                    label="Buscar produto para oferecer"
+                    onPick={(p) => {
+                      const cur = theme.checkout_orderbump_product_ids ?? [];
+                      if (!cur.includes(p.slug)) {
+                        set('checkout_orderbump_product_ids', [...cur, p.slug]);
+                      }
+                    }}
+                  />
+                </div>
               )}
             </Card>
 

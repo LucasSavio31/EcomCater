@@ -58,6 +58,7 @@ export interface Theme {
   checkout_review_position: 'side' | 'top';
   checkout_orderbump_enabled: boolean;
   checkout_orderbump_product_id: string | null;
+  checkout_orderbump_product_ids: string[];
   checkout_bg_color: string;
   checkout_header_bg_color: string;
   checkout_header_text_color: string;

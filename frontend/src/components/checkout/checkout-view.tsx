@@ -94,10 +94,10 @@ const DEFAULT_SETTINGS: CheckoutSettings = {
 
 export function CheckoutView({
   settings = DEFAULT_SETTINGS,
-  orderBump = null,
+  orderBumps = [],
 }: {
   settings?: CheckoutSettings;
-  orderBump?: OrderBumpProduct | null;
+  orderBumps?: OrderBumpProduct[];
 }) {
   const router = useRouter();
   const { cart, loading, refresh, setZip, selectShipping } = useCart();
@@ -134,7 +134,8 @@ export function CheckoutView({
   const [installments, setInstallments] = useState(1);
 
   const [cvvFocused, setCvvFocused] = useState(false);
-  const [bumpChecked, setBumpChecked] = useState(false);
+  // ids de variante dos order bumps marcados
+  const [bumpChecked, setBumpChecked] = useState<Set<string>>(new Set());
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -329,14 +330,15 @@ export function CheckoutView({
     setSubmitting(true);
     setError(null);
 
-    // order bump: adiciona o produto extra ao carrinho antes de criar o pedido
-    if (orderBump?.variant_id && bumpChecked) {
-      const already = cart.items.some((i) => i.variant_id === orderBump.variant_id);
-      if (!already) {
-        const r = await cartApi.addItem(orderBump.variant_id, 1);
-        if (r.ok) await refresh();
-      }
+    // order bumps: adiciona os produtos extras marcados ao carrinho antes de criar o pedido
+    let bumpAdded = false;
+    for (const b of orderBumps) {
+      if (!b.variant_id || !bumpChecked.has(b.variant_id)) continue;
+      if (cart.items.some((i) => i.variant_id === b.variant_id)) continue;
+      const r = await cartApi.addItem(b.variant_id, 1);
+      if (r.ok) bumpAdded = true;
     }
+    if (bumpAdded) await refresh();
 
     track('add_payment_info', {
       value: cart.totals.grand_total_cents / 100,
@@ -793,29 +795,49 @@ export function CheckoutView({
             </ul>
           )}
 
-          {orderBump && (
-            <div className="flex items-center gap-3 rounded-card border-2 border-dashed border-accent/60 bg-accent/5 p-3">
-              <input
-                type="checkbox"
-                checked={bumpChecked}
-                onChange={(e) => setBumpChecked(e.target.checked)}
-                className="h-5 w-5 shrink-0"
-                id="orderbump"
-              />
-              {orderBump.image_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={resolveMediaUrl(orderBump.image_url) ?? ''}
-                  alt=""
-                  className="h-14 w-14 shrink-0 rounded-card object-cover"
-                />
-              )}
-              <label htmlFor="orderbump" className="flex-1 cursor-pointer text-sm">
-                <span className="block font-semibold">Adicione também: {orderBump.name}</span>
-                <span className="text-text-muted">
-                  Aproveite e leve por {formatBRL(orderBump.price_cents)}
-                </span>
-              </label>
+          {orderBumps.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {orderBumps.map((b, i) => {
+                const id = b.variant_id ?? `bump-${i}`;
+                const checked = b.variant_id ? bumpChecked.has(b.variant_id) : false;
+                return (
+                  <div
+                    key={id}
+                    className="flex items-center gap-3 rounded-card border-2 border-dashed border-accent/60 bg-accent/5 p-3"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!b.variant_id}
+                      onChange={(e) =>
+                        setBumpChecked((prev) => {
+                          const n = new Set(prev);
+                          if (!b.variant_id) return n;
+                          if (e.target.checked) n.add(b.variant_id);
+                          else n.delete(b.variant_id);
+                          return n;
+                        })
+                      }
+                      className="h-5 w-5 shrink-0"
+                      id={`orderbump-${i}`}
+                    />
+                    {b.image_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={resolveMediaUrl(b.image_url) ?? ''}
+                        alt=""
+                        className="h-14 w-14 shrink-0 rounded-card object-cover"
+                      />
+                    )}
+                    <label htmlFor={`orderbump-${i}`} className="flex-1 cursor-pointer text-sm">
+                      <span className="block font-semibold">Adicione também: {b.name}</span>
+                      <span className="text-text-muted">
+                        Aproveite e leve por {formatBRL(b.price_cents)}
+                      </span>
+                    </label>
+                  </div>
+                );
+              })}
             </div>
           )}
 

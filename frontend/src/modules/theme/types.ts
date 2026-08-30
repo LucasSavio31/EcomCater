@@ -56,6 +56,7 @@ export interface ThemeSettings {
   checkout_review_position: 'side' | 'top';
   checkout_orderbump_enabled: boolean;
   checkout_orderbump_product_id: string | null;
+  checkout_orderbump_product_ids: string[];
   /** Cores próprias do checkout. */
   checkout_bg_color: string;
   checkout_header_bg_color: string;
@@ -160,6 +161,7 @@ export const NEUTRAL_THEME: ThemeSettings = {
   checkout_review_position: 'side',
   checkout_orderbump_enabled: false,
   checkout_orderbump_product_id: null,
+  checkout_orderbump_product_ids: [],
   checkout_bg_color: '#F7F7F7',
   checkout_header_bg_color: '#FFFFFF',
   checkout_header_text_color: '#111827',

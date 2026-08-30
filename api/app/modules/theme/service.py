@@ -32,6 +32,7 @@ _THEME_FIELDS = {
     "checkout_footer_bg_color", "checkout_footer_text_color",
     "checkout_animated_card", "checkout_show_review", "checkout_review_position",
     "checkout_orderbump_enabled", "checkout_orderbump_product_id",
+    "checkout_orderbump_product_ids",
     "filter_size_enabled", "filter_price_enabled", "filter_category_enabled",
     "mini_cart_enabled",
     "newsletter_enabled", "newsletter_title", "newsletter_subtitle",
@@ -135,6 +136,8 @@ async def update_theme(db: AsyncSession, data: dict) -> ThemeSettings:
             v = "top" if str(v) == "top" else "side"
         if k == "checkout_orderbump_product_id":
             v = str(v).strip() or None
+        if k == "checkout_orderbump_product_ids":
+            v = [str(x).strip() for x in v if str(x).strip()][:20] if isinstance(v, list) else []
         if k == "hero_mode":
             v = "static" if str(v) == "static" else "carousel"
         if k == "hero_autoplay_seconds":

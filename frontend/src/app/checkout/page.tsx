@@ -32,10 +32,17 @@ async function loadOrderBump(slug: string | null): Promise<OrderBumpProduct | nu
 
 export default async function CheckoutPage() {
   const theme = await getTheme();
-  const orderBump =
-    theme.checkout_orderbump_enabled && theme.checkout_orderbump_product_id
-      ? await loadOrderBump(theme.checkout_orderbump_product_id)
-      : null;
+
+  const bumpSlugs = theme.checkout_orderbump_enabled
+    ? (() => {
+        const list = theme.checkout_orderbump_product_ids ?? [];
+        if (list.length > 0) return list;
+        return theme.checkout_orderbump_product_id ? [theme.checkout_orderbump_product_id] : [];
+      })()
+    : [];
+  const orderBumps = (await Promise.all(bumpSlugs.map((s) => loadOrderBump(s)))).filter(
+    (b): b is OrderBumpProduct => b !== null,
+  );
 
   return (
     <div className="checkout-scope min-h-dvh bg-bg">
@@ -48,7 +55,7 @@ export default async function CheckoutPage() {
       >
         <h1 className="mb-4 text-xl font-semibold sm:text-2xl">Finalizar compra</h1>
         <CheckoutView
-          orderBump={orderBump}
+          orderBumps={orderBumps}
           settings={{
             emailFirst: theme.checkout_email_first,
             showCoupon: theme.checkout_show_coupon,
