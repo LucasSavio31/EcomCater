@@ -3,7 +3,6 @@ import Image from 'next/image';
 import type { ThemeSettings } from '@/modules/theme';
 import type { Menu } from '@/modules/menus/types';
 import { resolveMediaUrl } from '@/lib/media';
-import { WhatsappIcon } from '@/components/icons';
 import { FooterSealsBar } from './footer-seals';
 import { SocialIcons, type SocialLink } from './social-icons';
 
@@ -32,7 +31,6 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
       ? menu.items
       : [{ id: 'inst', label: 'Institucional', url: '#', highlight: false, is_megamenu: false, size_shortcuts: [], children: FALLBACK_LINKS.map((l, i) => ({ id: `fb-${i}`, label: l.label, url: l.url, highlight: false, is_megamenu: false, size_shortcuts: [], children: [] })) }];
 
-  const waDigits = theme.whatsapp_number?.replace(/\D/g, '') ?? '';
   const year = new Date().getFullYear();
 
   return (
@@ -50,17 +48,6 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
                 <span className="text-lg font-bold">{storeName}</span>
               )}
             </Link>
-            {waDigits && (
-              <a
-                href={`https://wa.me/${waDigits}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-footer-fg/70 hover:text-footer-fg"
-              >
-                <WhatsappIcon className="h-5 w-5" />
-                {theme.whatsapp_number}
-              </a>
-            )}
             <SocialIcons links={socialLinks} />
           </div>
 
