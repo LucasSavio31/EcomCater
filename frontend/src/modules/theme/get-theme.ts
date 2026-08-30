@@ -11,7 +11,7 @@ import { NEUTRAL_THEME, type ThemeSettings } from './types';
  */
 export async function getTheme(): Promise<ThemeSettings> {
   const result = await apiFetch<ThemeSettings>('/api/theme', {
-    next: { tags: ['theme'], revalidate: 300 },
+    next: { tags: ['theme'], revalidate: 60 },
   });
   if (!result.ok) return NEUTRAL_THEME;
   return { ...NEUTRAL_THEME, ...result.data };

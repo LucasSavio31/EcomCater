@@ -1,13 +1,25 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button, Drawer } from '@ecom/ui';
 import type { ProductFacets } from '@/modules/catalog/types';
 import { formatBRL } from '@/lib/format';
 
+export interface FilterVisibility {
+  size: boolean;
+  price: boolean;
+  category: boolean;
+}
+
+const ALL_VISIBLE: FilterVisibility = { size: true, price: true, category: true };
+
 interface PlpFiltersProps {
   facets: ProductFacets;
+  show?: FilterVisibility;
+  /** Subcategorias (ou irmãs) navegáveis — o "filtro de categoria". */
+  categoryLinks?: { name: string; path: string; active?: boolean }[];
 }
 
 function useFilterActions() {
@@ -25,8 +37,8 @@ function useFilterActions() {
   return { params, push };
 }
 
-/** Formulário de filtros (preço + tamanho). Reflete e altera a URL. */
-export function PlpFilters({ facets }: PlpFiltersProps) {
+/** Formulário de filtros (categoria + preço + tamanho). Reflete e altera a URL. */
+export function PlpFilters({ facets, show = ALL_VISIBLE, categoryLinks = [] }: PlpFiltersProps) {
   const { params, push } = useFilterActions();
   const selectedSizes = params.getAll('size');
   const [priceMin, setPriceMin] = useState(params.get('price_min') ?? '');
@@ -77,6 +89,27 @@ export function PlpFilters({ facets }: PlpFiltersProps) {
         </button>
       )}
 
+      {show.category && categoryLinks.length > 0 && (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1 text-sm font-semibold">Categorias</legend>
+          <ul className="flex flex-col gap-1">
+            {categoryLinks.map((c) => (
+              <li key={c.path}>
+                <Link
+                  href={`/categoria/${c.path}`}
+                  className={`block rounded-card px-2 py-1 text-sm hover:bg-bg-subtle ${
+                    c.active ? 'font-semibold text-primary' : 'text-text'
+                  }`}
+                >
+                  {c.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </fieldset>
+      )}
+
+      {show.price && (
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-semibold">Faixa de preço</legend>
         <p className="text-xs text-text-muted">
@@ -115,8 +148,9 @@ export function PlpFilters({ facets }: PlpFiltersProps) {
           Aplicar preço
         </Button>
       </fieldset>
+      )}
 
-      {facets.sizes.length > 0 && (
+      {show.size && facets.sizes.length > 0 && (
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-sm font-semibold">Tamanho</legend>
           <ul className="flex flex-col gap-1.5">
@@ -145,7 +179,7 @@ export function PlpFilters({ facets }: PlpFiltersProps) {
 }
 
 /** Botão + Drawer para filtros no mobile. */
-export function PlpFiltersDrawer({ facets }: PlpFiltersProps) {
+export function PlpFiltersDrawer({ facets, show, categoryLinks }: PlpFiltersProps) {
   const [open, setOpen] = useState(false);
   return (
     <div className="lg:hidden">
@@ -153,7 +187,7 @@ export function PlpFiltersDrawer({ facets }: PlpFiltersProps) {
         Filtrar
       </Button>
       <Drawer open={open} onClose={() => setOpen(false)} side="left" title="Filtros" labelledById="plp-filtros-title">
-        <PlpFilters facets={facets} />
+        <PlpFilters facets={facets} show={show} categoryLinks={categoryLinks} />
       </Drawer>
     </div>
   );

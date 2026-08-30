@@ -38,6 +38,10 @@ export interface ThemeSettings {
   footer_seals_json: FooterSeals;
   /** Após adicionar ao carrinho: true = vai para /carrinho, false = fica na PDP. */
   cart_redirect_after_add: boolean;
+  /** Filtros da vitrine (menu "Filtros" no admin). */
+  filter_size_enabled: boolean;
+  filter_price_enabled: boolean;
+  filter_category_enabled: boolean;
   /** Modelo do checkout (menu "Checkout" no admin). */
   checkout_email_first: boolean;
   checkout_container_width_px: number;
@@ -120,6 +124,9 @@ export const NEUTRAL_THEME: ThemeSettings = {
   footer_seals_enabled: true,
   footer_seals_json: DEFAULT_SEALS,
   cart_redirect_after_add: false,
+  filter_size_enabled: true,
+  filter_price_enabled: true,
+  filter_category_enabled: true,
   checkout_email_first: false,
   checkout_container_width_px: 1100,
   checkout_items_layout: 'with_thumb',

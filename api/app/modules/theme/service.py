@@ -32,12 +32,14 @@ _THEME_FIELDS = {
     "checkout_footer_bg_color", "checkout_footer_text_color",
     "checkout_animated_card", "checkout_show_review", "checkout_review_position",
     "checkout_orderbump_enabled", "checkout_orderbump_product_id",
+    "filter_size_enabled", "filter_price_enabled", "filter_category_enabled",
 }
 
 _BOOL_FIELDS = {
     "top_bar_enabled", "hero_enabled", "footer_seals_enabled", "cart_redirect_after_add",
     "checkout_email_first", "checkout_show_coupon", "checkout_allow_qty_change",
     "checkout_animated_card", "checkout_show_review", "checkout_orderbump_enabled",
+    "filter_size_enabled", "filter_price_enabled", "filter_category_enabled",
 }
 
 

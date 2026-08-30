@@ -40,6 +40,10 @@ export interface Theme {
   footer_seals_json: FooterSeals;
   /** Após adicionar ao carrinho: ir para /carrinho (true) ou ficar na PDP (false) */
   cart_redirect_after_add: boolean;
+  /** Filtros da vitrine (menu "Filtros") */
+  filter_size_enabled: boolean;
+  filter_price_enabled: boolean;
+  filter_category_enabled: boolean;
   /** Modelo do checkout (menu "Checkout") */
   checkout_email_first: boolean;
   checkout_container_width_px: number;

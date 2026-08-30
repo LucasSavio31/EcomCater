@@ -32,8 +32,22 @@ async function handle(req: Request) {
     return NextResponse.json({ ok: false, error: 'no valid tag' }, { status: 400 });
   }
   for (const tag of tags) revalidateTag(tag);
-  return NextResponse.json({ ok: true, revalidated: tags });
+  return NextResponse.json(
+    { ok: true, revalidated: tags },
+    { headers: { 'access-control-allow-origin': '*' } },
+  );
 }
 
 export const GET = handle;
 export const POST = handle;
+
+export function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'access-control-allow-headers': '*',
+    },
+  });
+}

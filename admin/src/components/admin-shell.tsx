@@ -1,17 +1,38 @@
 'use client';
 
 import { useState } from 'react';
+import type { ComponentType, SVGProps } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button, Drawer, cn } from '@ecom/ui';
 import { useAdminAuth } from '@/modules/auth';
+import {
+  IconAnalytics,
+  IconAppearance,
+  IconCategories,
+  IconCheckout,
+  IconCustomers,
+  IconDashboard,
+  IconFilters,
+  IconLeads,
+  IconMail,
+  IconMenus,
+  IconModules,
+  IconOrders,
+  IconPayment,
+  IconProducts,
+  IconPromotions,
+  IconSeals,
+  IconShipping,
+  IconUsers,
+} from './nav-icons';
 
+type Icon = ComponentType<SVGProps<SVGSVGElement>>;
 interface NavItem {
   href: string;
   label: string;
-  icon: string;
+  icon: Icon;
 }
-
 interface NavGroup {
   title: string;
   items: NavItem[];
@@ -21,44 +42,46 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Visão geral',
-    items: [{ href: '/', label: 'Painel', icon: '📊' }],
+    items: [{ href: '/', label: 'Painel', icon: IconDashboard }],
   },
   {
     title: 'Catálogo',
     items: [
-      { href: '/produtos', label: 'Produtos', icon: '👟' },
-      { href: '/categorias', label: 'Categorias', icon: '🗂️' },
+      { href: '/produtos', label: 'Produtos', icon: IconProducts },
+      { href: '/categorias', label: 'Categorias', icon: IconCategories },
+      { href: '/filtros', label: 'Filtros', icon: IconFilters },
     ],
   },
   {
     title: 'Vendas',
     items: [
-      { href: '/pedidos', label: 'Pedidos', icon: '🧾' },
-      { href: '/clientes', label: 'Clientes', icon: '👥' },
-      { href: '/promocoes', label: 'Promoções', icon: '🏷️' },
-      { href: '/pagamento', label: 'Pagamento', icon: '💳' },
-      { href: '/frete', label: 'Frete', icon: '🚚' },
+      { href: '/pedidos', label: 'Pedidos', icon: IconOrders },
+      { href: '/clientes', label: 'Clientes', icon: IconCustomers },
+      { href: '/leads', label: 'Leads', icon: IconLeads },
+      { href: '/promocoes', label: 'Promoções', icon: IconPromotions },
+      { href: '/pagamento', label: 'Pagamento', icon: IconPayment },
+      { href: '/frete', label: 'Frete', icon: IconShipping },
     ],
   },
   {
     title: 'Marketing',
-    items: [{ href: '/rastreamento', label: 'Rastreamento e anúncios', icon: '📈' }],
+    items: [{ href: '/rastreamento', label: 'Rastreamento e anúncios', icon: IconAnalytics }],
   },
   {
     title: 'Loja',
     items: [
-      { href: '/aparencia', label: 'Aparência', icon: '🎨' },
-      { href: '/checkout-modelo', label: 'Checkout', icon: '🛒' },
-      { href: '/selos-rodape', label: 'Selos do rodapé', icon: '🛡️' },
-      { href: '/menus', label: 'Menus', icon: '📑' },
+      { href: '/aparencia', label: 'Aparência', icon: IconAppearance },
+      { href: '/checkout-modelo', label: 'Checkout', icon: IconCheckout },
+      { href: '/selos-rodape', label: 'Selos do rodapé', icon: IconSeals },
+      { href: '/menus', label: 'Menus', icon: IconMenus },
     ],
   },
   {
     title: 'Sistema',
     items: [
-      { href: '/modulos', label: 'Módulos', icon: '🧩' },
-      { href: '/smtp', label: 'E-mail (SMTP)', icon: '✉️' },
-      { href: '/usuarios', label: 'Usuários', icon: '🔐' },
+      { href: '/modulos', label: 'Módulos', icon: IconModules },
+      { href: '/smtp', label: 'E-mail (SMTP)', icon: IconMail },
+      { href: '/usuarios', label: 'Usuários', icon: IconUsers },
     ],
   },
 ];
@@ -71,14 +94,21 @@ function isActive(pathname: string, href: string): boolean {
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   return (
-    <nav aria-label="Menu administrativo" className="flex flex-col gap-5">
-      {NAV_GROUPS.map((group) => (
-        <div key={group.title} className="flex flex-col gap-1">
-          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+    <nav aria-label="Menu administrativo" className="flex flex-col">
+      {NAV_GROUPS.map((group, gi) => (
+        <div
+          key={group.title}
+          className={cn(
+            'flex flex-col gap-0.5 py-4',
+            gi > 0 && 'border-t border-surface-border',
+          )}
+        >
+          <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             {group.title}
           </p>
           {group.items.map((item) => {
             const active = isActive(pathname, item.href);
+            const Icon = item.icon;
             return (
               <Link
                 key={item.href}
@@ -87,14 +117,10 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'flex min-h-touch items-center gap-2.5 rounded-card px-3 text-sm font-medium transition',
-                  active
-                    ? 'bg-primary text-primary-fg'
-                    : 'text-text hover:bg-bg-subtle',
+                  active ? 'bg-primary text-primary-fg' : 'text-text hover:bg-bg-subtle',
                 )}
               >
-                <span aria-hidden className="text-base leading-none">
-                  {item.icon}
-                </span>
+                <Icon className="shrink-0 opacity-80" />
                 {item.label}
               </Link>
             );
@@ -107,7 +133,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
 function SidebarHeader() {
   return (
-    <div className="mb-5 border-b border-surface-border px-3 pb-4">
+    <div className="px-3 pb-2">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
         Menu administrativo
       </p>
@@ -126,13 +152,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         Pular para o conteúdo
       </a>
 
-      {/* Sidebar desktop */}
       <aside className="hidden border-r border-surface-border bg-surface p-4 lg:block">
         <SidebarHeader />
         <NavLinks />
       </aside>
 
-      {/* Sidebar mobile (drawer) */}
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} side="left" title="Menu administrativo">
         <NavLinks onNavigate={() => setDrawerOpen(false)} />
       </Drawer>

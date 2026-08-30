@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getCategoryByPath, getCategoryTree, getProducts } from '@/modules/catalog/api';
+import { getTheme } from '@/modules/theme';
 import type { CategoryNode, ProductSort } from '@/modules/catalog/types';
 import { Breadcrumbs, type Crumb } from '@/components/catalog/breadcrumbs';
 import { ProductGrid } from '@/components/catalog/product-grid';
@@ -80,7 +81,7 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
   const path = slug.join('/');
   const search = parseSearch(await searchParams);
 
-  const [category, tree, result] = await Promise.all([
+  const [category, tree, result, theme] = await Promise.all([
     getCategoryByPath(path),
     getCategoryTree(),
     getProducts({
@@ -92,7 +93,35 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
       price_min: search.price_min,
       price_max: search.price_max,
     }),
+    getTheme(),
   ]);
+
+  const filterShow = {
+    size: theme.filter_size_enabled,
+    price: theme.filter_price_enabled,
+    category: theme.filter_category_enabled,
+  };
+  const anyFilter = filterShow.size || filterShow.price || filterShow.category;
+
+  // "filtro de categoria": subcategorias da atual; se não houver, as irmãs.
+  function nodeAt(nodes: CategoryNode[], p: string): CategoryNode | null {
+    for (const n of nodes) {
+      if (n.path === p) return n;
+      const found = nodeAt(n.children, p);
+      if (found) return found;
+    }
+    return null;
+  }
+  const current = nodeAt(tree, path);
+  const parentPath = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+  const siblingSource = current?.children?.length
+    ? current.children
+    : (parentPath ? nodeAt(tree, parentPath)?.children : tree) ?? tree;
+  const categoryLinks = (siblingSource ?? []).map((c) => ({
+    name: c.name,
+    path: c.path,
+    active: c.path === path,
+  }));
 
   if (!category && result.total === 0 && tree.length > 0) {
     // Categoria inexistente e sem produtos → 404 (só quando a API respondeu).
@@ -145,17 +174,21 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
         )}
       </header>
 
-      <div className="flex items-center justify-between gap-3 lg:hidden">
-        <PlpFiltersDrawer facets={result.facets} />
-      </div>
+      {anyFilter && (
+        <div className="flex items-center justify-between gap-3 lg:hidden">
+          <PlpFiltersDrawer facets={result.facets} show={filterShow} categoryLinks={categoryLinks} />
+        </div>
+      )}
 
-      <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-        <aside className="hidden lg:block">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">
-            Filtros
-          </h2>
-          <PlpFilters facets={result.facets} />
-        </aside>
+      <div className={anyFilter ? 'grid gap-6 lg:grid-cols-[220px_1fr]' : 'flex flex-col gap-4'}>
+        {anyFilter && (
+          <aside className="hidden lg:block">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">
+              Filtros
+            </h2>
+            <PlpFilters facets={result.facets} show={filterShow} categoryLinks={categoryLinks} />
+          </aside>
+        )}
 
         <div className="flex flex-col gap-4">
           <PlpSort total={result.total} />

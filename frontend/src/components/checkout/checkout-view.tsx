@@ -425,6 +425,62 @@ export function CheckoutView({
 
   const reviewOnSide = settings.showReview && settings.reviewPosition === 'side';
 
+  // Tela dedicada de e-mail (WC "custom screen"): só e-mail + Continuar.
+  if (settings.emailFirst && !customer && step === 'identify' && furthest === 'identify') {
+    return (
+      <div className="mx-auto flex max-w-xl flex-col items-center gap-6 py-10 text-center">
+        <p className="text-lg text-text sm:text-xl">
+          Para finalizar a compra, informe seu e-mail.{' '}
+          <span className="whitespace-nowrap">Rápido, fácil e seguro.</span>
+        </p>
+        <form
+          className="flex w-full flex-col gap-2 sm:flex-row sm:items-start"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void advanceIdentify();
+          }}
+        >
+          <div className="flex-1">
+            <Input
+              type="email"
+              placeholder="seu@email.com"
+              aria-label="E-mail"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              error={email && !EMAIL_RE.test(email) ? 'E-mail inválido' : undefined}
+            />
+            {!email && <p className="mt-1 text-left text-sm text-danger">Campo obrigatório.</p>}
+          </div>
+          <Button
+            type="submit"
+            size="lg"
+            disabled={!identifyValid}
+            className="uppercase tracking-wide sm:w-40"
+            style={{ background: settings.buttonColor, color: settings.buttonTextColor }}
+          >
+            Continuar
+          </Button>
+        </form>
+
+        <div className="text-left text-sm text-text-muted">
+          <p className="mb-2 font-semibold text-accent">Usamos seu e-mail de forma 100% segura para:</p>
+          <ul className="flex flex-col gap-1.5">
+            {[
+              'Identificar seu perfil',
+              'Notificar sobre o andamento do seu pedido',
+              'Gerenciar seu histórico de compras',
+              'Acelerar o preenchimento de suas informações',
+            ].map((t) => (
+              <li key={t} className="flex items-center gap-2">
+                <span className="text-accent">✓</span> {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={reviewOnSide ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]' : 'flex flex-col gap-6'}>
       <div className="flex flex-col gap-4">
