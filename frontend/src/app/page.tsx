@@ -130,18 +130,22 @@ export default async function HomePage() {
         </section>
       )}
 
-      <section
-        aria-labelledby="newsletter-home-title"
-        className="rounded-card border border-surface-border bg-bg-subtle p-6"
-      >
-        <h2 id="newsletter-home-title" className="text-lg font-semibold">
-          Fique por dentro
-        </h2>
-        <p className="mb-3 text-sm text-text-muted">
-          Cadastre seu e-mail e receba novidades e ofertas em primeira mão.
-        </p>
-        <NewsletterForm />
-      </section>
+      {theme.newsletter_enabled && (
+        <section
+          aria-labelledby="newsletter-home-title"
+          className="rounded-card border border-surface-border p-6"
+          style={{ background: theme.newsletter_bg_color, color: theme.newsletter_text_color }}
+        >
+          <h2 id="newsletter-home-title" className="text-lg font-semibold">
+            {theme.newsletter_title}
+          </h2>
+          <p className="mb-3 text-sm opacity-80">{theme.newsletter_subtitle}</p>
+          <NewsletterForm
+            buttonColor={theme.newsletter_button_color}
+            buttonTextColor={theme.newsletter_button_text_color}
+          />
+        </section>
+      )}
     </div>
   );
 }

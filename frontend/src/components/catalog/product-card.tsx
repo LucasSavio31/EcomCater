@@ -59,7 +59,7 @@ export function ProductCard({ product, priority = false, className }: ProductCar
         )}
 
         {typeof product.discount_pct === 'number' && product.discount_pct > 0 && (
-          <Badge tone="accent" className="absolute left-2 top-2">
+          <Badge tone="accent" className="ecom-discount-badge absolute left-2 top-2">
             -{product.discount_pct}%
           </Badge>
         )}

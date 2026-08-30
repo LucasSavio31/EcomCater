@@ -66,6 +66,15 @@ export interface Theme {
   checkout_accent_color: string;
   checkout_footer_bg_color: string;
   checkout_footer_text_color: string;
+  /** Newsletter (menu "Newsletter") */
+  newsletter_enabled: boolean;
+  newsletter_title: string;
+  newsletter_subtitle: string;
+  newsletter_bg_color: string;
+  newsletter_text_color: string;
+  newsletter_button_color: string;
+  newsletter_button_text_color: string;
+  discount_badge_enabled: boolean;
   logo_url?: string | null;
   logo_mobile_url?: string | null;
   favicon_url?: string | null;

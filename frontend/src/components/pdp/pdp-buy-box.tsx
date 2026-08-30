@@ -117,7 +117,7 @@ export function PdpBuyBox({ product, redirectAfterAdd = false, miniCart = false 
         {onSale && (
           <div className="flex items-center gap-2">
             <span className="text-sm text-text-muted line-through">{formatBRL(compareAt as number)}</span>
-            <span className="rounded-[4px] bg-accent px-1.5 py-0.5 text-xs font-bold text-white">
+            <span className="ecom-discount-badge rounded-[4px] bg-accent px-1.5 py-0.5 text-xs font-bold text-white">
               -{discountPct}%
             </span>
           </div>

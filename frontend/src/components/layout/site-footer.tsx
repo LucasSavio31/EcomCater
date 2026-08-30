@@ -4,7 +4,6 @@ import type { ThemeSettings } from '@/modules/theme';
 import type { Menu } from '@/modules/menus/types';
 import { resolveMediaUrl } from '@/lib/media';
 import { WhatsappIcon } from '@/components/icons';
-import { NewsletterForm } from './newsletter-form';
 import { FooterSealsBar } from './footer-seals';
 import { SocialIcons, type SocialLink } from './social-icons';
 
@@ -39,15 +38,6 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
   return (
     <footer className="mt-16 border-t border-surface-border bg-footer text-footer-fg">
       <div className="mx-auto max-w-header px-4 py-10">
-        {/* Newsletter */}
-        <div className="mb-8 rounded-card border border-surface-border bg-surface p-5 text-text">
-          <h2 className="text-base font-semibold">Receba novidades e ofertas</h2>
-          <p className="mb-3 text-sm text-text-muted">
-            Cadastre seu e-mail e fique por dentro dos lançamentos.
-          </p>
-          <NewsletterForm />
-        </div>
-
         <div className="grid gap-8 md:grid-cols-[1.2fr_repeat(3,1fr)]">
           {/* Marca + contato */}
           <div className="flex flex-col gap-3">

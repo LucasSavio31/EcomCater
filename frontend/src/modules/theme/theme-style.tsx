@@ -37,11 +37,15 @@ function serialize(vars: Record<string, string>): string {
  * (sem FOUC) e sem custo de rede.
  */
 export function ThemeStyle({ theme }: { theme: ThemeSettings }) {
+  let css = serialize(themeToCssVars(theme));
+  if (!theme.discount_badge_enabled) {
+    css += '.ecom-discount-badge{display:none !important;}';
+  }
   return (
     <style
       id="ecom-theme"
       // CSS estático derivado do tema; sanitizado contra `<` / `>`.
-      dangerouslySetInnerHTML={{ __html: serialize(themeToCssVars(theme)) }}
+      dangerouslySetInnerHTML={{ __html: css }}
     />
   );
 }

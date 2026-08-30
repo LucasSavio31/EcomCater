@@ -106,6 +106,20 @@ class ThemeSettings(Base):
     checkout_footer_bg_color: Mapped[str] = mapped_column(String(9), default="#111827", server_default="#111827", nullable=False)
     checkout_footer_text_color: Mapped[str] = mapped_column(String(9), default="#E5E7EB", server_default="#E5E7EB", nullable=False)
 
+    # Newsletter (bloco de captura na home) — menu "Newsletter" no admin
+    newsletter_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    newsletter_title: Mapped[str] = mapped_column(String(120), default="Receba novidades e ofertas", server_default="Receba novidades e ofertas", nullable=False)
+    newsletter_subtitle: Mapped[str] = mapped_column(String(240), default="Cadastre seu e-mail e fique por dentro dos lançamentos.", server_default="Cadastre seu e-mail e fique por dentro dos lançamentos.", nullable=False)
+    newsletter_bg_color: Mapped[str] = mapped_column(String(9), default="#F5F5F5", server_default="#F5F5F5", nullable=False)
+    newsletter_text_color: Mapped[str] = mapped_column(String(9), default="#111827", server_default="#111827", nullable=False)
+    newsletter_button_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    newsletter_button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+
+    # Selo de desconto (-XX%) calculado do preço "de" x preço promocional
+    discount_badge_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

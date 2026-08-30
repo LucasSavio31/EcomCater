@@ -36,7 +36,7 @@ export function PriceBlock({
       >
         {formatBRL(priceCents)}
         {typeof discountPct === 'number' && discountPct > 0 && (
-          <span className="ml-2 align-middle text-xs font-semibold text-success">
+          <span className="ecom-discount-badge ml-2 align-middle text-xs font-semibold text-success">
             {discountPct}% OFF
           </span>
         )}

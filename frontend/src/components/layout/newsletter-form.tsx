@@ -7,8 +7,16 @@ import { track } from '@/modules/analytics';
 
 type Status = 'idle' | 'loading' | 'success' | 'error';
 
-/** Captura de e-mail para a newsletter (home + rodapé). */
-export function NewsletterForm({ compact = false }: { compact?: boolean }) {
+/** Captura de e-mail para a newsletter (bloco da home). */
+export function NewsletterForm({
+  compact = false,
+  buttonColor,
+  buttonTextColor,
+}: {
+  compact?: boolean;
+  buttonColor?: string;
+  buttonTextColor?: string;
+}) {
   const nameId = useId();
   const emailId = useId();
   const [name, setName] = useState('');
@@ -59,7 +67,14 @@ export function NewsletterForm({ compact = false }: { compact?: boolean }) {
           placeholder="voce@email.com"
         />
         <div className="flex items-end">
-          <Button type="submit" loading={status === 'loading'} block={compact}>
+          <Button
+            type="submit"
+            loading={status === 'loading'}
+            block={compact}
+            style={
+              buttonColor ? { background: buttonColor, color: buttonTextColor } : undefined
+            }
+          >
             Inscrever
           </Button>
         </div>

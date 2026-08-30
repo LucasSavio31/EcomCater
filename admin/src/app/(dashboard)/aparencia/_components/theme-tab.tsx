@@ -229,6 +229,12 @@ export function ThemeTab() {
                 checked={theme.cart_redirect_after_add}
                 onChange={(v) => set('cart_redirect_after_add', v)}
               />
+              <Checkbox
+                label="Exibir o selo de desconto (-XX%)"
+                hint="Calculado do preço 'de' x preço promocional, na PDP e nos cards."
+                checked={theme.discount_badge_enabled}
+                onChange={(v) => set('discount_badge_enabled', v)}
+              />
             </Card>
 
             <Card variant="outline" className="flex flex-col gap-4">

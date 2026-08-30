@@ -14,7 +14,6 @@ import {
   IconCustomers,
   IconDashboard,
   IconFilters,
-  IconLeads,
   IconMail,
   IconMenus,
   IconModules,
@@ -57,7 +56,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/pedidos', label: 'Pedidos', icon: IconOrders },
       { href: '/clientes', label: 'Clientes', icon: IconCustomers },
-      { href: '/leads', label: 'Leads', icon: IconLeads },
       { href: '/promocoes', label: 'Promoções', icon: IconPromotions },
       { href: '/pagamento', label: 'Pagamento', icon: IconPayment },
       { href: '/frete', label: 'Frete', icon: IconShipping },
@@ -65,7 +63,10 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: 'Marketing',
-    items: [{ href: '/rastreamento', label: 'Rastreamento e anúncios', icon: IconAnalytics }],
+    items: [
+      { href: '/rastreamento', label: 'Rastreamento e anúncios', icon: IconAnalytics },
+      { href: '/newsletter', label: 'Newsletter', icon: IconMail },
+    ],
   },
   {
     title: 'Loja',

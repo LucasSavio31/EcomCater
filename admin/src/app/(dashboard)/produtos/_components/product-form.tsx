@@ -292,20 +292,38 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
           <Card variant="outline" className="flex flex-col gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <Input
-                label="Preço (R$)"
+                label="Preço promocional (R$)"
                 required
                 inputMode="decimal"
+                hint="O valor que o cliente paga."
                 value={state.price}
                 error={errors.price}
                 onChange={(e) => set('price', e.target.value)}
               />
               <Input
-                label="Preço “de” (R$)"
+                label="Preço “de” / normal (R$)"
                 inputMode="decimal"
-                hint="Deixe vazio se não há preço riscado."
+                hint="Vazio = sem desconto."
                 value={state.compare_at_price}
                 onChange={(e) => set('compare_at_price', e.target.value)}
               />
+            </div>
+            {(() => {
+              const now = Number(String(state.price).replace(',', '.'));
+              const was = Number(String(state.compare_at_price).replace(',', '.'));
+              if (!(was > now && now > 0)) return null;
+              const pct = Math.round((1 - now / was) * 100);
+              return (
+                <p className="text-sm">
+                  Selo de desconto:{' '}
+                  <span className="rounded bg-danger px-1.5 py-0.5 text-xs font-bold text-white">
+                    -{pct}%
+                  </span>{' '}
+                  <span className="text-text-muted">(liga/desliga em Aparência › Comportamento)</span>
+                </p>
+              );
+            })()}
+            <div className="grid gap-4 sm:grid-cols-2">
               <Input
                 label="Desconto Pix (%)"
                 inputMode="decimal"
