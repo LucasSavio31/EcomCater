@@ -76,6 +76,7 @@ export function HeroBanner({ banners, mode, autoplaySeconds }: HeroBannerProps) 
                     fill
                     sizes="100vw"
                     priority={i === 0}
+                    unoptimized={/\.gif($|\?)/i.test(src)}
                     className="object-cover"
                   />
                 )}

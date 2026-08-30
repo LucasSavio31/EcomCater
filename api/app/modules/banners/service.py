@@ -87,13 +87,32 @@ async def delete(db: AsyncSession, banner_id: str) -> None:
     await db.delete(b)
 
 
+def _is_animated_gif(raw: bytes) -> bool:
+    try:
+        import io
+
+        from PIL import Image as _Img
+
+        with _Img.open(io.BytesIO(raw)) as im:
+            return getattr(im, "is_animated", False) and getattr(im, "n_frames", 1) > 1
+    except Exception:  # noqa: BLE001
+        return False
+
+
 async def set_image(db: AsyncSession, banner_id: str, raw: bytes, filename: str, **_ignored) -> Banner:
-    """Uma imagem só. `process_image` já gera variações WebP; o front escala."""
+    """Aceita qualquer formato de imagem. GIF animado é mantido como GIF
+    (preserva a animação); os demais viram WebP pelo pipeline padrão."""
     b = await db.get(Banner, _uuid(banner_id))
     if not b:
         raise NotFoundError("Banner não encontrado.")
-    processed = process_image(raw, filename, prefix="banners")
-    b.image_desktop_key = processed.zoom_key
+
+    if _is_animated_gif(raw):
+        key = f"banners/{uuid.uuid4().hex}/banner.gif"
+        storage.save(key, raw, "image/gif")
+        b.image_desktop_key = key
+    else:
+        processed = process_image(raw, filename, prefix="banners")
+        b.image_desktop_key = processed.zoom_key
     b.image_mobile_key = None
     return b
 
