@@ -7,9 +7,9 @@ import { AsyncBoundary } from '@/components/async-boundary';
 import { Checkbox, Select } from '@/components/form-controls';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
-import { ADMIN_API_BASE_URL } from '@/lib/admin-api-client';
 import { formatBRL } from '@/lib/format';
 import { configApi, type ShippingConfig, type ShippingQuoteRate } from '@/modules/config/api';
+import { WebhookUrlBox } from '@/components/webhook-url';
 
 export default function FretePage() {
   const toast = useToast();
@@ -123,11 +123,10 @@ export default function FretePage() {
               />
             </fieldset>
 
-            <p className="rounded-card bg-bg-subtle p-3 text-xs text-text-muted">
-              Webhook do provedor:{' '}
-              <code>{ADMIN_API_BASE_URL}/api/webhooks/shipping/melhor_envio</code> — atualiza o
-              pedido para POSTADO / EM TRÂNSITO / ENTREGUE.
-            </p>
+            <WebhookUrlBox
+              url={cfg.webhook_url}
+              note="Já inclui o token do webhook. Atualiza o pedido para POSTADO / EM TRÂNSITO / ENTREGUE. Em produção troque localhost pelo seu domínio."
+            />
 
             <Button loading={saving} onClick={() => void save()} className="self-start">
               Salvar frete

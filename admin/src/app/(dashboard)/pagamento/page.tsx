@@ -7,8 +7,8 @@ import { AsyncBoundary } from '@/components/async-boundary';
 import { Checkbox, Select } from '@/components/form-controls';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
-import { ADMIN_API_BASE_URL } from '@/lib/admin-api-client';
 import { configApi, type PaymentConfig } from '@/modules/config/api';
+import { WebhookUrlBox } from '@/components/webhook-url';
 
 export default function PagamentoPage() {
   const toast = useToast();
@@ -98,11 +98,10 @@ export default function PagamentoPage() {
                 onChange={(v) => set('methods', { ...cfg.methods, boleto: v })}
               />
             </fieldset>
-            <p className="rounded-card bg-bg-subtle p-3 text-xs text-text-muted">
-              Webhook do provedor:{' '}
-              <code>{ADMIN_API_BASE_URL}/api/webhooks/payment/appmax</code> — atualiza o pedido para
-              PAGO / AGUARDANDO PAGAMENTO / CANCELADO.
-            </p>
+            <WebhookUrlBox
+              url={cfg.webhook_url}
+              note="Atualiza o pedido para PAGO / AGUARDANDO PAGAMENTO / CANCELADO. Em produção troque localhost pelo seu domínio."
+            />
             <Button loading={saving} onClick={() => void save()} className="self-start">
               Salvar pagamento
             </Button>

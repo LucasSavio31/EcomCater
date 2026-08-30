@@ -21,6 +21,8 @@ export interface ShippingConfig {
   melhor_envio_token: string;
   melhor_envio_sandbox: boolean;
   webhook_token: string;
+  /** URL de webhook que o lojista cadastra no painel do provedor (read-only). */
+  webhook_url?: string;
   default_package: {
     weight_grams?: number;
     length_mm?: number;
@@ -50,6 +52,8 @@ export interface PaymentConfig {
     boleto: boolean;
   };
   max_installments: number;
+  /** URL de webhook que o lojista cadastra no painel do gateway (read-only). */
+  webhook_url?: string;
 }
 
 export interface PaymentRecord {
