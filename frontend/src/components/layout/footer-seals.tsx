@@ -23,43 +23,59 @@ export function FooterSealsBar({ seals }: { seals: FooterSeals }) {
 
   return (
     <div className="grid gap-6 border-t border-footer-fg/15 pt-6 sm:grid-cols-3">
-      {columns.map((col) => (
-        <div
-          key={col.key}
-          className="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left"
-        >
-          <p className="text-xs font-semibold uppercase tracking-wide text-footer-fg/80">
-            {col.title}
-          </p>
+      {columns.map((col, colIdx) => {
+        // mobile: tudo centralizado. desktop: 1ª à esquerda, meio ao centro,
+        // última à direita — layout equilibrado.
+        const align =
+          colIdx === 0
+            ? 'sm:items-start sm:text-left'
+            : colIdx === columns.length - 1
+              ? 'sm:items-end sm:text-right'
+              : 'sm:items-center sm:text-center';
+        const justify =
+          colIdx === 0
+            ? 'sm:justify-start'
+            : colIdx === columns.length - 1
+              ? 'sm:justify-end'
+              : 'sm:justify-center';
+        return (
+          <div
+            key={col.key}
+            className={`flex flex-col items-center gap-2 text-center ${align}`}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-footer-fg/80">
+              {col.title}
+            </p>
 
-          {col.image_urls.length > 0 ? (
-            <ul className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-              {col.image_urls.map((url, i) => {
-                const src = resolveMediaUrl(url);
-                if (!src) return null;
-                return (
-                  <li key={i}>
-                    {/* eslint-disable-next-line @next/next/no-img-element -- selo enviado no admin */}
-                    <img src={src} alt="" loading="lazy" className="h-8 w-auto rounded bg-white object-contain px-1" />
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            col.badges.length > 0 && (
-              <ul className="flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
-                {col.badges.map((badge) => (
-                  <li key={badge}>
-                    <Badge value={badge} />
-                  </li>
-                ))}
+            {col.image_urls.length > 0 ? (
+              <ul className={`flex flex-wrap items-center justify-center gap-2 ${justify}`}>
+                {col.image_urls.map((url, i) => {
+                  const src = resolveMediaUrl(url);
+                  if (!src) return null;
+                  return (
+                    <li key={i}>
+                      {/* eslint-disable-next-line @next/next/no-img-element -- selo enviado no admin */}
+                      <img src={src} alt="" loading="lazy" className="h-8 w-auto rounded bg-white object-contain px-1" />
+                    </li>
+                  );
+                })}
               </ul>
-            )
-          )}
+            ) : (
+              col.badges.length > 0 && (
+                <ul className={`flex flex-wrap items-center justify-center gap-1.5 ${justify}`}>
+                  {col.badges.map((badge) => (
+                    <li key={badge}>
+                      <Badge value={badge} />
+                    </li>
+                  ))}
+                </ul>
+              )
+            )}
 
-          {col.text && <p className="text-xs text-footer-fg/70">{col.text}</p>}
-        </div>
-      ))}
+            {col.text && <p className="text-xs text-footer-fg/70">{col.text}</p>}
+          </div>
+        );
+      })}
     </div>
   );
 }

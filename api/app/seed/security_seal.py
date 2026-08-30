@@ -20,25 +20,27 @@ from app.shared.storage import storage
 logger = logging.getLogger("seed.security_seal")
 
 SSL_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 236 72" '
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 76" '
     'font-family="Arial, Helvetica, sans-serif">'
     # escudo verde
-    '<path fill="#1E9E3E" d="M30 4c12 4 20 6 20 6v22c0 17-20 30-20 30S10 49 10 32V10s8-2 20-6z"/>'
+    '<path fill="#1E9E3E" d="M32 6c12 4 20 6 20 6v22c0 17-20 30-20 30S12 51 12 34V12s8-2 20-6z"/>'
     # check branco
     '<path fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" '
-    'stroke-linejoin="round" d="M19 32l8 8 15-19"/>'
+    'stroke-linejoin="round" d="M21 34l8 8 15-19"/>'
     # textos
-    '<text x="66" y="20" font-size="10" fill="#9aa0a6" letter-spacing="2">COMPRA SEGURA</text>'
-    '<text x="66" y="42" font-size="20" font-weight="800" fill="#111111">SITE PROTEGIDO</text>'
-    '<text x="66" y="58" font-size="10" fill="#9aa0a6" letter-spacing="2">CERTIFICADO SSL</text>'
+    '<text x="70" y="22" font-size="10" fill="#9aa0a6" letter-spacing="1.5">COMPRA SEGURA</text>'
+    '<text x="70" y="44" font-size="19" font-weight="800" fill="#111111">SITE PROTEGIDO</text>'
+    '<text x="70" y="60" font-size="10" fill="#9aa0a6" letter-spacing="1.5">CERTIFICADO SSL</text>'
     "</svg>"
 )
 
 
-async def run(db: AsyncSession) -> None:
+async def run(db: AsyncSession, *, force: bool = False) -> None:
     row = await get_theme(db)
     seals = _clean_seals(row.footer_seals_json)
-    if seals["security"]["images"]:
+    imgs = seals["security"]["images"]
+    ours = len(imgs) == 1 and str(imgs[0]).endswith("site-protegido.svg")
+    if imgs and not (force and ours):
         logger.info("selo de segurança já configurado — nada a fazer")
         return
     key = f"theme/seals/{uuid.uuid4().hex}/site-protegido.svg"
@@ -55,7 +57,7 @@ async def run(db: AsyncSession) -> None:
 async def _main() -> None:
     logging.basicConfig(level=logging.INFO)
     async with SessionLocal() as db:
-        await run(db)
+        await run(db, force=True)
 
 
 if __name__ == "__main__":
