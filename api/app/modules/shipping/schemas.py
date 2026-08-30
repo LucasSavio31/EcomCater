@@ -35,6 +35,7 @@ class ShippingConfigOut(BaseModel):
     default_package: dict
     free_shipping_services: list[str]
     free_shipping_all: bool = False
+    free_shipping_min_cents: int | None = None
 
 
 class ShippingConfigIn(BaseModel):
@@ -46,3 +47,4 @@ class ShippingConfigIn(BaseModel):
     default_package: dict | None = None
     free_shipping_services: list[str] | None = None
     free_shipping_all: bool | None = None
+    free_shipping_min_cents: int | None = None

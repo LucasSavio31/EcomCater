@@ -18,7 +18,6 @@ from app.core.redis import redis_client
 from app.modules.cart.models import Cart, CartItem
 from app.modules.products.models import Product, ProductVariant
 from app.modules.products.service import variant_price
-from app.modules.theme.models import ThemeSettings
 
 CART_TTL_DAYS = 30
 _REDIS_PREFIX = "cart:tok:"
@@ -230,8 +229,9 @@ async def compute_totals(db: AsyncSession, cart: Cart) -> dict:
     if free_shipping_by_coupon:
         shipping_cents = 0
 
-    theme = await db.get(ThemeSettings, 1)
-    threshold = theme.free_shipping_threshold_cents if theme else None
+    from app.modules.shipping.service import free_shipping_min_cents
+
+    threshold = await free_shipping_min_cents(db)
     remaining = None
     if threshold:
         if items_total - discount >= threshold:

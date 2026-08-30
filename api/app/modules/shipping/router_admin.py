@@ -36,6 +36,7 @@ async def get_config(db: DbDep, _: AdminDep) -> dict:
         "default_package": cfg.default_package.model_dump(),
         "free_shipping_services": cfg.free_shipping_services,
         "free_shipping_all": getattr(cfg, "free_shipping_all", False),
+        "free_shipping_min_cents": getattr(cfg, "free_shipping_min_cents", None),
         # URL que o lojista cadastra no painel do Melhor Envio (inclui o token)
         "webhook_url": webhook_url,
     }

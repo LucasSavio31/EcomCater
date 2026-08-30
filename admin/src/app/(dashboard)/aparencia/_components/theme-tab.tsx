@@ -8,7 +8,6 @@ import { useToast } from '@/components/toast';
 import { AsyncBoundary } from '@/components/async-boundary';
 import { useResource } from '@/lib/use-resource';
 import { ColorField } from '@/components/color-field';
-import { CurrencyField } from '@/components/currency-field';
 import { maskPhone } from '@/lib/phone';
 import { appearanceApi, type Theme, type ThemeImageKind } from '@/modules/appearance/api';
 import { revalidateStore } from '@/lib/revalidate-store';
@@ -268,11 +267,10 @@ export function ThemeTab() {
                 value={maskPhone(theme.whatsapp_number ?? '')}
                 onChange={(e) => set('whatsapp_number', e.target.value.replace(/\D/g, ''))}
               />
-              <CurrencyField
-                label="Frete grátis a partir de (R$)"
-                cents={theme.free_shipping_threshold_cents}
-                onChange={(c) => set('free_shipping_threshold_cents', c)}
-              />
+              <p className="text-xs text-text-muted">
+                O valor de frete grátis fica em <b>Frete → Frete grátis para pedidos a partir
+                de</b>. A tarja superior mostra o progresso automaticamente.
+              </p>
             </Card>
 
             <Card variant="outline" className="flex flex-col gap-4">

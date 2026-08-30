@@ -32,6 +32,8 @@ export interface ShippingConfig {
   free_shipping_services: string[];
   /** Frete grátis para tudo — checkout não calcula frete */
   free_shipping_all?: boolean;
+  /** Frete grátis automático quando o subtotal do pedido atinge este valor (centavos). */
+  free_shipping_min_cents?: number | null;
 }
 
 export interface ShippingQuoteRate {

@@ -148,10 +148,26 @@ FREE_SHIPPING_OPTION = {
 }
 
 
+async def free_shipping_min_cents(db: AsyncSession) -> int | None:
+    """Valor de subtotal a partir do qual o frete é grátis (configurado na
+    página Frete). None/0 = desligado."""
+    cfg = await load_config(db)
+    v = getattr(cfg, "free_shipping_min_cents", None)
+    return int(v) if v else None
+
+
 async def quote_for_cart(db: AsyncSession, cart) -> list[dict]:
     cfg = await load_config(db)
     if getattr(cfg, "free_shipping_all", False):
         return [dict(FREE_SHIPPING_OPTION)]
+
+    # frete grátis automático ao atingir o valor mínimo do pedido
+    min_cents = await free_shipping_min_cents(db)
+    if min_cents:
+        subtotal = sum(i.unit_price_cents * i.quantity for i in cart.items)
+        if subtotal >= min_cents:
+            return [dict(FREE_SHIPPING_OPTION)]
+
     if not cart.shipping_zip:
         raise DomainError("Informe o CEP para calcular o frete.", code="missing_zip")
     from app.modules.cart.service import cart_items_signature

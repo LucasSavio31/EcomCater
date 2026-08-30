@@ -9,7 +9,7 @@ import type { ThemeSettings } from '@/modules/theme';
 import type { Menu, MenuItem } from '@/modules/menus/types';
 import { useCart } from '@/modules/cart/cart-context';
 import { resolveMediaUrl } from '@/lib/media';
-import { formatBRL, freeShippingRemaining } from '@/lib/format';
+import { formatBRL } from '@/lib/format';
 import {
   BagIcon,
   ChevronDownIcon,
@@ -37,7 +37,7 @@ function whatsappHref(raw?: string | null): string | null {
 
 export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
   const pathname = usePathname();
-  const { count, openMiniCart, subtotalCents } = useCart();
+  const { count, openMiniCart, subtotalCents, cart } = useCart();
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openMega, setOpenMega] = useState<string | null>(null);
@@ -55,13 +55,16 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
 
   // Barra superior: junta o progresso do frete grátis (quando há um mínimo
   // configurado) com as mensagens do tema. Sem carrossel = só a 1ª mensagem.
-  const freeShipMsg = theme.free_shipping_threshold_cents
-    ? freeShippingRemaining(subtotalCents, theme.free_shipping_threshold_cents) === 0
-      ? 'Você ganhou frete grátis! 🎉'
-      : `Faltam ${formatBRL(
-          freeShippingRemaining(subtotalCents, theme.free_shipping_threshold_cents),
-        )} para o frete grátis`
-    : null;
+  // O valor vem do carrinho (respeita cupom/desconto) e só aparece depois que
+  // o cliente coloca algo no carrinho.
+  const fsThreshold = cart.totals.free_shipping_threshold_cents;
+  const fsRemaining = cart.totals.free_shipping_remaining_cents;
+  const freeShipMsg =
+    fsThreshold && subtotalCents > 0
+      ? fsRemaining === 0
+        ? 'Você ganhou frete grátis! 🎉'
+        : `Faltam ${formatBRL(fsRemaining ?? fsThreshold)} para o frete grátis`
+      : null;
 
   const configuredMessages = (
     theme.top_bar_carousel

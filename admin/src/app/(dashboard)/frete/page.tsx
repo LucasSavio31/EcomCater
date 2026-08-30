@@ -10,6 +10,7 @@ import { useResource } from '@/lib/use-resource';
 import { formatBRL } from '@/lib/format';
 import { configApi, type ShippingConfig, type ShippingQuoteRate } from '@/modules/config/api';
 import { WebhookUrlBox } from '@/components/webhook-url';
+import { CurrencyField } from '@/components/currency-field';
 
 export default function FretePage() {
   const toast = useToast();
@@ -101,6 +102,14 @@ export default function FretePage() {
               checked={!!cfg.free_shipping_all}
               onChange={(v) => set('free_shipping_all', v)}
             />
+            {!cfg.free_shipping_all && (
+              <CurrencyField
+                label="Frete grátis para pedidos a partir de (R$)"
+                hint="Quando o subtotal do pedido atinge este valor, o frete vira R$ 0,00 automaticamente. Deixe vazio para desligar. A tarja superior mostra “Faltam R$ X para o frete grátis” conforme o carrinho."
+                cents={cfg.free_shipping_min_cents ?? null}
+                onChange={(c) => set('free_shipping_min_cents', c ?? 0)}
+              />
+            )}
             <fieldset className="grid gap-4 rounded-card border border-surface-border p-3 sm:grid-cols-4">
               <legend className="px-1 text-sm font-medium">Pacote padrão</legend>
               <Input

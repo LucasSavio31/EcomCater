@@ -21,3 +21,6 @@ class ShippingConfig(BaseModel):
     free_shipping_services: list[str] = []
     # Frete grátis para tudo: o checkout não calcula frete e vai direto ao pagamento
     free_shipping_all: bool = False
+    # Frete grátis automático quando o subtotal do pedido atinge este valor
+    # (em centavos). None/0 = desligado.
+    free_shipping_min_cents: int | None = None

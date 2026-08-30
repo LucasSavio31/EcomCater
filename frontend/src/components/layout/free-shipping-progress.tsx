@@ -4,6 +4,7 @@ import { useCart } from '@/modules/cart/cart-context';
 import { formatBRL, freeShippingRemaining } from '@/lib/format';
 
 interface FreeShippingProgressProps {
+  /** Fallback quando o carrinho ainda não trouxe o valor. */
   thresholdCents?: number | null;
   /** `bar` mostra a barra de progresso; `text` só a frase. */
   variant?: 'bar' | 'text';
@@ -11,19 +12,22 @@ interface FreeShippingProgressProps {
 }
 
 /**
- * Progresso até o frete grátis. Lê o subtotal do contexto de carrinho
- * (placeholder na Fase 3; a Fase 4 alimenta com dados reais).
+ * Progresso até o frete grátis. O valor mínimo e o quanto falta vêm do
+ * carrinho (config em Frete, respeita cupom). Só aparece depois que há algo
+ * no carrinho.
  */
 export function FreeShippingProgress({
   thresholdCents,
   variant = 'text',
   className,
 }: FreeShippingProgressProps) {
-  const { subtotalCents } = useCart();
-  if (!thresholdCents || thresholdCents <= 0) return null;
+  const { subtotalCents, cart } = useCart();
+  const threshold = cart.totals.free_shipping_threshold_cents ?? thresholdCents ?? 0;
+  // só aparece depois que o cliente coloca algo no carrinho
+  if (!threshold || threshold <= 0 || subtotalCents <= 0) return null;
 
-  const remaining = freeShippingRemaining(subtotalCents, thresholdCents);
-  const pct = Math.min(100, Math.round((subtotalCents / thresholdCents) * 100));
+  const remaining = cart.totals.free_shipping_remaining_cents ?? freeShippingRemaining(subtotalCents, threshold);
+  const pct = Math.min(100, Math.round((subtotalCents / threshold) * 100));
   const reached = remaining === 0;
 
   return (
