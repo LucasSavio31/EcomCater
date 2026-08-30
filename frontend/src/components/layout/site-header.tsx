@@ -18,7 +18,6 @@ import {
   MenuIcon,
   SearchIcon,
   UserIcon,
-  WhatsappIcon,
 } from '@/components/icons';
 import { SearchPanel } from './search-panel';
 import { MobileNav } from './mobile-nav';
@@ -95,31 +94,13 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
       {/* Barra utilitária (tarja superior) */}
       {showTopBar && (
         <div style={{ backgroundColor: theme.top_bar_bg_color, color: theme.top_bar_text_color }}>
-          <div
-            className={`mx-auto grid max-w-header items-center gap-3 px-4 py-1.5 text-xs ${
-              theme.top_bar_centered ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-[1fr_auto]'
-            }`}
-          >
-            {theme.top_bar_centered && <span aria-hidden />}
+          <div className="mx-auto max-w-header px-4 py-1.5 text-xs">
             <p
               key={rotate ? topBarIdx : 'static'}
               className={`truncate transition-opacity ${theme.top_bar_centered ? 'text-center' : ''}`}
             >
               {rotate ? topBarMessages[topBarIdx] : topBarMessages[0]}
             </p>
-            {wa ? (
-              <a
-                href={wa}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex shrink-0 items-center gap-1 justify-self-end hover:underline"
-              >
-                <WhatsappIcon className="h-4 w-4" />
-                <span className="hidden sm:inline">Atendimento</span>
-              </a>
-            ) : (
-              <span aria-hidden />
-            )}
           </div>
         </div>
       )}
