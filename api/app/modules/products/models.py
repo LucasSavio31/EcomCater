@@ -106,6 +106,7 @@ class VariantOptionType(UUIDPKMixin, Base):
     )
     name: Mapped[str] = mapped_column(String(80))
     is_size: Mapped[bool] = mapped_column(Boolean, default=False)  # eixo dos atalhos "compre por tamanho"
+    is_color: Mapped[bool] = mapped_column(Boolean, default=False)  # eixo renderizado como miniaturas na PDP
     position: Mapped[int] = mapped_column(Integer, default=0)
 
     product: Mapped[Product] = relationship(back_populates="option_types")
@@ -123,8 +124,13 @@ class VariantOptionValue(UUIDPKMixin, Base):
     )
     value: Mapped[str] = mapped_column(String(80))
     position: Mapped[int] = mapped_column(Integer, default=0)
+    # Miniatura da cor na PDP — aponta para uma imagem já cadastrada do produto.
+    image_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("product_images.id", ondelete="SET NULL")
+    )
 
     option_type: Mapped[VariantOptionType] = relationship(back_populates="values")
+    image: Mapped[ProductImage | None] = relationship("ProductImage", foreign_keys=[image_id])
 
 
 class ProductVariant(UUIDPKMixin, TimestampMixin, Base):
@@ -136,7 +142,7 @@ class ProductVariant(UUIDPKMixin, TimestampMixin, Base):
     sku: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     price_cents: Mapped[int | None] = mapped_column(Integer)  # null => herda do produto
     compare_at_price_cents: Mapped[int | None] = mapped_column(Integer)
-    stock_qty: Mapped[int] = mapped_column(Integer, default=0)
+    stock_qty: Mapped[int | None] = mapped_column(Integer, default=0)  # null => estoque ilimitado
     weight_grams: Mapped[int | None] = mapped_column(Integer)
     barcode: Mapped[str | None] = mapped_column(String(60))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

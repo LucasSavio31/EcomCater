@@ -57,10 +57,14 @@ def _min_variant_price(product: Product) -> int:
     return min(prices) if prices else product.price_cents
 
 
+def _variant_in_stock(v: ProductVariant) -> bool:
+    return v.is_active and (v.stock_qty is None or v.stock_qty > 0)
+
+
 def _in_stock(product: Product) -> bool:
     if not product.variants:
         return True
-    return any(v.is_active and v.stock_qty > 0 for v in product.variants)
+    return any(_variant_in_stock(v) for v in product.variants)
 
 
 # --------------------------------------------------------------------- slug
@@ -122,7 +126,7 @@ def _variant_out(product: Product, v: ProductVariant) -> dict:
         "price_cents": variant_price(product, v),
         "compare_at_price_cents": v.compare_at_price_cents or product.compare_at_price_cents,
         "stock_qty": v.stock_qty,
-        "in_stock": v.is_active and v.stock_qty > 0,
+        "in_stock": _variant_in_stock(v),
         "weight_grams": v.weight_grams or product.weight_grams,
         "is_active": v.is_active,
         "position": v.position,
@@ -146,7 +150,9 @@ def _detail_loader(stmt: Select) -> Select:
     return stmt.options(
         selectinload(Product.variants).selectinload(ProductVariant.option_values),
         selectinload(Product.images),
-        selectinload(Product.option_types).selectinload(VariantOptionType.values),
+        selectinload(Product.option_types)
+        .selectinload(VariantOptionType.values)
+        .selectinload(VariantOptionValue.image),
         selectinload(Product.specs),
         selectinload(Product.reviews),
     )
@@ -178,16 +184,26 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
         by_id = {p.id: p for p in rel}
         related = [list_item(by_id[i]) for i in related_ids if i in by_id]
 
+    def _value_out(v: VariantOptionValue) -> dict:
+        img = v.image
+        return {
+            "id": str(v.id),
+            "value": v.value,
+            "position": v.position,
+            "slug": make_slug(v.value) or str(v.id),
+            "image_id": str(v.image_id) if v.image_id else None,
+            "swatch_thumb_url": storage.url(img.thumb_key) if img else None,
+            "swatch_medium_url": storage.url(img.medium_key) if img else None,
+        }
+
     option_types = [
         {
             "id": str(ot.id),
             "name": ot.name,
             "is_size": ot.is_size,
+            "is_color": ot.is_color,
             "position": ot.position,
-            "values": [
-                {"id": str(v.id), "value": v.value, "position": v.position}
-                for v in sorted(ot.values, key=lambda x: x.position)
-            ],
+            "values": [_value_out(v) for v in sorted(ot.values, key=lambda x: x.position)],
         }
         for ot in sorted(product.option_types, key=lambda x: x.position)
     ]
@@ -453,6 +469,135 @@ async def get_admin(db: AsyncSession, product_id: str) -> Product:
     if not product:
         raise NotFoundError("Produto não encontrado.")
     return product
+
+
+_PRODUCT_COPY_FIELDS = (
+    "short_description", "description", "brand", "supplier", "category_id",
+    "price_cents", "compare_at_price_cents", "pix_discount_pct", "installments_max",
+    "weight_grams", "length_mm", "width_mm", "height_mm",
+    "seo_title", "seo_description",
+)
+
+
+def _copy_image_files(thumb: str, medium: str, zoom: str) -> tuple[str, str, str]:
+    """Copia os 3 arquivos de uma imagem para uma nova pasta. Retorna as novas keys."""
+    folder = f"products/{uuid.uuid4().hex}"
+    out: list[str] = []
+    for src, name in ((thumb, "thumb"), (medium, "medium"), (zoom, "zoom")):
+        new_key = f"{folder}/{name}.webp"
+        try:
+            storage.save(new_key, storage.read(src), "image/webp")
+        except Exception:  # noqa: BLE001 - arquivo sumiu; segue sem essa imagem
+            return "", "", ""
+        out.append(new_key)
+    return out[0], out[1], out[2]
+
+
+async def duplicate(db: AsyncSession, product_id: str) -> Product:
+    """Clona um produto inteiro: dados, tipos/valores de variação, matriz de
+    variações (SKUs novos), imagens (arquivos copiados) e especificações.
+    O clone nasce como rascunho e sem destaque."""
+    from datetime import UTC, datetime
+
+    from app.modules.products.models import ProductVariantOption
+
+    src = await get_admin(db, product_id)
+
+    new = Product(
+        name=f"{src.name} (cópia)",
+        slug=await _unique_slug(db, f"{src.name} copia"),
+        status="draft",
+        is_featured=False,
+        rating_avg=0,
+        rating_count=0,
+        published_at=None,
+    )
+    if src.sku_root:
+        base = f"{src.sku_root}-COPY"
+        cand, i = base, 2
+        while await db.scalar(select(Product.id).where(Product.sku_root == cand)):
+            cand, i = f"{base}{i}", i + 1
+        new.sku_root = cand
+    for f in _PRODUCT_COPY_FIELDS:
+        setattr(new, f, getattr(src, f))
+    db.add(new)
+    await db.flush()
+
+    # tipos + valores de opção
+    value_map: dict[uuid.UUID, uuid.UUID] = {}
+    for ot in sorted(src.option_types, key=lambda x: x.position):
+        row = VariantOptionType(
+            product_id=new.id, name=ot.name, is_size=ot.is_size,
+            is_color=ot.is_color, position=ot.position,
+        )
+        db.add(row)
+        await db.flush()
+        for v in sorted(ot.values, key=lambda x: x.position):
+            nv = VariantOptionValue(option_type_id=row.id, value=v.value, position=v.position)
+            db.add(nv)
+            await db.flush()
+            value_map[v.id] = nv.id
+
+    # imagens (copia arquivos) + mapa p/ corrigir referências
+    image_map: dict[uuid.UUID, uuid.UUID] = {}
+    for img in sorted(src.images, key=lambda i: (not i.is_primary, i.position)):
+        t, m, z = _copy_image_files(img.thumb_key, img.medium_key, img.zoom_key)
+        if not t:
+            continue
+        ni = ProductImage(
+            product_id=new.id, alt=img.alt, position=img.position, is_primary=img.is_primary,
+            original_filename=img.original_filename, original_width=img.original_width,
+            original_height=img.original_height, thumb_key=t, medium_key=m, zoom_key=z,
+            created_at=datetime.now(UTC),
+        )
+        db.add(ni)
+        await db.flush()
+        image_map[img.id] = ni.id
+
+    # variações (SKUs novos) + vínculo de opções
+    for var in sorted(src.variants, key=lambda x: x.position):
+        base = f"{var.sku}-COPY"
+        sku, i = base, 2
+        while await db.scalar(select(ProductVariant.id).where(ProductVariant.sku == sku)):
+            sku, i = f"{base}{i}", i + 1
+        nvar = ProductVariant(
+            product_id=new.id, sku=sku, price_cents=var.price_cents,
+            compare_at_price_cents=var.compare_at_price_cents, stock_qty=var.stock_qty,
+            weight_grams=var.weight_grams, barcode=None, is_active=var.is_active,
+            position=var.position,
+        )
+        db.add(nvar)
+        await db.flush()
+        for ov in var.option_values:
+            if ov.id in value_map:
+                db.add(ProductVariantOption(variant_id=nvar.id, option_value_id=value_map[ov.id]))
+        # imagens amarradas a esta variação
+        for img in src.images:
+            if img.variant_id == var.id and img.id in image_map:
+                clone_img = await db.get(ProductImage, image_map[img.id])
+                if clone_img:
+                    clone_img.variant_id = nvar.id
+
+    # miniatura de cor por valor
+    for ot in src.option_types:
+        for v in ot.values:
+            if v.image_id and v.id in value_map and v.image_id in image_map:
+                nv = await db.get(VariantOptionValue, value_map[v.id])
+                if nv:
+                    nv.image_id = image_map[v.image_id]
+
+    # especificações
+    for sp in sorted(src.specs, key=lambda s: s.position):
+        db.add(ProductSpec(
+            product_id=new.id, group=sp.group, label=sp.label, value=sp.value, position=sp.position,
+        ))
+
+    # categorias extras
+    for pc in await db.scalars(select(ProductCategory).where(ProductCategory.product_id == src.id)):
+        db.add(ProductCategory(product_id=new.id, category_id=pc.category_id))
+
+    await db.flush()
+    return await get_admin(db, str(new.id))
 
 
 async def update(db: AsyncSession, product_id: str, data: dict) -> Product:

@@ -47,7 +47,7 @@ class Settings(BaseSettings):
 
     # imagem
     image_webp_quality: int = 82
-    image_thumb_size: int = 130
+    image_thumb_size: int = 150
     image_medium_size: int = 600
     image_zoom_size: int = 1600
 

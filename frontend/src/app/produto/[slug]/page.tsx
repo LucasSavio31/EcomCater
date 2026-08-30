@@ -7,9 +7,7 @@ import { resolveMediaUrl } from '@/lib/media';
 import { Breadcrumbs, type Crumb } from '@/components/catalog/breadcrumbs';
 import { Stars } from '@/components/catalog/stars';
 import { ProductCarousel } from '@/components/catalog/product-carousel';
-import { ProductGallery } from '@/components/pdp/product-gallery';
-import { PdpBuyBox } from '@/components/pdp/pdp-buy-box';
-import { ShippingCalculator } from '@/components/pdp/shipping-calculator';
+import { PdpMain } from '@/components/pdp/pdp-main';
 import { ReviewForm } from '@/components/pdp/review-form';
 import { FreeShippingProgress } from '@/components/layout/free-shipping-progress';
 import { TrackOnMount } from '@/components/analytics/track-on-mount';
@@ -163,35 +161,11 @@ export default async function ProdutoPage({ params }: PageProps) {
 
       <Breadcrumbs items={crumbs} />
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-12">
-        <ProductGallery images={product.images} productName={product.name} />
-
-        <div className="flex flex-col gap-5">
-          {product.brand && (
-            <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-              {product.brand}
-            </span>
-          )}
-          <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{product.name}</h1>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <Stars value={product.rating_avg} count={product.rating_count} size="md" />
-            {product.sku_root && (
-              <span className="text-xs text-text-muted">Referência: {product.sku_root}</span>
-            )}
-          </div>
-
-          <PdpBuyBox
-            product={product}
-            redirectAfterAdd={theme.cart_redirect_after_add}
-            miniCart={theme.mini_cart_enabled}
-          />
-
-          <div className="rounded-card border border-surface-border p-4">
-            <p className="mb-2 text-sm font-semibold">Calcular frete e prazo</p>
-            <ShippingCalculator product={product} />
-          </div>
-        </div>
-      </div>
+      <PdpMain
+        product={product}
+        redirectAfterAdd={theme.cart_redirect_after_add}
+        miniCart={theme.mini_cart_enabled}
+      />
 
       {accordionItems.length > 0 && (
         <section aria-label="Detalhes do produto">

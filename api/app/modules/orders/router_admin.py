@@ -74,13 +74,15 @@ async def _payment_out(db: AsyncSession, order: Order) -> dict | None:
 @router.get("/{number}")
 async def get_order(number: str, db: DbDep, _: AdminDep) -> dict:
     order = await service.get_by_number(db, number)
-    return {**service.to_out(order), "payment": await _payment_out(db, order)}
+    out = {**service.to_out(order), "payment": await _payment_out(db, order)}
+    return await service.attach_variation_options(db, out)
 
 
 @router.patch("/{number}")
 async def edit_order(number: str, body: dict, db: DbDep, _: EditorDep) -> dict:
     order = await service.edit_order(db, number, body)
-    return {**service.to_out(order), "payment": await _payment_out(db, order)}
+    out = {**service.to_out(order), "payment": await _payment_out(db, order)}
+    return await service.attach_variation_options(db, out)
 
 
 @router.delete("/{number}", status_code=http_status.HTTP_204_NO_CONTENT)

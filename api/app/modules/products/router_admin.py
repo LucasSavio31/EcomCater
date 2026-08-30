@@ -15,6 +15,9 @@ from app.modules.products import service, service_variants
 from app.modules.products.models import Product
 from app.modules.products.schemas import (
     OptionTypeIn,
+    OptionTypePatchIn,
+    OptionValueAddIn,
+    OptionValueUpdateIn,
     ProductCreateIn,
     ProductUpdateIn,
     ReviewModerateIn,
@@ -87,6 +90,12 @@ async def delete_product(product_id: str, db: DbDep, _: EditorDep) -> None:
     await service.delete(db, product_id)
 
 
+@router.post("/{product_id}/duplicate", status_code=status.HTTP_201_CREATED)
+async def duplicate_product(product_id: str, db: DbDep, _: EditorDep) -> dict:
+    product = await service.duplicate(db, product_id)
+    return {"id": str(product.id), "slug": product.slug, "name": product.name}
+
+
 # ------------------------------------------------------------------ eixos de opção
 @router.put("/{product_id}/option-types")
 async def set_option_types(
@@ -94,6 +103,50 @@ async def set_option_types(
 ) -> dict:
     await service_variants.replace_option_types(db, product_id, [o.model_dump() for o in body])
     return {"ok": True}
+
+
+@router.patch("/{product_id}/option-types/{type_id}", response_model=None)
+async def patch_option_type(
+    product_id: str, type_id: str, body: OptionTypePatchIn, db: DbDep, _: EditorDep
+) -> dict:
+    await service_variants.patch_option_type(
+        db, product_id, type_id, body.model_dump(exclude_unset=True)
+    )
+    return await service.get_detail_by_slug(
+        db, (await service.get_admin(db, product_id)).slug, include_unpublished=True
+    )
+
+
+@router.post("/{product_id}/option-types/{type_id}/values", response_model=None, status_code=201)
+async def add_option_value(
+    product_id: str, type_id: str, body: OptionValueAddIn, db: DbDep, _: EditorDep
+) -> dict:
+    await service_variants.add_option_value(db, product_id, type_id, body.value)
+    return await service.get_detail_by_slug(
+        db, (await service.get_admin(db, product_id)).slug, include_unpublished=True
+    )
+
+
+@router.patch("/{product_id}/option-values/{value_id}", response_model=None)
+async def update_option_value(
+    product_id: str, value_id: str, body: OptionValueUpdateIn, db: DbDep, _: EditorDep
+) -> dict:
+    await service_variants.update_option_value(
+        db, product_id, value_id, body.model_dump(exclude_unset=True)
+    )
+    return await service.get_detail_by_slug(
+        db, (await service.get_admin(db, product_id)).slug, include_unpublished=True
+    )
+
+
+@router.delete("/{product_id}/option-values/{value_id}", response_model=None)
+async def delete_option_value(
+    product_id: str, value_id: str, db: DbDep, _: EditorDep
+) -> dict:
+    await service_variants.delete_option_value(db, product_id, value_id)
+    return await service.get_detail_by_slug(
+        db, (await service.get_admin(db, product_id)).slug, include_unpublished=True
+    )
 
 
 # ------------------------------------------------------------------ variações

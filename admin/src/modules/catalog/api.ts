@@ -94,9 +94,41 @@ export const productsApi = {
   setStatus: (id: string, value: ProductStatus) =>
     adminFetch<ProductDetail>(`/api/admin/products/${id}/status`, { method: 'POST', query: { value } }),
   remove: (id: string) => adminFetch<void>(`/api/admin/products/${id}`, { method: 'DELETE' }),
+  duplicate: (id: string) =>
+    adminFetch<{ id: string; slug: string; name: string }>(
+      `/api/admin/products/${id}/duplicate`,
+      { method: 'POST' },
+    ),
 
   putOptionTypes: (id: string, body: OptionType[]) =>
     adminFetch<OptionType[]>(`/api/admin/products/${id}/option-types`, { method: 'PUT', body }),
+  patchOptionType: (
+    id: string,
+    typeId: string,
+    body: { name?: string; is_size?: boolean; is_color?: boolean },
+  ) =>
+    adminFetch<ProductDetail>(`/api/admin/products/${id}/option-types/${typeId}`, {
+      method: 'PATCH',
+      body,
+    }),
+  addOptionValue: (id: string, typeId: string, value: string) =>
+    adminFetch<ProductDetail>(`/api/admin/products/${id}/option-types/${typeId}/values`, {
+      method: 'POST',
+      body: { value },
+    }),
+  updateOptionValue: (
+    id: string,
+    valueId: string,
+    body: { value?: string; image_id?: string | null },
+  ) =>
+    adminFetch<ProductDetail>(`/api/admin/products/${id}/option-values/${valueId}`, {
+      method: 'PATCH',
+      body,
+    }),
+  deleteOptionValue: (id: string, valueId: string) =>
+    adminFetch<ProductDetail>(`/api/admin/products/${id}/option-values/${valueId}`, {
+      method: 'DELETE',
+    }),
 
   createVariant: (id: string, body: VariantInput) =>
     adminFetch<Variant>(`/api/admin/products/${id}/variants`, { method: 'POST', body }),

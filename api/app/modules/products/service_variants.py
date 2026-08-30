@@ -54,6 +54,7 @@ async def replace_option_types(db: AsyncSession, product_id: str, option_types: 
             product_id=product.id,
             name=ot["name"],
             is_size=ot.get("is_size", False),
+            is_color=ot.get("is_color", False),
             position=ot.get("position", i),
         )
         db.add(row)
@@ -66,6 +67,94 @@ async def replace_option_types(db: AsyncSession, product_id: str, option_types: 
                     position=val.get("position", j),
                 )
             )
+    await db.flush()
+    return await _get_product(db, product_id)
+
+
+async def _get_type(db: AsyncSession, product_id: str, type_id: str) -> VariantOptionType:
+    ot = await db.scalar(
+        select(VariantOptionType)
+        .where(VariantOptionType.id == _uuid(type_id))
+        .options(selectinload(VariantOptionType.values))
+    )
+    if not ot or str(ot.product_id) != str(_uuid(product_id)):
+        raise NotFoundError("Eixo de opção não encontrado.")
+    return ot
+
+
+async def patch_option_type(
+    db: AsyncSession, product_id: str, type_id: str, data: dict
+) -> Product:
+    """Ajusta nome/flags de um eixo. Permitido mesmo com variações (não mexe em SKU)."""
+    ot = await _get_type(db, product_id, type_id)
+    if data.get("name") is not None and str(data["name"]).strip():
+        ot.name = str(data["name"]).strip()
+    if "is_size" in data and data["is_size"] is not None:
+        ot.is_size = bool(data["is_size"])
+    if "is_color" in data and data["is_color"] is not None:
+        ot.is_color = bool(data["is_color"])
+    await db.flush()
+    return await _get_product(db, product_id)
+
+
+async def add_option_value(
+    db: AsyncSession, product_id: str, type_id: str, value: str
+) -> Product:
+    """Inclui um novo valor num eixo existente (funciona mesmo com variações)."""
+    ot = await _get_type(db, product_id, type_id)
+    label = (value or "").strip()
+    if not label:
+        raise ValidationError("Informe o valor.")
+    if any(v.value.lower() == label.lower() for v in ot.values):
+        raise ConflictError(f"O valor '{label}' já existe neste eixo.")
+    pos = max((v.position for v in ot.values), default=-1) + 1
+    db.add(VariantOptionValue(option_type_id=ot.id, value=label, position=pos))
+    await db.flush()
+    return await _get_product(db, product_id)
+
+
+async def update_option_value(
+    db: AsyncSession, product_id: str, value_id: str, data: dict
+) -> Product:
+    """Renomeia um valor e/ou define a imagem (miniatura de cor)."""
+    val = await db.get(VariantOptionValue, _uuid(value_id))
+    if not val:
+        raise NotFoundError("Valor de opção não encontrado.")
+    ot = await _get_type(db, product_id, str(val.option_type_id))  # valida o produto
+    if data.get("value") is not None and str(data["value"]).strip():
+        val.value = str(data["value"]).strip()
+    if "image_id" in data:
+        img_id = data["image_id"]
+        if img_id:
+            from app.modules.products.models import ProductImage
+
+            img = await db.get(ProductImage, _uuid(img_id))
+            if not img or str(img.product_id) != str(_uuid(product_id)):
+                raise ValidationError("Imagem não pertence a este produto.")
+            val.image_id = img.id
+        else:
+            val.image_id = None
+    await db.flush()
+    _ = ot
+    return await _get_product(db, product_id)
+
+
+async def delete_option_value(db: AsyncSession, product_id: str, value_id: str) -> Product:
+    """Exclui um valor. Bloqueado se alguma variação já o usa."""
+    val = await db.get(VariantOptionValue, _uuid(value_id))
+    if not val:
+        raise NotFoundError("Valor de opção não encontrado.")
+    await _get_type(db, product_id, str(val.option_type_id))  # valida o produto
+    used = await db.scalar(
+        select(ProductVariantOption.variant_id)
+        .where(ProductVariantOption.option_value_id == val.id)
+        .limit(1)
+    )
+    if used:
+        raise ConflictError(
+            "Este valor está em uso por uma variação. Exclua a variação primeiro."
+        )
+    await db.delete(val)
     await db.flush()
     return await _get_product(db, product_id)
 
@@ -97,9 +186,12 @@ async def upsert_variant(db: AsyncSession, product_id: str, data: dict, variant_
         variant = ProductVariant(product_id=product.id)
         db.add(variant)
 
-    for f in ("sku", "price_cents", "compare_at_price_cents", "stock_qty", "weight_grams", "barcode", "is_active", "position"):
+    for f in ("sku", "price_cents", "compare_at_price_cents", "weight_grams", "barcode", "is_active", "position"):
         if f in data and data[f] is not None:
             setattr(variant, f, data[f])
+    # stock_qty: aceita None de propósito (== estoque ilimitado)
+    if "stock_qty" in data:
+        variant.stock_qty = data["stock_qty"]
     await db.flush()
 
     # sincroniza opções da variação
@@ -129,5 +221,7 @@ async def adjust_stock(db: AsyncSession, variant_id: str, delta: int) -> Product
     variant = await db.get(ProductVariant, _uuid(variant_id))
     if not variant:
         raise NotFoundError("Variação não encontrada.")
+    if variant.stock_qty is None:  # ilimitado: nada a ajustar
+        return variant
     variant.stock_qty = max(0, variant.stock_qty + delta)
     return variant

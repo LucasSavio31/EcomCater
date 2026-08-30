@@ -57,12 +57,17 @@ export interface OptionValue {
   id?: string;
   value: string;
   position?: number;
+  slug?: string | null;
+  image_id?: string | null;
+  swatch_thumb_url?: string | null;
+  swatch_medium_url?: string | null;
 }
 
 export interface OptionType {
   id?: string;
   name: string;
   is_size: boolean;
+  is_color?: boolean;
   position?: number;
   values: OptionValue[];
 }
@@ -74,7 +79,8 @@ export interface Variant {
   option_labels?: string[];
   price_cents: number | null;
   compare_at_price_cents: number | null;
-  stock_qty: number;
+  /** null = estoque ilimitado */
+  stock_qty: number | null;
   weight_grams: number | null;
   barcode: string | null;
   is_active: boolean;
@@ -86,7 +92,8 @@ export interface VariantInput {
   option_value_ids: string[];
   price_cents?: number | null;
   compare_at_price_cents?: number | null;
-  stock_qty: number;
+  /** null = estoque ilimitado */
+  stock_qty: number | null;
   weight_grams?: number | null;
   barcode?: string | null;
   is_active: boolean;

@@ -35,6 +35,45 @@ function formatCpf(cpf: string | null): string {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
+function VarField({
+  label,
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  disabled: boolean;
+  onChange: (v: string) => void;
+}) {
+  if (!options || options.length === 0) {
+    return (
+      <Input label={label} disabled={disabled} value={value} onChange={(e) => onChange(e.target.value)} />
+    );
+  }
+  const list = value && !options.includes(value) ? [value, ...options] : options;
+  return (
+    <label className="flex flex-col gap-1 text-sm font-medium text-text">
+      {label}
+      <select
+        disabled={disabled}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-h-touch rounded-card border border-surface-border bg-surface px-3 text-sm text-text disabled:opacity-60"
+      >
+        <option value="">—</option>
+        {list.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function buildDraft(d: OrderDetail): OrderEditPayload {
   return {
     email: d.email,
@@ -311,17 +350,19 @@ export default function PedidoDetalhePage() {
                           {it.name} ({it.sku})
                         </span>
                         <div className="grid gap-2 sm:grid-cols-2">
-                          <Input
+                          <VarField
                             label="Cor"
                             disabled={!editMode}
+                            options={it.cor_options}
                             value={edit.items?.find((x) => x.id === it.id)?.cor ?? ''}
-                            onChange={(e) => setItemAttr(it.id!, 'cor', e.target.value)}
+                            onChange={(v) => setItemAttr(it.id!, 'cor', v)}
                           />
-                          <Input
+                          <VarField
                             label="Número / tamanho"
                             disabled={!editMode}
+                            options={it.numero_options}
                             value={edit.items?.find((x) => x.id === it.id)?.numero ?? ''}
-                            onChange={(e) => setItemAttr(it.id!, 'numero', e.target.value)}
+                            onChange={(v) => setItemAttr(it.id!, 'numero', v)}
                           />
                         </div>
                       </div>

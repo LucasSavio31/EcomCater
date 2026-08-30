@@ -39,9 +39,12 @@ export interface OrderItem {
   id?: string;
   sku: string;
   name: string;
+  product_id: string | null;
   variant_label: string | null;
   cor: string | null;
   numero: string | null;
+  cor_options: string[];
+  numero_options: string[];
   supplier: string | null;
   image_url: string | null;
   unit_price_cents: number;

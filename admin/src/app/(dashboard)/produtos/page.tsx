@@ -9,6 +9,7 @@ import { DataTable, type Column } from '@/components/data-table';
 import { Select } from '@/components/form-controls';
 import { StatusBadge } from '@/components/status-badge';
 import { useResource } from '@/lib/use-resource';
+import { useToast } from '@/components/toast';
 import { formatBRL } from '@/lib/format';
 import { productsApi } from '@/modules/catalog/api';
 import type { ProductListItem, ProductStatus } from '@/modules/catalog/types';
@@ -17,16 +18,33 @@ const PAGE_SIZE = 20;
 
 export default function ProdutosPage() {
   const router = useRouter();
+  const toast = useToast();
   const [qInput, setQInput] = useState('');
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<ProductStatus | ''>('');
   const [page, setPage] = useState(1);
+  const [dupId, setDupId] = useState<string | null>(null);
 
   const fetcher = useCallback(
     () => productsApi.list({ q, status, page, page_size: PAGE_SIZE }),
     [q, status, page],
   );
   const { data, loading, error, reload } = useResource(fetcher, [q, status, page]);
+
+  const duplicate = useCallback(
+    async (id: string) => {
+      setDupId(id);
+      const res = await productsApi.duplicate(id);
+      setDupId(null);
+      if (!res.ok) {
+        toast.error(res.error.message);
+        return;
+      }
+      toast.success('Produto duplicado.');
+      router.push(`/produtos/${res.data.id}`);
+    },
+    [router, toast],
+  );
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
@@ -67,8 +85,24 @@ export default function ProdutosPage() {
         header: 'Destaque',
         cell: (p) => (p.is_featured ? <Badge tone="accent">Sim</Badge> : <span className="text-text-muted">—</span>),
       },
+      {
+        key: 'actions',
+        header: 'Ações',
+        cell: (p) => (
+          <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              variant="outline"
+              loading={dupId === p.id}
+              onClick={() => void duplicate(p.id)}
+            >
+              Duplicar
+            </Button>
+          </div>
+        ),
+      },
     ],
-    [],
+    [dupId, duplicate],
   );
 
   return (

@@ -111,7 +111,7 @@ async def add_item(db: AsyncSession, cart: Cart, variant_id: str, quantity: int)
     product, variant = await _get_variant(db, variant_id)
     existing = next((i for i in cart.items if str(i.variant_id) == str(variant.id)), None)
     desired = (existing.quantity if existing else 0) + quantity
-    if desired > variant.stock_qty:
+    if variant.stock_qty is not None and desired > variant.stock_qty:
         raise ValidationError(
             f"Estoque insuficiente: restam {variant.stock_qty} unidade(s) de {product.name}."
         )
@@ -141,7 +141,7 @@ async def update_item(db: AsyncSession, cart: Cart, item_id: str, quantity: int)
         await db.delete(item)
     else:
         _, variant = await _get_variant(db, str(item.variant_id))
-        if quantity > variant.stock_qty:
+        if variant.stock_qty is not None and quantity > variant.stock_qty:
             raise ValidationError(f"Estoque insuficiente: restam {variant.stock_qty}.")
         item.quantity = quantity
     await db.flush()
@@ -272,8 +272,14 @@ async def serialize(db: AsyncSession, cart: Cart, *, coupon_error: str | None = 
                 "unit_price_cents": i.unit_price_cents,
                 "quantity": i.quantity,
                 "line_total_cents": i.unit_price_cents * i.quantity,
-                "in_stock": bool(variant and variant.stock_qty >= i.quantity),
-                "max_qty": variant.stock_qty if variant else 0,
+                "in_stock": bool(
+                    variant and (variant.stock_qty is None or variant.stock_qty >= i.quantity)
+                ),
+                "max_qty": (
+                    variant.stock_qty
+                    if variant and variant.stock_qty is not None
+                    else 999
+                ),
                 "price_changed": bool(variant and current_price != i.unit_price_cents),
             }
         )
@@ -327,8 +333,13 @@ async def merge_guest_into_user(db: AsyncSession, *, guest_token: str, user_id: 
         key = str(gi.variant_id)
         if key in by_variant:
             _, variant = await _get_variant_safe(db, gi)
-            cap = variant.stock_qty if variant else by_variant[key].quantity
-            by_variant[key].quantity = min(cap, by_variant[key].quantity + gi.quantity)
+            merged = by_variant[key].quantity + gi.quantity
+            cap = (
+                variant.stock_qty
+                if variant and variant.stock_qty is not None
+                else merged
+            )
+            by_variant[key].quantity = min(cap, merged)
         else:
             db.add(
                 CartItem(

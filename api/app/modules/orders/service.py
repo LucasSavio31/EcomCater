@@ -109,7 +109,7 @@ async def create_from_cart(
         )
         if not v or not v.is_active:
             raise ConflictError("Um item do carrinho ficou indisponível.")
-        if v.stock_qty < item.quantity:
+        if v.stock_qty is not None and v.stock_qty < item.quantity:
             product = await db.get(Product, v.product_id)
             raise ConflictError(f"Estoque insuficiente para {product.name if product else v.sku}.")
         variants[item.variant_id] = v
@@ -158,7 +158,8 @@ async def create_from_cart(
     for item in cart.items:
         v = variants[item.variant_id]
         product = await db.get(Product, v.product_id)
-        v.stock_qty -= item.quantity  # baixa de estoque
+        if v.stock_qty is not None:
+            v.stock_qty -= item.quantity  # baixa de estoque (ilimitado = não baixa)
         primary_img = await db.scalar(
             select(ProductImage)
             .where(ProductImage.product_id == v.product_id)
@@ -247,7 +248,7 @@ async def _restore_stock(db: AsyncSession, order: Order) -> None:
     for it in order.items:
         if it.variant_id:
             v = await db.get(ProductVariant, it.variant_id)
-            if v:
+            if v and v.stock_qty is not None:
                 v.stock_qty += it.quantity
 
 
@@ -292,9 +293,13 @@ def _item_out(it: OrderItem) -> dict:
         "id": str(it.id),
         "sku": it.sku,
         "name": it.name,
+        "product_id": str(it.product_id) if it.product_id else None,
         "variant_label": it.variant_label,
         "cor": attrs.get("cor"),
         "numero": attrs.get("numero"),
+        # preenchidos por attach_variation_options() nas telas de detalhe
+        "cor_options": [],
+        "numero_options": [],
         "supplier": it.supplier,
         "image_url": storage.url(it.image_key) if it.image_key else None,
         "unit_price_cents": it.unit_price_cents,
@@ -336,6 +341,38 @@ def to_out(order: Order) -> dict:
             for e in sorted(order.events, key=lambda x: x.created_at or datetime.now(UTC))
         ],
     }
+
+
+async def attach_variation_options(db: AsyncSession, out: dict) -> dict:
+    """Enriquece cada item do pedido com as opções de Cor / Número cadastradas
+    no produto correspondente — para os dropdowns da tela de edição."""
+    from app.modules.products.models import VariantOptionType
+
+    pids = {i["product_id"] for i in out.get("items", []) if i.get("product_id")}
+    if not pids:
+        return out
+    rows = await db.scalars(
+        select(VariantOptionType)
+        .where(VariantOptionType.product_id.in_([uuid.UUID(p) for p in pids]))
+        .options(selectinload(VariantOptionType.values))
+    )
+    cor_by_pid: dict[str, list[str]] = {}
+    num_by_pid: dict[str, list[str]] = {}
+    for ot in rows:
+        pid = str(ot.product_id)
+        vals = [v.value for v in sorted(ot.values, key=lambda x: x.position)]
+        name = (ot.name or "").lower()
+        if ot.is_color or "cor" in name:
+            cor_by_pid.setdefault(pid, []).extend(vals)
+        if ot.is_size or "num" in name or "tam" in name:
+            num_by_pid.setdefault(pid, []).extend(vals)
+    for item in out.get("items", []):
+        pid = item.get("product_id")
+        if not pid:
+            continue
+        item["cor_options"] = cor_by_pid.get(pid, [])
+        item["numero_options"] = num_by_pid.get(pid, [])
+    return out
 
 
 def _customer_name(order: Order) -> str:

@@ -21,6 +21,9 @@ class Storage(ABC):
     @abstractmethod
     def url(self, key: str) -> str: ...
 
+    @abstractmethod
+    def read(self, key: str) -> bytes: ...
+
 
 class LocalStorage(Storage):
     def __init__(self, root: str, base_url: str) -> None:
@@ -48,6 +51,9 @@ class LocalStorage(Storage):
 
     def url(self, key: str) -> str:
         return f"{self.base_url}/{key.lstrip('/')}"
+
+    def read(self, key: str) -> bytes:
+        return self._path(key).read_bytes()
 
 
 def get_storage() -> Storage:
