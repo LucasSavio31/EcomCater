@@ -154,22 +154,28 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
     toast.success('Status atualizado.');
   }
 
-  const tabs: TabDef[] = isNew
-    ? [
-        { id: 'geral', label: 'Geral' },
-        { id: 'preco', label: 'Preço' },
-        { id: 'seo', label: 'SEO' },
-      ]
-    : [
-        { id: 'geral', label: 'Geral' },
-        { id: 'preco', label: 'Preço' },
-        { id: 'variacoes', label: 'Variações' },
-        { id: 'imagens', label: 'Imagens' },
-        { id: 'specs', label: 'Especificações' },
-        { id: 'relacionados', label: 'Relacionados' },
-        { id: 'seo', label: 'SEO' },
-        { id: 'avaliacoes', label: 'Avaliações' },
-      ];
+  // O mesmo conjunto de abas para todo produto (novo ou existente).
+  const tabs: TabDef[] = [
+    { id: 'geral', label: 'Geral' },
+    { id: 'preco', label: 'Preço' },
+    { id: 'variacoes', label: 'Variações' },
+    { id: 'imagens', label: 'Imagens' },
+    { id: 'specs', label: 'Especificações' },
+    { id: 'relacionados', label: 'Relacionados' },
+    { id: 'seo', label: 'SEO' },
+    { id: 'avaliacoes', label: 'Avaliações' },
+  ];
+
+  const NeedsSave = () => (
+    <div className="rounded-card border border-dashed border-surface-border p-6 text-center text-sm text-text-muted">
+      Salve o produto primeiro para gerenciar esta seção.
+      <div className="mt-3">
+        <Button size="sm" loading={saving} onClick={() => void handleSave()}>
+          Criar produto
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -381,13 +387,16 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
           </Card>
         )}
 
-        {!isNew && tab === 'variacoes' && (
-          <VariantsTab product={product} onChanged={onSaved} />
-        )}
-        {!isNew && tab === 'imagens' && <ImagesTab product={product} onChanged={onSaved} />}
-        {!isNew && tab === 'specs' && <SpecsTab product={product} onChanged={onSaved} />}
-        {!isNew && tab === 'relacionados' && <RelatedTab product={product} onChanged={onSaved} />}
-        {!isNew && tab === 'avaliacoes' && <ReviewsTab productId={product.id} />}
+        {tab === 'variacoes' &&
+          (product ? <VariantsTab product={product} onChanged={onSaved} /> : <NeedsSave />)}
+        {tab === 'imagens' &&
+          (product ? <ImagesTab product={product} onChanged={onSaved} /> : <NeedsSave />)}
+        {tab === 'specs' &&
+          (product ? <SpecsTab product={product} onChanged={onSaved} /> : <NeedsSave />)}
+        {tab === 'relacionados' &&
+          (product ? <RelatedTab product={product} onChanged={onSaved} /> : <NeedsSave />)}
+        {tab === 'avaliacoes' &&
+          (product ? <ReviewsTab productId={product.id} /> : <NeedsSave />)}
       </Tabs>
 
       {isNew && (

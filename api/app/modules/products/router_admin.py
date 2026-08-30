@@ -221,6 +221,26 @@ async def replace_specs(product_id: str, body: list[SpecIn], db: DbDep, _: Edito
 
 
 # ------------------------------------------------------------------ reviews
+@router.get("/reviews/all", response_model=None)
+async def all_reviews(
+    db: DbDep,
+    _: AdminDep,
+    status_filter: str | None = Query(None, alias="status"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(30, ge=1, le=100),
+) -> dict:
+    """Todas as avaliações da loja — menu de moderação."""
+    return await service.list_all_reviews(db, status=status_filter, page=page, page_size=page_size)
+
+
+@router.post("/reviews/{review_id}/moderate")
+async def moderate_any_review(
+    review_id: str, body: ReviewModerateIn, db: DbDep, _: EditorDep
+) -> dict:
+    r = await service.moderate_review(db, review_id, body.status)
+    return {"id": str(r.id), "status": r.status}
+
+
 @router.get("/{product_id}/reviews")
 async def list_reviews(
     product_id: str, db: DbDep, _: AdminDep, status_filter: str | None = Query(None, alias="status")

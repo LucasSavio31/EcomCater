@@ -3,6 +3,7 @@
 import { adminFetch, ADMIN_API_BASE_URL, type ApiResult } from '@/lib/admin-api-client';
 import { getSession } from '@/lib/auth-storage';
 import type {
+  AdminReview,
   Category,
   CategoryInput,
   CategoryTreeNode,
@@ -163,6 +164,17 @@ export const productsApi = {
     }),
   moderateReview: (id: string, rid: string, status: 'approved' | 'rejected' | 'pending') =>
     adminFetch<ProductReview>(`/api/admin/products/${id}/reviews/${rid}/moderate`, {
+      method: 'POST',
+      body: { status },
+    }),
+
+  /** Todas as avaliações da loja (menu de moderação). */
+  allReviews: (status: string | undefined, page: number) =>
+    adminFetch<Paginated<AdminReview>>('/api/admin/products/reviews/all', {
+      query: { status: status || undefined, page, page_size: 30 },
+    }),
+  moderateAnyReview: (rid: string, status: 'approved' | 'rejected' | 'pending') =>
+    adminFetch<{ id: string; status: string }>(`/api/admin/products/reviews/${rid}/moderate`, {
       method: 'POST',
       body: { status },
     }),

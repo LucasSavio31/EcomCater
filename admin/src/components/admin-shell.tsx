@@ -23,6 +23,7 @@ import {
   IconPromotions,
   IconSeals,
   IconShipping,
+  IconStar,
   IconUsers,
 } from './nav-icons';
 
@@ -49,6 +50,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/produtos', label: 'Produtos', icon: IconProducts },
       { href: '/categorias', label: 'Categorias', icon: IconCategories },
       { href: '/filtros', label: 'Filtros', icon: IconFilters },
+      { href: '/avaliacoes', label: 'Avaliações', icon: IconStar },
     ],
   },
   {

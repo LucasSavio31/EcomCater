@@ -11,7 +11,10 @@ export interface PickerResult {
   primary_image_url?: string | null;
 }
 
-/** Campo de busca de produtos com dropdown de resultados. Chama onPick ao escolher. */
+/**
+ * Combobox de produtos: abre um dropdown com a lista ao focar e filtra
+ * conforme se digita (busca no servidor a partir de 2 letras).
+ */
 export function ProductPicker({
   excludeIds = [],
   label = 'Buscar produto para adicionar',
@@ -23,10 +26,29 @@ export function ProductPicker({
 }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
-  const [results, setResults] = useState<PickerResult[]>([]);
+  const [base, setBase] = useState<PickerResult[]>([]); // lista inicial (sem busca)
+  const [results, setResults] = useState<PickerResult[]>([]); // resultado da busca
   const [loading, setLoading] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrap = useRef<HTMLDivElement | null>(null);
 
+  // lista inicial ao montar
+  useEffect(() => {
+    void productsApi.list({ page: 1, page_size: 50 }).then((r) => {
+      if (r.ok) {
+        setBase(
+          r.data.items.map((p) => ({
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            primary_image_url: p.primary_image_url,
+          })),
+        );
+      }
+    });
+  }, []);
+
+  // busca no servidor com debounce
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
     if (q.trim().length < 2) {
@@ -35,7 +57,7 @@ export function ProductPicker({
     }
     timer.current = setTimeout(async () => {
       setLoading(true);
-      const res = await productsApi.list({ q: q.trim(), page: 1, page_size: 20 });
+      const res = await productsApi.list({ q: q.trim(), page: 1, page_size: 30 });
       setLoading(false);
       if (res.ok) {
         setResults(
@@ -46,7 +68,6 @@ export function ProductPicker({
             primary_image_url: p.primary_image_url,
           })),
         );
-        setOpen(true);
       }
     }, 300);
     return () => {
@@ -54,19 +75,35 @@ export function ProductPicker({
     };
   }, [q]);
 
-  const visible = results.filter((r) => !excludeIds.includes(r.id));
+  // fecha ao clicar fora
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const source = q.trim().length >= 2 ? results : base;
+  const needle = q.trim().toLowerCase();
+  const visible = source
+    .filter((r) => !excludeIds.includes(r.id))
+    .filter((r) => (needle && q.trim().length < 2 ? r.name.toLowerCase().includes(needle) : true));
 
   return (
-    <div className="relative max-w-md">
+    <div className="relative max-w-md" ref={wrap}>
       <Input
         label={label}
-        placeholder="Digite ao menos 2 letras"
+        placeholder="Clique para ver a lista ou digite para buscar"
         value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onFocus={() => results.length > 0 && setOpen(true)}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
       />
-      {open && q.trim().length >= 2 && (
-        <ul className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-card border border-surface-border bg-surface shadow-lg">
+      {open && (
+        <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-card border border-surface-border bg-surface shadow-lg">
           {loading && <li className="px-3 py-2 text-sm text-text-muted">Buscando…</li>}
           {!loading && visible.length === 0 && (
             <li className="px-3 py-2 text-sm text-text-muted">Nenhum produto.</li>

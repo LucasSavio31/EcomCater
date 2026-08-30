@@ -816,9 +816,27 @@ async def add_review(db: AsyncSession, product_id: str, data: dict) -> ProductRe
     product = await db.get(Product, _uuid(product_id))
     if not product:
         raise NotFoundError("Produto não encontrado.")
+
+    user_id = _uuid(data["user_id"]) if data.get("user_id") else None
+    if user_id:
+        existing = await db.scalar(
+            select(ProductReview).where(
+                ProductReview.product_id == product.id, ProductReview.user_id == user_id
+            )
+        )
+        if existing:
+            existing.rating = data["rating"]
+            existing.title = data.get("title")
+            existing.body = data.get("body")
+            existing.status = "pending"
+            existing.created_at = datetime.now(UTC)
+            await db.flush()
+            return existing
+
     review = ProductReview(
         product_id=product.id,
-        author_name=data["author_name"],
+        user_id=user_id,
+        author_name=data.get("author_name") or "Cliente",
         rating=data["rating"],
         title=data.get("title"),
         body=data.get("body"),
@@ -860,3 +878,34 @@ async def list_reviews(db: AsyncSession, product_id: str, *, status: str | None 
     if status:
         stmt = stmt.where(ProductReview.status == status)
     return list(await db.scalars(stmt.order_by(ProductReview.created_at.desc())))
+
+
+async def list_all_reviews(
+    db: AsyncSession, *, status: str | None = None, page: int = 1, page_size: int = 30
+) -> dict:
+    """Todas as avaliações da loja, para o menu de moderação."""
+    stmt = select(ProductReview).options(selectinload(ProductReview.product))
+    if status:
+        stmt = stmt.where(ProductReview.status == status)
+    total = int(await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
+    rows = await db.scalars(
+        stmt.order_by(ProductReview.created_at.desc())
+        .limit(page_size)
+        .offset((page - 1) * page_size)
+    )
+    items = [
+        {
+            "id": str(r.id),
+            "product_id": str(r.product_id),
+            "product_name": r.product.name if r.product else "—",
+            "product_slug": r.product.slug if r.product else None,
+            "author_name": r.author_name,
+            "rating": r.rating,
+            "title": r.title,
+            "body": r.body,
+            "status": r.status,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}

@@ -128,6 +128,11 @@ export const IconLeads = (p: P) => (
     <path d="M8 9h8M8 12h5" />
   </svg>
 );
+export const IconStar = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 21l1.1-6.5L2.6 9.8l6.5-.9L12 3Z" />
+  </svg>
+);
 export const IconEdit = (p: P) => (
   <svg {...base(p)}>
     <path d="M12 20h9" />

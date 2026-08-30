@@ -7,13 +7,16 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import get_current_customer
 from app.core.ratelimit import rate_limit
+from app.modules.customers.models import User
 from app.modules.products import service
 from app.modules.products.schemas import ProductDetail, ReviewIn
 
 router = APIRouter()
 
 DbDep = Annotated[AsyncSession, Depends(get_db)]
+CurrentCustomer = Annotated[User, Depends(get_current_customer)]
 
 
 @router.get("")
@@ -66,8 +69,18 @@ async def create_review(
     slug: str,
     body: ReviewIn,
     db: DbDep,
+    customer: CurrentCustomer,
     _rl: Annotated[None, Depends(rate_limit("5/minute", scope="review"))],
 ) -> dict:
+    """Só clientes logados avaliam. A avaliação entra na fila de moderação."""
     product = await service.get_detail_by_slug(db, slug)
-    review = await service.add_review(db, product["id"], body.model_dump())
+    review = await service.add_review(
+        db,
+        product["id"],
+        {
+            **body.model_dump(),
+            "author_name": customer.full_name or (customer.email or "Cliente").split("@")[0],
+            "user_id": str(customer.id),
+        },
+    )
     return {"id": str(review.id), "status": review.status}

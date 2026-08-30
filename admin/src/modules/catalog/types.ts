@@ -129,6 +129,12 @@ export interface ProductReview {
   created_at: string;
 }
 
+export interface AdminReview extends ProductReview {
+  product_id: string;
+  product_name: string;
+  product_slug: string | null;
+}
+
 export interface RelatedProduct {
   id: string;
   name: string;
