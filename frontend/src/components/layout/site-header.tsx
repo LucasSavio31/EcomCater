@@ -9,6 +9,7 @@ import type { ThemeSettings } from '@/modules/theme';
 import type { Menu, MenuItem } from '@/modules/menus/types';
 import { useCart } from '@/modules/cart/cart-context';
 import { resolveMediaUrl } from '@/lib/media';
+import { formatBRL, freeShippingRemaining } from '@/lib/format';
 import {
   BagIcon,
   ChevronDownIcon,
@@ -20,7 +21,6 @@ import {
   WhatsappIcon,
 } from '@/components/icons';
 import { SearchPanel } from './search-panel';
-import { FreeShippingProgress } from './free-shipping-progress';
 import { MobileNav } from './mobile-nav';
 
 interface SiteHeaderProps {
@@ -37,7 +37,7 @@ function whatsappHref(raw?: string | null): string | null {
 
 export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
   const pathname = usePathname();
-  const { count, openMiniCart } = useCart();
+  const { count, openMiniCart, subtotalCents } = useCart();
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openMega, setOpenMega] = useState<string | null>(null);
@@ -53,48 +53,69 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
   const logo = resolveMediaUrl(theme.logo_url);
   const wa = whatsappHref(theme.whatsapp_number);
 
-  // Barra superior: 1 texto estático ou carrossel com até 3 textos.
-  const topBarMessages = [theme.top_bar_message, theme.top_bar_message_2, theme.top_bar_message_3]
+  // Barra superior: junta o progresso do frete grátis (quando há um mínimo
+  // configurado) com as mensagens do tema. Sem carrossel = só a 1ª mensagem.
+  const freeShipMsg = theme.free_shipping_threshold_cents
+    ? freeShippingRemaining(subtotalCents, theme.free_shipping_threshold_cents) === 0
+      ? 'Você ganhou frete grátis! 🎉'
+      : `Faltam ${formatBRL(
+          freeShippingRemaining(subtotalCents, theme.free_shipping_threshold_cents),
+        )} para o frete grátis`
+    : null;
+
+  const configuredMessages = (
+    theme.top_bar_carousel
+      ? [theme.top_bar_message, theme.top_bar_message_2, theme.top_bar_message_3]
+      : [theme.top_bar_message]
+  )
     .map((m) => (m ?? '').trim())
     .filter(Boolean);
-  if (topBarMessages.length === 0) {
-    topBarMessages.push(
-      theme.free_shipping_threshold_cents
-        ? 'Frete grátis nas compras acima do valor mínimo'
-        : 'Bem-vindo à nossa loja',
-    );
-  }
-  const carousel = theme.top_bar_carousel && topBarMessages.length > 1;
+
+  const topBarMessages = [freeShipMsg, ...configuredMessages].filter(Boolean) as string[];
+  if (topBarMessages.length === 0) topBarMessages.push('Bem-vindo à nossa loja');
+
+  const rotate = topBarMessages.length > 1;
+  const showTopBar = theme.top_bar_enabled || Boolean(freeShipMsg);
   const [topBarIdx, setTopBarIdx] = useState(0);
   useEffect(() => {
-    if (!carousel) return;
+    if (!rotate) return;
     setTopBarIdx(0);
     const id = window.setInterval(
       () => setTopBarIdx((i) => (i + 1) % topBarMessages.length),
       4000,
     );
     return () => window.clearInterval(id);
-  }, [carousel, topBarMessages.length]);
+  }, [rotate, topBarMessages.length]);
 
   return (
     <header className="sticky top-0 z-40 border-b border-surface-border bg-header text-header-fg">
-      {/* Barra utilitária */}
-      {theme.top_bar_enabled && (
+      {/* Barra utilitária (tarja superior) */}
+      {showTopBar && (
         <div style={{ backgroundColor: theme.top_bar_bg_color, color: theme.top_bar_text_color }}>
-          <div className="mx-auto flex max-w-header items-center justify-between gap-3 px-4 py-1.5 text-xs">
-            <p key={carousel ? topBarIdx : 'static'} className="truncate transition-opacity">
-              {carousel ? topBarMessages[topBarIdx] : topBarMessages[0]}
+          <div
+            className={`mx-auto grid max-w-header items-center gap-3 px-4 py-1.5 text-xs ${
+              theme.top_bar_centered ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-[1fr_auto]'
+            }`}
+          >
+            {theme.top_bar_centered && <span aria-hidden />}
+            <p
+              key={rotate ? topBarIdx : 'static'}
+              className={`truncate transition-opacity ${theme.top_bar_centered ? 'text-center' : ''}`}
+            >
+              {rotate ? topBarMessages[topBarIdx] : topBarMessages[0]}
             </p>
-            {wa && (
+            {wa ? (
               <a
                 href={wa}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex shrink-0 items-center gap-1 hover:underline"
+                className="inline-flex shrink-0 items-center gap-1 justify-self-end hover:underline"
               >
                 <WhatsappIcon className="h-4 w-4" />
                 <span className="hidden sm:inline">Atendimento</span>
               </a>
+            ) : (
+              <span aria-hidden />
             )}
           </div>
         </div>
@@ -210,19 +231,6 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
           )}
         </div>
       </div>
-
-      {/* Progresso frete grátis */}
-      {theme.free_shipping_threshold_cents ? (
-        <div className="border-t border-surface-border bg-bg-subtle">
-          <div className="mx-auto max-w-header px-4 py-1.5">
-            <FreeShippingProgress
-              thresholdCents={theme.free_shipping_threshold_cents}
-              variant="text"
-              className="text-center text-text-muted"
-            />
-          </div>
-        </div>
-      ) : null}
 
       <SearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} />
 

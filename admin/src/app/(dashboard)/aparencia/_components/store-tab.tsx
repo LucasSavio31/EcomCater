@@ -6,10 +6,10 @@ import { Textarea } from '@/components/form-controls';
 import { AsyncBoundary } from '@/components/async-boundary';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
-import { centsToInput, inputToCents } from '@/lib/format';
 import { appearanceApi, type StoreSettings } from '@/modules/appearance/api';
 import { lookupCep } from '@/lib/viacep';
 import { maskPhone } from '@/lib/phone';
+import { CurrencyField } from '@/components/currency-field';
 
 const ADDRESS_FIELDS: Array<{ key: string; label: string }> = [
   { key: 'zip', label: 'CEP' },
@@ -99,11 +99,10 @@ export function StoreTab() {
                 value={maskPhone(settings.contact_whatsapp ?? '')}
                 onChange={(e) => set('contact_whatsapp', maskPhone(e.target.value))}
               />
-              <Input
+              <CurrencyField
                 label="Frete grátis a partir de (R$)"
-                inputMode="decimal"
-                value={centsToInput(settings.free_shipping_threshold_cents)}
-                onChange={(e) => set('free_shipping_threshold_cents', inputToCents(e.target.value))}
+                cents={settings.free_shipping_threshold_cents}
+                onChange={(c) => set('free_shipping_threshold_cents', c)}
               />
             </div>
           </Card>

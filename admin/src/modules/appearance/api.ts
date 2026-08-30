@@ -32,6 +32,7 @@ export interface Theme {
   top_bar_message: string | null;
   top_bar_enabled: boolean;
   top_bar_carousel: boolean;
+  top_bar_centered: boolean;
   top_bar_message_2: string | null;
   top_bar_message_3: string | null;
   top_bar_bg_color: string;

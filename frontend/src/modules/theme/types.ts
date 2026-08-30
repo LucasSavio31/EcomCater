@@ -31,6 +31,7 @@ export interface ThemeSettings {
   top_bar_enabled: boolean;
   /** Barra superior em carrossel: roda as 3 mensagens; senão mostra só a 1ª. */
   top_bar_carousel: boolean;
+  top_bar_centered: boolean;
   top_bar_message_2?: string | null;
   top_bar_message_3?: string | null;
   top_bar_bg_color: string;
@@ -163,6 +164,7 @@ export const NEUTRAL_THEME: ThemeSettings = {
   top_bar_enabled: false,
   top_bar_message: null,
   top_bar_carousel: false,
+  top_bar_centered: false,
   top_bar_message_2: null,
   top_bar_message_3: null,
   top_bar_bg_color: '#111111',

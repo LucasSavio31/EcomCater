@@ -21,7 +21,7 @@ _THEME_FIELDS = {
     "header_bg_color", "header_text_color", "header_max_width_px",
     "footer_bg_color", "footer_text_color",
     "font_family", "free_shipping_threshold_cents", "whatsapp_number",
-    "top_bar_message", "top_bar_enabled", "top_bar_carousel",
+    "top_bar_message", "top_bar_enabled", "top_bar_carousel", "top_bar_centered",
     "top_bar_message_2", "top_bar_message_3",
     "top_bar_bg_color", "top_bar_text_color",
     "hero_enabled", "hero_mode", "hero_autoplay_seconds",
@@ -56,7 +56,7 @@ _THEME_FIELDS = {
 }
 
 _BOOL_FIELDS = {
-    "top_bar_enabled", "top_bar_carousel",
+    "top_bar_enabled", "top_bar_carousel", "top_bar_centered",
     "hero_enabled", "footer_seals_enabled", "cart_redirect_after_add",
     "mini_cart_enabled",
     "checkout_email_first", "checkout_show_coupon", "checkout_allow_qty_change",

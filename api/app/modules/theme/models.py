@@ -64,6 +64,10 @@ class ThemeSettings(Base):
     top_bar_carousel: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
     )
+    # texto centralizado na tarja (senão fica à esquerda, WhatsApp à direita)
+    top_bar_centered: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     top_bar_message_2: Mapped[str | None] = mapped_column(String(240))
     top_bar_message_3: Mapped[str | None] = mapped_column(String(240))
     top_bar_bg_color: Mapped[str] = mapped_column(

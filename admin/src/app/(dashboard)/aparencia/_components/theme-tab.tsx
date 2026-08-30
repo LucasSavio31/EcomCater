@@ -7,8 +7,9 @@ import { ImageUploader } from '@/components/image-uploader';
 import { useToast } from '@/components/toast';
 import { AsyncBoundary } from '@/components/async-boundary';
 import { useResource } from '@/lib/use-resource';
-import { centsToInput, inputToCents } from '@/lib/format';
 import { ColorField } from '@/components/color-field';
+import { CurrencyField } from '@/components/currency-field';
+import { maskPhone } from '@/lib/phone';
 import { appearanceApi, type Theme, type ThemeImageKind } from '@/modules/appearance/api';
 import { revalidateStore } from '@/lib/revalidate-store';
 
@@ -217,6 +218,12 @@ export function ThemeTab() {
                 checked={theme.top_bar_carousel}
                 onChange={(v) => set('top_bar_carousel', v)}
               />
+              <Checkbox
+                label="Texto centralizado"
+                hint="Desligado: texto à esquerda e WhatsApp à direita (padrão atual). Ligado: texto/carrossel no centro da página."
+                checked={theme.top_bar_centered}
+                onChange={(v) => set('top_bar_centered', v)}
+              />
               {theme.top_bar_carousel ? (
                 <>
                   <Input
@@ -256,14 +263,15 @@ export function ThemeTab() {
               </div>
               <Input
                 label="WhatsApp"
-                value={theme.whatsapp_number ?? ''}
-                onChange={(e) => set('whatsapp_number', e.target.value)}
+                inputMode="numeric"
+                placeholder="(11) 99999-9999"
+                value={maskPhone(theme.whatsapp_number ?? '')}
+                onChange={(e) => set('whatsapp_number', e.target.value.replace(/\D/g, ''))}
               />
-              <Input
+              <CurrencyField
                 label="Frete grátis a partir de (R$)"
-                inputMode="decimal"
-                value={centsToInput(theme.free_shipping_threshold_cents)}
-                onChange={(e) => set('free_shipping_threshold_cents', inputToCents(e.target.value))}
+                cents={theme.free_shipping_threshold_cents}
+                onChange={(c) => set('free_shipping_threshold_cents', c)}
               />
             </Card>
 
