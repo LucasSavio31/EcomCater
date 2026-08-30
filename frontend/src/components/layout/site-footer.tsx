@@ -31,8 +31,6 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
       ? menu.items
       : [{ id: 'inst', label: 'Institucional', url: '#', highlight: false, is_megamenu: false, size_shortcuts: [], children: FALLBACK_LINKS.map((l, i) => ({ id: `fb-${i}`, label: l.label, url: l.url, highlight: false, is_megamenu: false, size_shortcuts: [], children: [] })) }];
 
-  const year = new Date().getFullYear();
-
   return (
     <footer className="mt-16 border-t border-surface-border bg-footer text-footer-fg">
       <div className="mx-auto max-w-header px-4 py-10">
@@ -48,6 +46,14 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
                 <span className="text-lg font-bold">{storeName}</span>
               )}
             </Link>
+            <p className="text-xs leading-relaxed text-footer-fg/60">
+              {storeName} — Preços e condições de pagamento exclusivos para compras via internet.
+              Endereço comercial disponível na página{' '}
+              <Link href="/pagina/fale-conosco" className="underline hover:text-footer-fg">
+                Fale conosco
+              </Link>
+              .
+            </p>
             <SocialIcons links={socialLinks} />
           </div>
 
@@ -77,21 +83,6 @@ export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFoo
             <FooterSealsBar seals={theme.footer_seals_json} />
           </div>
         )}
-
-        {/* Legal */}
-        <div className="mt-6 border-t border-footer-fg/15 pt-6 text-xs text-footer-fg/70">
-          <p>
-            {storeName} — CNPJ 00.000.000/0001-00. Endereço comercial disponível na página{' '}
-            <Link href="/pagina/fale-conosco" className="underline hover:text-footer-fg">
-              Fale conosco
-            </Link>
-            .
-          </p>
-          <p className="mt-1">
-            © {year} {storeName}. Todos os direitos reservados. Preços e condições de pagamento
-            exclusivos para compras via internet.
-          </p>
-        </div>
       </div>
     </footer>
   );
