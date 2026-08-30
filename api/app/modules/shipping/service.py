@@ -219,3 +219,79 @@ async def handle_tracking_webhook(
         )
         await emit("order.status_changed", {"order_id": str(order.id), "status": new_status})
     return {"matched": True, "status": update.status}
+
+
+async def send_orders_to_melhor_envio(db: AsyncSession, order_numbers: list[str]) -> dict:
+    """Adiciona cada pedido ao carrinho do Melhor Envio (`POST /api/v2/me/cart`).
+
+    A compra/impressão da etiqueta é finalizada no painel do ME. Sem o token
+    configurado (ou sem dados de remetente), devolve o motivo por pedido.
+    """
+    import httpx
+
+    from app.modules.orders.models import Order
+
+    cfg = await load_config(db)
+    token = cfg.melhor_envio_token or settings.melhor_envio_token
+    results: list[dict] = []
+    if not token:
+        for n in order_numbers:
+            results.append({"number": n, "ok": False, "message": "Configure o token do Melhor Envio no menu Frete."})
+        return {"results": results}
+
+    base = (cfg.melhor_envio_api_url or settings.melhor_envio_api_url).rstrip("/") if hasattr(cfg, "melhor_envio_api_url") else settings.melhor_envio_api_url.rstrip("/")
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": settings.melhor_envio_user_agent,
+    }
+    origin = cfg.origin_zip or settings.shipping_origin_zip
+
+    for number in order_numbers:
+        order = await db.scalar(
+            select(Order).where(Order.number == number).options(selectinload(Order.items))
+        )
+        if not order:
+            results.append({"number": number, "ok": False, "message": "Pedido não encontrado."})
+            continue
+        addr = order.shipping_address_json or {}
+        svc = (order.shipping_service_json or {})
+        service_id = svc.get("id") or svc.get("service_id")
+        if not service_id:
+            results.append({"number": number, "ok": False, "message": "Pedido sem serviço de frete escolhido."})
+            continue
+        payload = {
+            "service": int(service_id) if str(service_id).isdigit() else service_id,
+            "from": {"postal_code": origin},
+            "to": {
+                "name": addr.get("recipient_name", ""),
+                "phone": "".join(ch for ch in str(addr.get("phone", "")) if ch.isdigit()),
+                "email": order.email,
+                "address": addr.get("street", ""),
+                "number": addr.get("number", ""),
+                "complement": addr.get("complement", ""),
+                "district": addr.get("district", ""),
+                "city": addr.get("city", ""),
+                "state_abbr": addr.get("state", ""),
+                "country_id": "BR",
+                "postal_code": "".join(ch for ch in str(addr.get("zip", "")) if ch.isdigit()),
+            },
+            "products": [
+                {"name": it.name[:120], "quantity": it.quantity, "unitary_value": round(it.unit_price_cents / 100, 2)}
+                for it in order.items
+            ],
+            "volumes": [{"height": 10, "width": 15, "length": 20, "weight": 0.5}],
+            "options": {"insurance_value": round(order.grand_total_cents / 100, 2), "receipt": False, "own_hand": False},
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15) as c:
+                r = await c.post(f"{base}/api/v2/me/cart", headers=headers, json=payload)
+            if r.status_code < 300:
+                results.append({"number": number, "ok": True, "message": "Adicionado ao carrinho do Melhor Envio."})
+            else:
+                results.append({"number": number, "ok": False, "message": f"ME {r.status_code}: {r.text[:200]}"})
+        except Exception as exc:  # noqa: BLE001
+            results.append({"number": number, "ok": False, "message": f"Erro de rede: {exc}"})
+
+    return {"results": results}

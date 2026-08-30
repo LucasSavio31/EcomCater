@@ -33,12 +33,13 @@ export async function fetchCustomers(): Promise<ApiResult<CustomerSummary[]>> {
   const map = new Map<string, CustomerSummary>();
   for (const order of all) {
     const key = order.email.toLowerCase();
+    const orderAt = order.placed_at ?? order.created_at;
     const existing = map.get(key);
     if (existing) {
       existing.orders_count += 1;
       existing.total_spent_cents += order.grand_total_cents;
-      if (order.placed_at > existing.last_order_at) {
-        existing.last_order_at = order.placed_at;
+      if (orderAt > existing.last_order_at) {
+        existing.last_order_at = orderAt;
         existing.last_status = order.status;
       }
     } else {
@@ -46,7 +47,7 @@ export async function fetchCustomers(): Promise<ApiResult<CustomerSummary[]>> {
         email: order.email,
         orders_count: 1,
         total_spent_cents: order.grand_total_cents,
-        last_order_at: order.placed_at,
+        last_order_at: orderAt,
         last_status: order.status,
       });
     }

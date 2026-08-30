@@ -283,6 +283,7 @@ async def add_note(db: AsyncSession, order: Order, message: str, actor_id: str |
 # --------------------------------------------------------------------- serialização
 def _item_out(it: OrderItem) -> dict:
     return {
+        "id": str(it.id),
         "sku": it.sku,
         "name": it.name,
         "variant_label": it.variant_label,
@@ -328,25 +329,62 @@ def to_out(order: Order) -> dict:
 
 
 def list_item_out(order: Order) -> dict:
+    items = list(order.items)
+    total_qty = sum(i.quantity for i in items)
+    if not items:
+        summary = "—"
+    elif len(items) == 1:
+        summary = f"{items[0].name}"
+        if items[0].quantity > 1:
+            summary += f" (x{items[0].quantity})"
+    else:
+        summary = f"{items[0].name} + {len(items) - 1} item(ns)"
     return {
         "id": str(order.id),
         "number": order.number,
         "status": order.status,
         "payment_status": order.payment_status,
+        "fulfillment_status": order.fulfillment_status,
         "email": order.email,
         "grand_total_cents": order.grand_total_cents,
         "placed_at": order.placed_at,
+        "created_at": order.created_at,
+        "items_summary": summary,
+        "items_count": total_qty,
+        "suppliers": sorted({i.supplier for i in items if i.supplier}),
     }
 
 
 async def admin_list(
-    db: AsyncSession, *, status: str | None, q: str | None, page: int, page_size: int
+    db: AsyncSession,
+    *,
+    status: str | None = None,
+    payment_status: str | None = None,
+    q: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    page: int = 1,
+    page_size: int = 25,
 ) -> dict:
-    stmt = select(Order)
+    from datetime import date
+
+    stmt = select(Order).options(selectinload(Order.items))
     if status:
         stmt = stmt.where(Order.status == status)
+    if payment_status:
+        stmt = stmt.where(Order.payment_status == payment_status)
     if q:
         stmt = stmt.where((Order.number.ilike(f"%{q}%")) | (Order.email.ilike(f"%{q}%")))
+    if date_from:
+        try:
+            stmt = stmt.where(Order.created_at >= datetime.combine(date.fromisoformat(date_from), datetime.min.time(), tzinfo=UTC))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            stmt = stmt.where(Order.created_at <= datetime.combine(date.fromisoformat(date_to), datetime.max.time(), tzinfo=UTC))
+        except ValueError:
+            pass
     total = int(await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
     rows = await db.scalars(
         stmt.order_by(Order.placed_at.desc().nullslast(), Order.created_at.desc())
@@ -359,3 +397,72 @@ async def admin_list(
         "page": page,
         "page_size": page_size,
     }
+
+
+_ADDR_KEYS = (
+    "recipient_name", "zip", "street", "number", "complement",
+    "district", "city", "state", "country", "phone",
+)
+
+
+async def edit_order(db: AsyncSession, number: str, data: dict) -> Order:
+    """Edita dados do comprador/envio e rótulos dos itens (uso admin)."""
+    order = await get_by_number(db, number)
+
+    if data.get("email"):
+        order.email = str(data["email"]).strip()
+    if data.get("customer_note") is not None:
+        order.customer_note = str(data["customer_note"]).strip() or None
+    if isinstance(data.get("shipping_address"), dict):
+        addr = dict(order.shipping_address_json or {})
+        for k in _ADDR_KEYS:
+            if k in data["shipping_address"] and data["shipping_address"][k] is not None:
+                addr[k] = str(data["shipping_address"][k]).strip()
+        order.shipping_address_json = addr
+    if isinstance(data.get("shipping_service"), dict):
+        svc = dict(order.shipping_service_json or {})
+        svc.update({k: v for k, v in data["shipping_service"].items() if v is not None})
+        order.shipping_service_json = svc
+        if data["shipping_service"].get("tracking_code"):
+            order.shipping_method = order.shipping_method  # noqa: keep
+
+    for it_edit in data.get("items", []) or []:
+        it = next((x for x in order.items if str(x.id) == str(it_edit.get("id"))), None)
+        if not it:
+            continue
+        if it_edit.get("variant_label") is not None:
+            it.variant_label = str(it_edit["variant_label"]).strip() or None
+        if it_edit.get("name"):
+            it.name = str(it_edit["name"]).strip()
+
+    await record_event(db, order, type="edited", actor_type="admin", message="Dados do pedido editados")
+    await db.flush()
+    return await _load(db, order.id)
+
+
+async def delete_order(db: AsyncSession, number: str) -> None:
+    """Apaga o pedido do banco (itens/eventos/pagamentos). Mantém o cliente."""
+    from app.modules.payment.models import Payment, PaymentWebhookEvent
+
+    order = await get_by_number(db, number)
+    await db.execute(
+        Payment.__table__.delete().where(Payment.order_id == order.id)
+    )
+    await db.execute(
+        PaymentWebhookEvent.__table__.update()
+        .where(PaymentWebhookEvent.order_id == order.id)
+        .values(order_id=None)
+    )
+    await db.delete(order)  # items/events caem por cascade
+    await db.flush()
+
+
+async def admin_bulk(db: AsyncSession, numbers: list[str]) -> list[dict]:
+    """Carrega vários pedidos completos (para PDF/etiquetas)."""
+    rows = await db.scalars(
+        select(Order)
+        .where(Order.number.in_(numbers))
+        .options(selectinload(Order.items), selectinload(Order.events))
+        .order_by(Order.number)
+    )
+    return [to_out(o) for o in rows]

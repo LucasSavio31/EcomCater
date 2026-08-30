@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -57,3 +57,12 @@ async def test_quote(
         dest_zip=dest_zip,
         packages=[Package(weight_grams=500, length_mm=200, width_mm=150, height_mm=100, insurance_cents=10000)],
     )
+
+
+@router.post("/melhor-envio/send")
+async def send_to_melhor_envio(
+    db: DbDep, _: AdminRoleDep, order_numbers: list[str] = Body(..., embed=True)
+) -> dict:
+    """Adiciona pedidos ao carrinho do Melhor Envio (a compra da etiqueta é
+    finalizada no painel do ME). Requer token do ME configurado."""
+    return await service.send_orders_to_melhor_envio(db, order_numbers)

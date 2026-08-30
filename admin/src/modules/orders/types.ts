@@ -12,15 +12,34 @@ export interface OrderListItem {
   number: string;
   status: OrderStatus;
   payment_status: string;
+  fulfillment_status: string;
   email: string;
   grand_total_cents: number;
-  placed_at: string;
+  placed_at: string | null;
+  created_at: string;
+  items_summary: string;
+  items_count: number;
+  suppliers: string[];
+}
+
+export interface OrderPayment {
+  provider: string;
+  method: string;
+  status: string;
+  amount_cents: number;
+  installments: number | null;
+  provider_charge_id: string | null;
+  paid_at: string | null;
+  boleto_url: string | null;
+  pix_qr_code: string | null;
 }
 
 export interface OrderItem {
+  id?: string;
   sku: string;
   name: string;
   variant_label: string | null;
+  supplier: string | null;
   image_url: string | null;
   unit_price_cents: number;
   quantity: number;
@@ -45,6 +64,7 @@ export interface OrderAddress {
   district?: string;
   city?: string;
   state?: string;
+  phone?: string;
 }
 
 export interface OrderDetail {
@@ -65,6 +85,7 @@ export interface OrderDetail {
   customer_note: string | null;
   placed_at: string;
   events: OrderEvent[];
+  payment?: OrderPayment | null;
 }
 
 /** Transições válidas por status atual (espelha o backend). */
