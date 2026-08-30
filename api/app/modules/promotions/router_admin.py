@@ -33,6 +33,7 @@ def _out(c) -> dict:
         "usage_limit": c.usage_limit,
         "usage_limit_per_user": c.usage_limit_per_user,
         "is_active": c.is_active,
+        "audience": getattr(c, "audience", "general"),
         "used_count": c.used_count,
     }
 

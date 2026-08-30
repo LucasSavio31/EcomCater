@@ -15,6 +15,16 @@ export interface Lead {
 
 export const leadsApi = {
   list: () => adminFetch<Lead[]>('/api/admin/newsletter'),
+  remove: (ids: string[]) =>
+    adminFetch<{ ok: boolean; deleted: number }>('/api/admin/newsletter/delete', {
+      method: 'POST',
+      body: { ids },
+    }),
+  campaign: (payload: { ids: string[]; subject: string; body: string; coupon_code: string | null }) =>
+    adminFetch<{ sent: number; failed: number }>('/api/admin/newsletter/campaign', {
+      method: 'POST',
+      body: payload,
+    }),
 };
 
 export const SOURCE_LABEL: Record<string, string> = {

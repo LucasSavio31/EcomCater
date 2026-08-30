@@ -101,6 +101,16 @@ async def list_coupons(db: AsyncSession) -> list[Coupon]:
     return list(await db.scalars(select(Coupon).order_by(Coupon.created_at.desc())))
 
 
+async def lead_signup_coupon_code(db: AsyncSession) -> str | None:
+    """Código do cupom marcado como 'novos clientes (formulário)', se houver."""
+    row = await db.scalar(
+        select(Coupon)
+        .where(Coupon.audience == "lead_signup", Coupon.is_active.is_(True))
+        .order_by(Coupon.created_at.desc())
+    )
+    return row.code if row else None
+
+
 async def create_coupon(db: AsyncSession, data: dict) -> Coupon:
     if data["type"] not in VALID_TYPES:
         raise ValidationError(f"Tipo inválido: {data['type']}")

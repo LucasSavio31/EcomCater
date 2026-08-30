@@ -63,7 +63,6 @@ export function PdpMain({ product, redirectAfterAdd, miniCart, theme }: PdpMainP
         />
 
         <div className="rounded-card border border-surface-border p-4">
-          <p className="mb-2 text-sm font-semibold">Calcular frete e prazo</p>
           <ShippingCalculator product={product} />
         </div>
       </div>

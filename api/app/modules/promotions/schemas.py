@@ -18,6 +18,7 @@ class CouponBase(BaseModel):
     usage_limit: int | None = None
     usage_limit_per_user: int | None = None
     is_active: bool = True
+    audience: str = "general"  # general | lead_signup
 
 
 class CouponCreateIn(CouponBase):
@@ -35,6 +36,7 @@ class CouponUpdateIn(BaseModel):
     usage_limit: int | None = None
     usage_limit_per_user: int | None = None
     is_active: bool | None = None
+    audience: str | None = None
 
 
 class CouponOut(CouponBase):

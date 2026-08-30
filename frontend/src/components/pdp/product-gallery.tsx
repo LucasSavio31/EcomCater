@@ -53,7 +53,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
       {/* Imagem principal (desktop) */}
       <div className="relative hidden md:block">
         <div
-          className="relative aspect-[5/4] w-full cursor-zoom-in overflow-hidden rounded-card border border-surface-border bg-bg-subtle"
+          className="relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-card border border-surface-border bg-bg-subtle"
           onMouseEnter={() => setZoom(true)}
           onMouseLeave={() => setZoom(false)}
           onMouseMove={onMove}
@@ -67,7 +67,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
             fill
             sizes="(min-width: 1024px) 40vw, 60vw"
             priority
-            className={zoom ? 'opacity-0' : 'object-contain'}
+            className={zoom ? 'opacity-0' : 'object-cover'}
           />
           {zoom && (
             <div
@@ -142,7 +142,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
           return (
             <div
               key={image.id}
-              className="relative aspect-[5/4] w-full shrink-0 snap-center overflow-hidden rounded-card border border-surface-border bg-bg-subtle"
+              className="relative aspect-square w-full shrink-0 snap-center overflow-hidden rounded-card border border-surface-border bg-bg-subtle"
             >
               <Image
                 src={src}
@@ -150,7 +150,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
                 fill
                 sizes="100vw"
                 priority={i === 0}
-                className="object-contain"
+                className="object-cover"
               />
             </div>
           );

@@ -24,6 +24,7 @@ interface FormState {
   usage_limit: string;
   usage_limit_per_user: string;
   is_active: boolean;
+  audience: 'general' | 'lead_signup';
 }
 
 const EMPTY: FormState = {
@@ -38,6 +39,7 @@ const EMPTY: FormState = {
   usage_limit: '',
   usage_limit_per_user: '',
   is_active: true,
+  audience: 'general',
 };
 
 function toForm(p: Promotion): FormState {
@@ -53,6 +55,7 @@ function toForm(p: Promotion): FormState {
     usage_limit: p.usage_limit != null ? String(p.usage_limit) : '',
     usage_limit_per_user: p.usage_limit_per_user != null ? String(p.usage_limit_per_user) : '',
     is_active: p.is_active,
+    audience: p.audience ?? 'general',
   };
 }
 
@@ -70,6 +73,7 @@ function buildPayload(f: FormState): PromotionInput {
     usage_limit: f.usage_limit ? Number(f.usage_limit) : null,
     usage_limit_per_user: f.usage_limit_per_user ? Number(f.usage_limit_per_user) : null,
     is_active: f.is_active,
+    audience: f.audience,
   };
 }
 
@@ -251,6 +255,16 @@ export default function PromocoesPage() {
             label="Descrição"
             value={form.description}
             onChange={(e) => set('description', e.target.value)}
+          />
+          <Select
+            label="Público do cupom"
+            hint="'Novos clientes' é enviado automaticamente por e-mail a quem se cadastra no formulário/popup."
+            value={form.audience}
+            options={[
+              { value: 'general', label: 'Geral' },
+              { value: 'lead_signup', label: 'Novos clientes (formulário de captura)' },
+            ]}
+            onChange={(e) => set('audience', e.target.value as 'general' | 'lead_signup')}
           />
           {form.type !== 'free_shipping' && (
             <Input

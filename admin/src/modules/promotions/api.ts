@@ -18,6 +18,7 @@ export interface Promotion {
   usage_limit_per_user: number | null;
   used_count: number;
   is_active: boolean;
+  audience: 'general' | 'lead_signup';
 }
 
 export interface PromotionInput {
@@ -32,6 +33,7 @@ export interface PromotionInput {
   usage_limit?: number | null;
   usage_limit_per_user?: number | null;
   is_active: boolean;
+  audience?: 'general' | 'lead_signup';
 }
 
 export const promotionsApi = {

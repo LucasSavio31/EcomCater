@@ -33,6 +33,10 @@ class Coupon(UUIDPKMixin, TimestampMixin, Base):
     used_count: Mapped[int] = mapped_column(Integer, default=0)
     applies_to_json: Mapped[dict | None] = mapped_column(JSONB)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # "general" = cupom normal | "lead_signup" = enviado automaticamente ao lead
+    audience: Mapped[str] = mapped_column(
+        String(16), default="general", server_default="general", nullable=False
+    )
 
 
 class CouponRedemption(UUIDPKMixin, Base):

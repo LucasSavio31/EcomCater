@@ -81,6 +81,12 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         "<p>O reembolso do pedido <b>{{ number }}</b> foi processado. "
         "O prazo de estorno depende do meio de pagamento.</p>",
     ),
+    "campaign": (
+        "{{ subject }}",
+        "<div>{{ body | e | replace('\n', '<br>'|safe) }}</div>"
+        "{% if coupon %}<p style='margin-top:16px'>Use o cupom: "
+        "<b style='font-size:18px;letter-spacing:1px'>{{ coupon }}</b></p>{% endif %}",
+    ),
     "lead_coupon": (
         "Seu cupom chegou 🎁",
         "<h2>Obrigado por se cadastrar!</h2>"
