@@ -37,6 +37,12 @@ export interface Theme {
   top_bar_message_3: string | null;
   top_bar_bg_color: string;
   top_bar_text_color: string;
+  /** Rodapé */
+  footer_note_text: string;
+  footer_copyright_enabled: boolean;
+  footer_copyright_text: string;
+  footer_copyright_bg_color: string;
+  footer_copyright_text_color: string;
   /** Banner principal (hero) */
   hero_enabled: boolean;
   hero_mode: 'carousel' | 'static';

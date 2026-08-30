@@ -16,7 +16,16 @@ DbDep = Annotated[AsyncSession, Depends(get_db)]
 
 @router.get("")
 async def get_theme(db: DbDep) -> dict:
-    return service.theme_out(await service.get_theme(db))
+    out = service.theme_out(await service.get_theme(db))
+    # dados da loja usados no rodapé (copyright / CNPJ)
+    from app.modules.admin.models import StoreSettings
+
+    store = await db.get(StoreSettings, 1)
+    if store:
+        out["store_name"] = store.store_name
+        out["legal_name"] = store.legal_name
+        out["cnpj"] = store.cnpj
+    return out
 
 
 @router.get("/pages/{slug}")

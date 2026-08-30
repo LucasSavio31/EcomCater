@@ -148,16 +148,12 @@ export default async function ProdutoPage({ params }: PageProps) {
         }}
       />
 
-      {/* Barra de frete grátis fixa no topo */}
-      {theme.free_shipping_threshold_cents ? (
-        <div className="sticky top-[56px] z-20 -mx-4 border-b border-surface-border bg-bg-subtle px-4 py-1.5 sm:top-[64px]">
-          <FreeShippingProgress
-            thresholdCents={theme.free_shipping_threshold_cents}
-            variant="bar"
-            className="mx-auto max-w-6xl text-center text-text-muted"
-          />
-        </div>
-      ) : null}
+      {/* Barra de frete grátis fixa no topo — só aparece com item no carrinho */}
+      <FreeShippingProgress
+        sticky
+        variant="bar"
+        className="mx-auto max-w-6xl text-center text-text-muted"
+      />
 
       <Breadcrumbs items={crumbs} />
 

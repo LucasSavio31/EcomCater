@@ -77,6 +77,37 @@ class ThemeSettings(Base):
         String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False
     )
 
+    # Texto logo abaixo do logo do rodapé (herda a cor de texto do rodapé)
+    footer_note_text: Mapped[str] = mapped_column(
+        String(500),
+        default=(
+            "Preços e condições de pagamento exclusivos para compras via internet. "
+            "Endereço comercial disponível na página Fale conosco."
+        ),
+        server_default=(
+            "Preços e condições de pagamento exclusivos para compras via internet. "
+            "Endereço comercial disponível na página Fale conosco."
+        ),
+        nullable=False,
+    )
+
+    # Tarja de copyright no rodapé de tudo (variáveis: {ano} {loja} {cnpj})
+    footer_copyright_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    footer_copyright_text: Mapped[str] = mapped_column(
+        String(400),
+        default="© {ano} {loja} — CNPJ {cnpj}. Todos os Direitos Reservados.",
+        server_default="© {ano} {loja} — CNPJ {cnpj}. Todos os Direitos Reservados.",
+        nullable=False,
+    )
+    footer_copyright_bg_color: Mapped[str] = mapped_column(
+        String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False
+    )
+    footer_copyright_text_color: Mapped[str] = mapped_column(
+        String(9), default="#6B7280", server_default="#6B7280", nullable=False
+    )
+
     # Banner principal (hero) da home
     hero_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     hero_mode: Mapped[str] = mapped_column(String(12), default="carousel", server_default="carousel", nullable=False)  # carousel | static

@@ -202,6 +202,63 @@ export function ThemeTab() {
                   />
                 ))}
               </div>
+
+              <label className="flex flex-col gap-1 text-sm font-medium text-text">
+                Texto abaixo do logo do rodapé
+                <textarea
+                  value={theme.footer_note_text ?? ''}
+                  onChange={(e) => set('footer_note_text', e.target.value)}
+                  rows={2}
+                  className="rounded-card border border-surface-border bg-surface px-3 py-2 text-sm font-normal"
+                />
+                <span className="text-xs text-text-muted">
+                  Herda a cor de texto do rodapé. Se citar “Fale conosco”, vira link.
+                  Deixe vazio para não exibir.
+                </span>
+              </label>
+
+              <div className="flex flex-col gap-3 border-t border-surface-border pt-4">
+                <Checkbox
+                  label="Exibir tarja de copyright (abaixo de tudo)"
+                  checked={theme.footer_copyright_enabled}
+                  onChange={(v) => set('footer_copyright_enabled', v)}
+                />
+                {theme.footer_copyright_enabled && (
+                  <>
+                    <label className="flex flex-col gap-1 text-sm font-medium text-text">
+                      Texto do copyright
+                      <input
+                        value={theme.footer_copyright_text ?? ''}
+                        onChange={(e) => set('footer_copyright_text', e.target.value)}
+                        className="rounded-card border border-surface-border bg-surface px-3 py-2 text-sm font-normal"
+                      />
+                      <span className="text-xs text-text-muted">
+                        Variáveis: <code>{'{ano}'}</code>, <code>{'{loja}'}</code> (razão
+                        social ou nome), <code>{'{cnpj}'}</code>.
+                      </span>
+                    </label>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <ColorField
+                        label="Fundo da tarja de copyright"
+                        value={String(theme.footer_copyright_bg_color ?? '#FFFFFF')}
+                        onChange={(hex) =>
+                          set('footer_copyright_bg_color', hex as Theme['footer_copyright_bg_color'])
+                        }
+                      />
+                      <ColorField
+                        label="Texto da tarja de copyright"
+                        value={String(theme.footer_copyright_text_color ?? '#6B7280')}
+                        onChange={(hex) =>
+                          set(
+                            'footer_copyright_text_color',
+                            hex as Theme['footer_copyright_text_color'],
+                          )
+                        }
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
             </Card>
 
             <Card variant="outline" className="flex flex-col gap-4">

@@ -26,6 +26,17 @@ export interface ThemeSettings {
   logo_url?: string | null;
   favicon_key?: string | null;
   favicon_url?: string | null;
+  /** Dados da loja (rodapé / copyright). */
+  store_name?: string | null;
+  legal_name?: string | null;
+  cnpj?: string | null;
+  /** Texto abaixo do logo do rodapé (herda a cor de texto do rodapé). */
+  footer_note_text: string;
+  /** Tarja de copyright no rodapé de tudo. Vars: {ano} {loja} {cnpj}. */
+  footer_copyright_enabled: boolean;
+  footer_copyright_text: string;
+  footer_copyright_bg_color: string;
+  footer_copyright_text_color: string;
   free_shipping_threshold_cents?: number | null;
   whatsapp_number?: string | null;
   top_bar_message?: string | null;
@@ -163,6 +174,15 @@ export const NEUTRAL_THEME: ThemeSettings = {
   font_family: 'Inter, system-ui, sans-serif',
   logo_url: null,
   favicon_url: null,
+  store_name: null,
+  legal_name: null,
+  cnpj: null,
+  footer_note_text:
+    'Preços e condições de pagamento exclusivos para compras via internet. Endereço comercial disponível na página Fale conosco.',
+  footer_copyright_enabled: true,
+  footer_copyright_text: '© {ano} {loja} — CNPJ {cnpj}. Todos os Direitos Reservados.',
+  footer_copyright_bg_color: '#FFFFFF',
+  footer_copyright_text_color: '#6B7280',
   top_bar_enabled: false,
   top_bar_message: null,
   top_bar_carousel: false,
