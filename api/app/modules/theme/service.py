@@ -208,15 +208,19 @@ async def set_seal_image(
         raise ValidationError("Posição de selo inválida (0 a 2).")
     row = await get_theme(db)
     seals = _clean_seals(row.footer_seals_json)
-    if whiten:
-        raw = whiten_bytes(raw)
-        filename = "selo-branco.png"
-    processed = process_image(raw, filename, prefix="theme/seals")
+    if b"<svg" in raw[:1024].lower():
+        key = f"theme/seals/{uuid.uuid4().hex}/selo.svg"
+        storage.save(key, raw, "image/svg+xml")
+    else:
+        if whiten:
+            raw = whiten_bytes(raw)
+            filename = "selo-branco.png"
+        key = process_image(raw, filename, prefix="theme/seals").medium_key
     images = list(seals[column]["images"])
     if index < len(images):
-        images[index] = processed.medium_key
+        images[index] = key
     else:
-        images.append(processed.medium_key)
+        images.append(key)
     seals[column]["images"] = images[:3]
     row.footer_seals_json = seals  # reatribui p/ o SQLAlchemy detectar a mudança
     row.updated_at = datetime.now(UTC)

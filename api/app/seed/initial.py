@@ -170,4 +170,8 @@ async def run_all(db: AsyncSession) -> None:
     await seed_content(db)
     await seed_recovery(db)
     await db.commit()
+
+    from app.seed.payment_seal import run as seed_payment_seal
+
+    await seed_payment_seal(db)  # faz o próprio commit
     logger.info("seed concluído.")
