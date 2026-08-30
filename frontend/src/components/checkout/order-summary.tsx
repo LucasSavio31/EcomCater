@@ -41,14 +41,16 @@ export function OrderSummary({
           return (
             <li key={i.id} className="flex gap-3">
               {layout === 'with_thumb' && (
-                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-card bg-bg-subtle">
-                  {img && <Image src={img} alt="" fill sizes="56px" className="object-cover" />}
-                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-btn px-1 text-[10px] font-bold text-btn-fg">
+                <div className="relative h-14 w-14 shrink-0">
+                  <div className="h-full w-full overflow-hidden rounded-card bg-bg-subtle">
+                    {img && <Image src={img} alt="" fill sizes="56px" className="object-cover" />}
+                  </div>
+                  <span className="pointer-events-none absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-btn px-1 text-[10px] font-bold text-btn-fg shadow">
                     {i.quantity}
                   </span>
                 </div>
               )}
-              <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="line-clamp-2 text-sm">
                   {layout === 'simple' && <strong>{i.quantity}× </strong>}
                   {i.product_name}
@@ -56,19 +58,30 @@ export function OrderSummary({
                 {i.variant_label && (
                   <span className="text-xs text-text-muted">{i.variant_label}</span>
                 )}
-                {layout === 'with_thumb' && allowQtyChange && i.max_qty > 1 && (
-                  <select
-                    value={i.quantity}
-                    onChange={(e) => void updateItem(i.id, Number(e.target.value))}
-                    className="mt-1 w-16 rounded-card border border-surface-border bg-surface px-1 text-xs"
-                    aria-label={`Quantidade de ${i.product_name}`}
-                  >
-                    {Array.from({ length: Math.min(i.max_qty, 10) }, (_, n) => n + 1).map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
+                {layout === 'with_thumb' && allowQtyChange && (
+                  <div className="mt-1 inline-flex w-fit items-center rounded-card border border-surface-border">
+                    <button
+                      type="button"
+                      aria-label={`Diminuir quantidade de ${i.product_name}`}
+                      onClick={() => void updateItem(i.id, Math.max(1, i.quantity - 1))}
+                      disabled={i.quantity <= 1}
+                      className="flex h-7 w-7 items-center justify-center text-sm disabled:opacity-40"
+                    >
+                      −
+                    </button>
+                    <span className="min-w-[1.5rem] text-center text-xs font-medium">
+                      {i.quantity}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Aumentar quantidade de ${i.product_name}`}
+                      onClick={() => void updateItem(i.id, Math.min(i.max_qty || 99, i.quantity + 1))}
+                      disabled={i.quantity >= (i.max_qty || 99)}
+                      className="flex h-7 w-7 items-center justify-center text-sm disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
                 )}
               </div>
               <span className="shrink-0 text-sm font-medium">{formatBRL(i.line_total_cents)}</span>

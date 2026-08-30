@@ -276,6 +276,11 @@ export function CheckoutView({
     return STEP_ORDER.indexOf(id) < STEP_ORDER.indexOf(step) ? 'done' : 'locked';
   }
 
+  /** Só mostra a etapa depois que a anterior foi concluída (visual mais limpo). */
+  function stepVisible(id: CheckoutStepId): boolean {
+    return STEP_ORDER.indexOf(id) <= STEP_ORDER.indexOf(furthest);
+  }
+
   // ---- avançar etapas
   function tryInstantLogin() {
     if (!customer && EMAIL_RE.test(email) && cpfOk) {
@@ -288,8 +293,12 @@ export function CheckoutView({
     if (!identifyValid) return;
     identify({ email: email.trim(), externalId: onlyDigits(cpf) || undefined });
     if (!settings.emailFirst) tryInstantLogin();
-    // recuperação de carrinho: registra o e-mail assim que informado
+    // ao informar o e-mail: vira lead na hora + entra na recuperação de carrinho
     if (EMAIL_RE.test(email)) {
+      void apiFetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        body: { email: email.trim(), source: 'checkout' },
+      });
       void apiFetch('/api/cart-recovery/capture', {
         method: 'POST',
         credentials: 'include',
@@ -301,6 +310,18 @@ export function CheckoutView({
   function advanceProfile() {
     if (!profileValid) return;
     if (settings.emailFirst) tryInstantLogin();
+    // atualiza o lead com nome/telefone agora que foram preenchidos
+    if (EMAIL_RE.test(email)) {
+      void apiFetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        body: {
+          email: email.trim(),
+          name: `${firstName} ${lastName}`.trim() || null,
+          phone: onlyDigits(phone) || null,
+          source: 'checkout',
+        },
+      });
+    }
     identify({
       firstName: firstName.trim(),
       lastName: lastName.trim(),
@@ -555,6 +576,7 @@ export function CheckoutView({
         </StepSection>
 
         {/* 2 — Dados pessoais */}
+        {stepVisible('profile') && (
         <StepSection
           number={2}
           title="Dados pessoais"
@@ -603,8 +625,10 @@ export function CheckoutView({
             Avançar
           </Button>
         </StepSection>
+        )}
 
         {/* 3 — Entrega */}
+        {stepVisible('shipping') && (
         <StepSection
           number={3}
           title="Entrega"
@@ -703,8 +727,10 @@ export function CheckoutView({
             Avançar
           </Button>
         </StepSection>
+        )}
 
         {/* 4 — Pagamento */}
+        {stepVisible('payment') && (
         <StepSection
           number={4}
           title="Pagamento"
@@ -906,6 +932,7 @@ export function CheckoutView({
                 : `Pagar ${formatBRL(cart.totals.grand_total_cents)}`}
           </Button>
         </StepSection>
+        )}
       </div>
 
       {reviewOnSide && (

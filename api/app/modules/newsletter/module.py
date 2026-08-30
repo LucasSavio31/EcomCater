@@ -68,6 +68,8 @@ async def subscribe(
     if existing:
         if existing.unsubscribed_at:
             existing.unsubscribed_at = None
+        if body.name and not existing.name:
+            existing.name = body.name
         if body.phone and not existing.phone:
             existing.phone = body.phone
         if coupon and not existing.coupon_code:
