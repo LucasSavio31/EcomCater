@@ -38,6 +38,8 @@ export interface ThemeSettings {
   footer_seals_json: FooterSeals;
   /** Após adicionar ao carrinho: true = vai para /carrinho, false = fica na PDP. */
   cart_redirect_after_add: boolean;
+  /** Mini-carrinho lateral ao adicionar (tem precedência sobre o redirect). */
+  mini_cart_enabled: boolean;
   /** Filtros da vitrine (menu "Filtros" no admin). */
   filter_size_enabled: boolean;
   filter_price_enabled: boolean;
@@ -124,6 +126,7 @@ export const NEUTRAL_THEME: ThemeSettings = {
   footer_seals_enabled: true,
   footer_seals_json: DEFAULT_SEALS,
   cart_redirect_after_add: false,
+  mini_cart_enabled: true,
   filter_size_enabled: true,
   filter_price_enabled: true,
   filter_category_enabled: true,

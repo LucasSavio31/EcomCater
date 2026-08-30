@@ -180,7 +180,11 @@ export default async function ProdutoPage({ params }: PageProps) {
             )}
           </div>
 
-          <PdpBuyBox product={product} redirectAfterAdd={theme.cart_redirect_after_add} />
+          <PdpBuyBox
+            product={product}
+            redirectAfterAdd={theme.cart_redirect_after_add}
+            miniCart={theme.mini_cart_enabled}
+          />
 
           <div className="rounded-card border border-surface-border p-4">
             <p className="mb-2 text-sm font-semibold">Calcular frete e prazo</p>

@@ -14,11 +14,13 @@ interface PdpBuyBoxProps {
   product: ProductDetail;
   /** Após adicionar ao carrinho, ir direto para /carrinho. */
   redirectAfterAdd?: boolean;
+  /** Abrir o mini-carrinho lateral ao adicionar (tem precedência). */
+  miniCart?: boolean;
 }
 
-export function PdpBuyBox({ product, redirectAfterAdd = false }: PdpBuyBoxProps) {
+export function PdpBuyBox({ product, redirectAfterAdd = false, miniCart = false }: PdpBuyBoxProps) {
   const router = useRouter();
-  const { addItem } = useCart();
+  const { addItem, openMiniCart } = useCart();
   const { has: isWished, toggle: toggleWish } = useWishlist();
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
@@ -85,6 +87,10 @@ export function PdpBuyBox({ product, redirectAfterAdd = false }: PdpBuyBoxProps)
       value: (priceCents / 100) * qty,
       items: [{ ...baseTrackItem(), price: priceCents / 100, quantity: qty }],
     });
+    if (miniCart) {
+      openMiniCart();
+      return;
+    }
     if (redirectAfterAdd) {
       router.push('/carrinho');
       return;

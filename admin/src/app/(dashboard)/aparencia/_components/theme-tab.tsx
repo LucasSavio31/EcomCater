@@ -218,8 +218,14 @@ export function ThemeTab() {
             <Card variant="outline" className="flex flex-col gap-4">
               <h2 className="text-lg font-semibold">Comportamento da loja</h2>
               <Checkbox
+                label="Mini-carrinho lateral ao adicionar"
+                hint="Abre um painel do carrinho à direita. Tem precedência sobre a opção abaixo."
+                checked={theme.mini_cart_enabled}
+                onChange={(v) => set('mini_cart_enabled', v)}
+              />
+              <Checkbox
                 label="Ir para o carrinho logo após adicionar um produto"
-                hint="Desligado: o cliente permanece na página do produto (com a confirmação)."
+                hint="Só quando o mini-carrinho está desligado. Senão o cliente fica na página do produto."
                 checked={theme.cart_redirect_after_add}
                 onChange={(v) => set('cart_redirect_after_add', v)}
               />

@@ -37,7 +37,7 @@ function whatsappHref(raw?: string | null): string | null {
 
 export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
   const pathname = usePathname();
-  const { count } = useCart();
+  const { count, openMiniCart } = useCart();
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openMega, setOpenMega] = useState<string | null>(null);
@@ -152,21 +152,40 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
           >
             <UserIcon />
           </Link>
-          <Link
-            href="/carrinho"
-            aria-label={`Carrinho${count > 0 ? ` (${count} itens)` : ''}`}
-            className="relative min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10"
-          >
-            <BagIcon />
-            {count > 0 && (
-              <Badge
-                tone="accent"
-                className="absolute -right-0.5 -top-0.5 min-w-[1.1rem] justify-center px-1 py-0 text-[10px] leading-4"
-              >
-                {count > 99 ? '99+' : count}
-              </Badge>
-            )}
-          </Link>
+          {theme.mini_cart_enabled ? (
+            <button
+              type="button"
+              onClick={openMiniCart}
+              aria-label={`Carrinho${count > 0 ? ` (${count} itens)` : ''}`}
+              className="relative min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10"
+            >
+              <BagIcon />
+              {count > 0 && (
+                <Badge
+                  tone="accent"
+                  className="absolute -right-0.5 -top-0.5 min-w-[1.1rem] justify-center px-1 py-0 text-[10px] leading-4"
+                >
+                  {count > 99 ? '99+' : count}
+                </Badge>
+              )}
+            </button>
+          ) : (
+            <Link
+              href="/carrinho"
+              aria-label={`Carrinho${count > 0 ? ` (${count} itens)` : ''}`}
+              className="relative min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10"
+            >
+              <BagIcon />
+              {count > 0 && (
+                <Badge
+                  tone="accent"
+                  className="absolute -right-0.5 -top-0.5 min-w-[1.1rem] justify-center px-1 py-0 text-[10px] leading-4"
+                >
+                  {count > 99 ? '99+' : count}
+                </Badge>
+              )}
+            </Link>
+          )}
         </div>
       </div>
 

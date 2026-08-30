@@ -11,6 +11,7 @@ import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
 import { StorefrontShell } from '@/components/layout/storefront-shell';
 import { CartProvider } from '@/modules/cart/cart-context';
+import { MiniCartDrawer } from '@/components/cart/mini-cart-drawer';
 import { AuthProvider } from '@/modules/customer/auth-context';
 import { SITE_NAME, SITE_URL, jsonLdScript, organizationJsonLd, webSiteJsonLd } from '@/lib/seo';
 
@@ -72,6 +73,7 @@ export default async function RootLayout({
             >
               {children}
             </StorefrontShell>
+            <MiniCartDrawer />
           </CartProvider>
         </AuthProvider>
 

@@ -36,6 +36,10 @@ interface CartState {
   applyCoupon: (code: string) => Promise<void>;
   removeCoupon: () => Promise<void>;
   selectShipping: (serviceId: string) => Promise<void>;
+  /** Mini-carrinho lateral. */
+  miniCartOpen: boolean;
+  openMiniCart: () => void;
+  closeMiniCart: () => void;
 }
 
 const CartContext = createContext<CartState | null>(null);
@@ -43,7 +47,11 @@ const CartContext = createContext<CartState | null>(null);
 export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<Cart>(EMPTY_CART);
   const [loading, setLoading] = useState(true);
+  const [miniCartOpen, setMiniCartOpen] = useState(false);
   const mounted = useRef(true);
+
+  const openMiniCart = useCallback(() => setMiniCartOpen(true), []);
+  const closeMiniCart = useCallback(() => setMiniCartOpen(false), []);
 
   const apply = useCallback((next: Cart) => {
     if (mounted.current) setCart(next);
@@ -141,8 +149,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
       applyCoupon,
       removeCoupon,
       selectShipping,
+      miniCartOpen,
+      openMiniCart,
+      closeMiniCart,
     }),
-    [cart, loading, refresh, addItem, updateItem, removeItem, setZip, applyCoupon, removeCoupon, selectShipping],
+    [
+      cart,
+      loading,
+      refresh,
+      addItem,
+      updateItem,
+      removeItem,
+      setZip,
+      applyCoupon,
+      removeCoupon,
+      selectShipping,
+      miniCartOpen,
+      openMiniCart,
+      closeMiniCart,
+    ],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

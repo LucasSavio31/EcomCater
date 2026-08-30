@@ -74,6 +74,10 @@ class ThemeSettings(Base):
     cart_redirect_after_add: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
     )
+    # Mini-carrinho lateral: abre ao adicionar (tem precedência sobre o redirect)
+    mini_cart_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
 
     # Filtros da vitrine (menu "Filtros" no admin)
     filter_size_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
