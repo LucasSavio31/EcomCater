@@ -12,6 +12,7 @@ import {
   IconCategories,
   IconCheckout,
   IconCustomers,
+  IconCart,
   IconDashboard,
   IconFilters,
   IconLeads,
@@ -58,7 +59,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Vendas',
     items: [
       { href: '/pedidos', label: 'Pedidos', icon: IconOrders },
-      { href: '/recuperacao-carrinho', label: 'Recuperação de carrinho', icon: IconOrders },
+      { href: '/recuperacao-carrinho', label: 'Recuperação de carrinho', icon: IconCart },
       { href: '/clientes', label: 'Clientes', icon: IconCustomers },
       { href: '/promocoes', label: 'Promoções', icon: IconPromotions },
       { href: '/pagamento', label: 'Pagamento', icon: IconPayment },

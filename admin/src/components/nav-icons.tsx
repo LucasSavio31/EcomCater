@@ -158,3 +158,10 @@ export const IconTag = (p: P) => (
     <circle cx="15.5" cy="8.5" r="1.5" />
   </svg>
 );
+export const IconCart = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M3 4h2l2.4 12.3a1 1 0 0 0 1 .8h9.2a1 1 0 0 0 1-.8L21 8H6" />
+    <circle cx="9" cy="20" r="1.4" />
+    <circle cx="18" cy="20" r="1.4" />
+  </svg>
+);
