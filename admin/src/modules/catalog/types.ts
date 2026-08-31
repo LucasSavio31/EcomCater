@@ -148,6 +148,7 @@ export interface ProductDetail {
   status: ProductStatus;
   category_id: string | null;
   extra_category_ids: string[];
+  size_chart_id?: string | null;
   brand: string | null;
   supplier?: string | null;
   short_description: string | null;
@@ -186,6 +187,7 @@ export interface ProductInput {
   name: string;
   category_id?: string | null;
   extra_category_ids?: string[];
+  size_chart_id?: string | null;
   status: ProductStatus;
   price_cents: number;
   compare_at_price_cents?: number | null;

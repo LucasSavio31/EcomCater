@@ -63,6 +63,9 @@ from app.modules.banners.models import Banner  # noqa: F401
 # --- menus ---
 from app.modules.menus.models import Menu, MenuItem  # noqa: F401
 
+# --- size charts ---
+from app.modules.size_charts.models import SizeChart  # noqa: F401
+
 # --- theme ---
 from app.modules.theme.models import Page, ThemeSettings  # noqa: F401
 

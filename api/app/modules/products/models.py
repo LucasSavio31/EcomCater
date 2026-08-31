@@ -48,6 +48,9 @@ class Product(UUIDPKMixin, TimestampMixin, Base):
     category_id: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("categories.id", ondelete="SET NULL"), index=True
     )
+    size_chart_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("size_charts.id", ondelete="SET NULL")
+    )
     status: Mapped[str] = mapped_column(String(12), default="draft")
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False)
 

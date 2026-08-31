@@ -138,6 +138,7 @@ class ProductBase(BaseModel):
     supplier: str | None = None
     category_id: str | None = None
     extra_category_ids: list[str] = []
+    size_chart_id: str | None = None
     status: str = "draft"
     is_featured: bool = False
     price_cents: int = 0
@@ -165,6 +166,7 @@ class ProductUpdateIn(BaseModel):
     supplier: str | None = None
     category_id: str | None = None
     extra_category_ids: list[str] | None = None
+    size_chart_id: str | None = None
     status: str | None = None
     is_featured: bool | None = None
     price_cents: int | None = None
@@ -228,6 +230,9 @@ class ProductDetail(BaseModel):
     specs: list[SpecOut]
     related: list[ProductListItem]
     reviews: list[ReviewOut]
+    size_chart: dict | None = None
+    size_chart_id: str | None = None
+    supplier: str | None = None
 
 
 class SearchResultItem(BaseModel):

@@ -165,3 +165,9 @@ export const IconCart = (p: P) => (
     <circle cx="18" cy="20" r="1.4" />
   </svg>
 );
+export const IconRuler = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 15 15 4l5 5L9 20z" />
+    <path d="M8 11l2 2M11 8l2 2M14 5l2 2M5 14l2 2" />
+  </svg>
+);

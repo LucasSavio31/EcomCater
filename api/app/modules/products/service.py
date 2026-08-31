@@ -202,6 +202,13 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
         raise NotFoundError("Produto não encontrado.")
 
     category = await db.get(Category, product.category_id) if product.category_id else None
+    size_chart = None
+    if product.size_chart_id:
+        from app.modules.size_charts.models import SizeChart
+        from app.modules.size_charts.service import out as _sc_out
+
+        sc = await db.get(SizeChart, product.size_chart_id)
+        size_chart = _sc_out(sc) if sc else None
     price = _min_variant_price(product)
     color_siblings = await _color_siblings(db, product, include_unpublished=include_unpublished)
 
@@ -303,6 +310,9 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
         ],
         "related": related,
         "reviews": reviews,
+        "size_chart": size_chart,
+        **({"size_chart_id": str(product.size_chart_id) if product.size_chart_id else None}
+           if include_unpublished else {}),
         # fornecedor: só no contexto admin (nunca na loja)
         **({"supplier": product.supplier} if include_unpublished else {}),
     }
@@ -541,6 +551,9 @@ async def create(db: AsyncSession, data: dict) -> Product:
         data["description"] = sanitize_html(data["description"])
     slug = await _unique_slug(db, data["name"])
     extra = data.pop("extra_category_ids", []) or []
+    for k in ("category_id", "size_chart_id"):
+        if k in data:
+            data[k] = _uuid(data[k]) if data[k] else None
     product = Product(slug=slug, **{k: v for k, v in data.items() if k != "extra_category_ids"})
     if product.status == "active" and product.published_at is None:
         from datetime import UTC, datetime
@@ -755,6 +768,12 @@ async def update(db: AsyncSession, product_id: str, data: dict) -> Product:
         product.slug = await _unique_slug(db, data["name"], exclude=product.id)
     related = data.pop("related_product_ids", None)
     extra = data.pop("extra_category_ids", None)
+    # size_chart_id / category_id: aceitam null explícito para DESVINCULAR
+    for k in ("category_id", "size_chart_id"):
+        if k in data:
+            product_val = _uuid(data[k]) if data[k] else None
+            setattr(product, k, product_val)
+            data.pop(k)
     for k, v in data.items():
         if k in ("name", "slug"):
             continue

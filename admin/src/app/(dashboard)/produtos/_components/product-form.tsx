@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { Tabs, type TabDef } from '@/components/tabs';
 import { Checkbox, Select, Textarea } from '@/components/form-controls';
 import { RichTextarea } from '@/components/rich-textarea';
+import { sizeChartsApi, type SizeChart } from '@/modules/size-charts/api';
 import { StatusBadge } from '@/components/status-badge';
 import { useToast } from '@/components/toast';
 import { centsToInput, inputToCents, slugify } from '@/lib/format';
@@ -24,6 +25,7 @@ interface GeneralState {
   supplier: string;
   category_id: string;
   extra_category_ids: string[];
+  size_chart_id: string;
   short_description: string;
   description: string;
   is_featured: boolean;
@@ -46,6 +48,7 @@ function toState(p: ProductDetail | null): GeneralState {
     supplier: p?.supplier ?? '',
     category_id: p?.category_id ?? '',
     extra_category_ids: p?.extra_category_ids ?? [],
+    size_chart_id: p?.size_chart_id ?? '',
     short_description: p?.short_description ?? '',
     description: p?.description ?? '',
     is_featured: p?.is_featured ?? false,
@@ -69,6 +72,7 @@ function buildPayload(s: GeneralState, status: ProductStatus): ProductInput {
     supplier: s.supplier.trim() || null,
     category_id: s.category_id || null,
     extra_category_ids: s.extra_category_ids,
+    size_chart_id: s.size_chart_id || null,
     status,
     price_cents: inputToCents(s.price) ?? 0,
     compare_at_price_cents: inputToCents(s.compare_at_price),
@@ -102,6 +106,12 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
   const [tab, setTab] = useState('geral');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [sizeCharts, setSizeCharts] = useState<SizeChart[]>([]);
+  useEffect(() => {
+    void sizeChartsApi.list().then((r) => {
+      if (r.ok) setSizeCharts(r.data);
+    });
+  }, []);
 
   const set = <K extends keyof GeneralState>(key: K, value: GeneralState[K]): void =>
     setState((prev) => ({ ...prev, [key]: value }));
@@ -272,6 +282,16 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
                 })}
               </div>
             </fieldset>
+            <Select
+              label="Tabela de medidas"
+              value={state.size_chart_id}
+              onChange={(e) => set('size_chart_id', e.target.value)}
+              options={[
+                { value: '', label: 'Nenhuma' },
+                ...sizeCharts.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+              hint="Se vinculada, aparece num popup 'Tabela de medidas' na página do produto. Cadastre em Catálogo → Tabelas de medidas."
+            />
             <Textarea
               label="Descrição curta"
               value={state.short_description}

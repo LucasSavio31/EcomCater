@@ -178,6 +178,13 @@ export interface ProductDetail {
   specs: ProductSpec[];
   related: ProductListItem[];
   reviews: ProductReview[];
+  size_chart: {
+    id: string;
+    name: string;
+    columns: string[];
+    rows: string[][];
+    note: string | null;
+  } | null;
 }
 
 export interface SearchResultItem {
