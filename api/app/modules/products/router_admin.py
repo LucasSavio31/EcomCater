@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, Query, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -202,15 +203,19 @@ async def delete_image(product_id: str, image_id: str, db: DbDep, _: EditorDep) 
     await service.delete_image(db, product_id, image_id)
 
 
+class _ReorderImagesIn(BaseModel):
+    ordered_ids: list[str]
+    primary_id: str | None = None
+
+
 @router.post("/{product_id}/images/reorder", status_code=204)
 async def reorder_images(
     product_id: str,
     db: DbDep,
     _: EditorDep,
-    ordered_ids: list[str],
-    primary_id: str | None = None,
+    body: _ReorderImagesIn = Body(...),
 ) -> None:
-    await service.reorder_images(db, product_id, ordered_ids, primary_id)
+    await service.reorder_images(db, product_id, body.ordered_ids, body.primary_id)
 
 
 # ------------------------------------------------------------------ specs
