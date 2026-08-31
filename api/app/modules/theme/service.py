@@ -52,6 +52,8 @@ _THEME_FIELDS = {
     "discount_badge_enabled",
     "button_radius_px",
     "pdp_qty_selector_enabled", "wishlist_enabled",
+    "size_chart_bg_color", "size_chart_header_bg_color",
+    "size_chart_header_text_color", "size_chart_text_color",
     "card_hover_zoom_enabled", "card_buy_button_enabled", "card_buy_button_label",
     "cookie_consent_enabled", "cookie_consent_text",
     "email_header_bg_color", "email_header_text_color",

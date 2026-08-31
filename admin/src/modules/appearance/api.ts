@@ -113,6 +113,10 @@ export interface Theme {
   /** Raio das bordas dos botões (px) */
   button_radius_px: number;
   pdp_qty_selector_enabled: boolean;
+  size_chart_bg_color: string;
+  size_chart_header_bg_color: string;
+  size_chart_header_text_color: string;
+  size_chart_text_color: string;
   wishlist_enabled: boolean;
   card_hover_zoom_enabled: boolean;
   card_buy_button_enabled: boolean;

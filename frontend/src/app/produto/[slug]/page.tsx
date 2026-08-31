@@ -8,7 +8,6 @@ import { Breadcrumbs, type Crumb } from '@/components/catalog/breadcrumbs';
 import { Stars } from '@/components/catalog/stars';
 import { ProductCarousel } from '@/components/catalog/product-carousel';
 import { PdpMain } from '@/components/pdp/pdp-main';
-import { SizeChartButton } from '@/components/pdp/size-chart';
 import { ReviewForm } from '@/components/pdp/review-form';
 import { FreeShippingProgress } from '@/components/layout/free-shipping-progress';
 import { TrackOnMount } from '@/components/analytics/track-on-mount';
@@ -164,8 +163,6 @@ export default async function ProdutoPage({ params }: PageProps) {
         miniCart={theme.mini_cart_enabled}
         theme={theme}
       />
-
-      {product.size_chart && <SizeChartButton chart={product.size_chart} />}
 
       {accordionItems.length > 0 && (
         <section aria-label="Detalhes do produto">

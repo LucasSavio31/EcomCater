@@ -10,6 +10,7 @@ import { HeartIcon } from '@/components/icons';
 import { useWishlist } from '@/modules/wishlist/use-wishlist';
 import { track, type TrackItem } from '@/modules/analytics';
 import { LeadPopup, type LeadPopupConfig } from '@/components/lead-popup';
+import { SizeChartButton, type SizeChartColors } from '@/components/pdp/size-chart';
 
 interface PdpBuyBoxProps {
   product: ProductDetail;
@@ -20,6 +21,7 @@ interface PdpBuyBoxProps {
   leadPopup?: LeadPopupConfig | null;
   showQty?: boolean;
   showWishlist?: boolean;
+  sizeChartColors?: SizeChartColors;
 }
 
 export function PdpBuyBox({
@@ -29,6 +31,7 @@ export function PdpBuyBox({
   leadPopup = null,
   showQty = true,
   showWishlist = true,
+  sizeChartColors,
 }: PdpBuyBoxProps) {
   const router = useRouter();
   const { addItem, openMiniCart } = useCart();
@@ -162,10 +165,8 @@ export function PdpBuyBox({
                   </span>
                 )}
               </span>
-              {type.is_size && (
-                <a href="#specs" className="text-xs font-normal normal-case text-primary underline">
-                  Tabela de medidas
-                </a>
+              {type.is_size && product.size_chart && (
+                <SizeChartButton chart={product.size_chart} colors={sizeChartColors} />
               )}
             </legend>
             <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={type.name}>

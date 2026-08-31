@@ -120,6 +120,10 @@ export interface ThemeSettings {
   lead_popup_button_text_color: string;
   button_radius_px: number;
   pdp_qty_selector_enabled: boolean;
+  size_chart_bg_color: string;
+  size_chart_header_bg_color: string;
+  size_chart_header_text_color: string;
+  size_chart_text_color: string;
   wishlist_enabled: boolean;
   card_hover_zoom_enabled: boolean;
   card_buy_button_enabled: boolean;
@@ -267,6 +271,10 @@ export const NEUTRAL_THEME: ThemeSettings = {
   lead_popup_button_text_color: '#111111',
   button_radius_px: 12,
   pdp_qty_selector_enabled: true,
+  size_chart_bg_color: '#FFFFFF',
+  size_chart_header_bg_color: '#FFC400',
+  size_chart_header_text_color: '#111111',
+  size_chart_text_color: '#374151',
   wishlist_enabled: true,
   card_hover_zoom_enabled: true,
   card_buy_button_enabled: false,

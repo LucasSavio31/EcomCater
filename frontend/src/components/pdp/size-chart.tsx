@@ -1,64 +1,110 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-interface SizeChartData {
+export interface SizeChartData {
   name: string;
   columns: string[];
   rows: string[][];
   note: string | null;
 }
 
-/** Link "Tabela de medidas" + popup com a tabela do produto. */
-export function SizeChartButton({ chart }: { chart: SizeChartData }) {
+export interface SizeChartColors {
+  bg: string;
+  headerBg: string;
+  headerText: string;
+  text: string;
+}
+
+const DEFAULT_COLORS: SizeChartColors = {
+  bg: '#FFFFFF',
+  headerBg: '#FFC400',
+  headerText: '#111111',
+  text: '#374151',
+};
+
+/** Gatilho "Tabela de medidas" + popup CENTRALIZADO (só aparece se houver tabela). */
+export function SizeChartButton({
+  chart,
+  colors = DEFAULT_COLORS,
+  className,
+}: {
+  chart: SizeChartData;
+  colors?: SizeChartColors;
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [open]);
+
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary underline"
+        className={
+          className ??
+          'text-xs font-normal normal-case text-primary underline hover:no-underline'
+        }
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4">
-          <path d="M4 15 15 4l5 5L9 20z" />
-          <path d="M8 11l2 2M11 8l2 2M14 5l2 2" strokeLinecap="round" />
-        </svg>
         Tabela de medidas
       </button>
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
-          aria-label={chart.name}
-          onClick={() => setOpen(false)}
         >
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => setOpen(false)}
+            className="absolute inset-0 bg-black/50"
+          />
           <div
-            className="max-h-[85vh] w-full max-w-lg overflow-auto rounded-card bg-surface p-5"
-            onClick={(e) => e.stopPropagation()}
+            className="relative flex max-h-[85vh] w-full max-w-sm flex-col overflow-hidden rounded-lg shadow-2xl"
+            style={{ backgroundColor: colors.bg, color: colors.text }}
           >
-            <div className="mb-3 flex items-start justify-between gap-4">
-              <h2 className="text-lg font-semibold">{chart.name || 'Tabela de medidas'}</h2>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Fechar"
-                className="text-2xl leading-none text-text-muted hover:text-text"
-              >
+            {/* barra escura com FECHAR */}
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="flex shrink-0 items-center justify-end gap-2 bg-black px-4 py-2.5 text-xs font-semibold uppercase tracking-widest text-white"
+            >
+              Fechar
+              <span aria-hidden className="text-lg leading-none">
                 &times;
-              </button>
+              </span>
+            </button>
+
+            {/* faixa de cabeçalho com título */}
+            <div
+              className="shrink-0 px-6 py-5 text-center"
+              style={{ backgroundColor: colors.headerBg, color: colors.headerText }}
+            >
+              <h2 className="text-base font-extrabold uppercase tracking-[0.3em]">
+                Tabela de medidas
+              </h2>
+              {chart.name && <p className="mt-1 text-sm font-medium opacity-80">{chart.name}</p>}
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[320px] border-collapse text-sm">
+            {/* tabela (rola aqui dentro se for grande) */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr>
+                  <tr className="border-b border-black/10 text-[10px] uppercase tracking-[0.25em] opacity-60">
                     {chart.columns.map((c, i) => (
-                      <th
-                        key={i}
-                        className="border border-surface-border bg-bg-subtle px-3 py-2 text-left font-semibold"
-                      >
+                      <th key={i} className="py-2.5 text-left font-semibold">
                         {c}
                       </th>
                     ))}
@@ -66,9 +112,9 @@ export function SizeChartButton({ chart }: { chart: SizeChartData }) {
                 </thead>
                 <tbody>
                   {chart.rows.map((r, ri) => (
-                    <tr key={ri}>
+                    <tr key={ri} className="border-b border-dashed border-black/10">
                       {r.map((cell, ci) => (
-                        <td key={ci} className="border border-surface-border px-3 py-2">
+                        <td key={ci} className="py-3.5">
                           {cell}
                         </td>
                       ))}
@@ -76,9 +122,8 @@ export function SizeChartButton({ chart }: { chart: SizeChartData }) {
                   ))}
                 </tbody>
               </table>
+              {chart.note && <p className="mt-4 text-xs opacity-60">{chart.note}</p>}
             </div>
-
-            {chart.note && <p className="mt-3 text-xs text-text-muted">{chart.note}</p>}
           </div>
         </div>
       )}

@@ -227,6 +227,11 @@ class ThemeSettings(Base):
     card_hover_zoom_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     card_buy_button_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     card_buy_button_label: Mapped[str] = mapped_column(String(40), default="COMPRAR", server_default="COMPRAR", nullable=False)
+    # Popup "Tabela de medidas" na PDP
+    size_chart_bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    size_chart_header_bg_color: Mapped[str] = mapped_column(String(9), default="#FFC400", server_default="#FFC400", nullable=False)
+    size_chart_header_text_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    size_chart_text_color: Mapped[str] = mapped_column(String(9), default="#374151", server_default="#374151", nullable=False)
 
     # Aviso de cookies de terceiros
     cookie_consent_enabled: Mapped[bool] = mapped_column(

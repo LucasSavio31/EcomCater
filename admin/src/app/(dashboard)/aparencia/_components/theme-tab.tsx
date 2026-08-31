@@ -420,6 +420,40 @@ export function ThemeTab() {
                 checked={theme.pdp_related_enabled}
                 onChange={(v) => set('pdp_related_enabled', v)}
               />
+
+              <div className="flex flex-col gap-3 border-t border-surface-border pt-4">
+                <span className="text-sm font-medium text-text">
+                  Popup “Tabela de medidas” (cores)
+                </span>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <ColorField
+                    label="Fundo do popup"
+                    value={String(theme.size_chart_bg_color ?? '#FFFFFF')}
+                    onChange={(hex) => set('size_chart_bg_color', hex as Theme['size_chart_bg_color'])}
+                  />
+                  <ColorField
+                    label="Fundo do cabeçalho"
+                    value={String(theme.size_chart_header_bg_color ?? '#FFC400')}
+                    onChange={(hex) =>
+                      set('size_chart_header_bg_color', hex as Theme['size_chart_header_bg_color'])
+                    }
+                  />
+                  <ColorField
+                    label="Texto do cabeçalho"
+                    value={String(theme.size_chart_header_text_color ?? '#111111')}
+                    onChange={(hex) =>
+                      set('size_chart_header_text_color', hex as Theme['size_chart_header_text_color'])
+                    }
+                  />
+                  <ColorField
+                    label="Texto da tabela"
+                    value={String(theme.size_chart_text_color ?? '#374151')}
+                    onChange={(hex) =>
+                      set('size_chart_text_color', hex as Theme['size_chart_text_color'])
+                    }
+                  />
+                </div>
+              </div>
               <Checkbox
                 label="Ativar favoritos (coração + menu)"
                 checked={theme.wishlist_enabled}

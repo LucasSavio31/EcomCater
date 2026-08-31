@@ -60,6 +60,12 @@ export function PdpMain({ product, redirectAfterAdd, miniCart, theme }: PdpMainP
           leadPopup={leadPopup}
           showQty={theme.pdp_qty_selector_enabled}
           showWishlist={theme.wishlist_enabled}
+          sizeChartColors={{
+            bg: theme.size_chart_bg_color,
+            headerBg: theme.size_chart_header_bg_color,
+            headerText: theme.size_chart_header_text_color,
+            text: theme.size_chart_text_color,
+          }}
         />
 
         <div className="rounded-card border border-surface-border p-4">
