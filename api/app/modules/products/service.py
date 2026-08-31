@@ -143,7 +143,8 @@ def _variant_out(product: Product, v: ProductVariant) -> dict:
 
 
 async def _breadcrumb(db: AsyncSession, category: Category | None) -> list[dict]:
-    crumbs: list[dict] = [{"name": "Home", "url": "/"}]
+    # a raiz ("Início") é adicionada pelo front — aqui só a trilha de categorias
+    crumbs: list[dict] = []
     chain: list[Category] = []
     current = category
     while current:
