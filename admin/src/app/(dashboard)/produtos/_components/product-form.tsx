@@ -6,6 +6,7 @@ import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { Tabs, type TabDef } from '@/components/tabs';
 import { Checkbox, Select, Textarea } from '@/components/form-controls';
+import { RichTextarea } from '@/components/rich-textarea';
 import { StatusBadge } from '@/components/status-badge';
 import { useToast } from '@/components/toast';
 import { centsToInput, inputToCents, slugify } from '@/lib/format';
@@ -277,12 +278,12 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
               onChange={(e) => set('short_description', e.target.value)}
               rows={2}
             />
-            <Textarea
+            <RichTextarea
               label="Descrição completa"
               value={state.description}
-              onChange={(e) => set('description', e.target.value)}
-              rows={6}
-              hint="HTML simples é aceito."
+              onChange={(v) => set('description', v)}
+              rows={8}
+              hint="Escreva normalmente e formate pela barra (negrito, título, lista, link, fonte, tamanho)."
             />
             <Checkbox
               label="Produto em destaque"

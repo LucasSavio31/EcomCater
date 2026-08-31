@@ -71,6 +71,8 @@ export interface ThemeSettings {
   filter_material_enabled: boolean;
   filter_price_enabled: boolean;
   filter_category_enabled: boolean;
+  filters_on_home: boolean;
+  pdp_related_enabled: boolean;
   /** Modelo do checkout (menu "Checkout" no admin). */
   checkout_email_first: boolean;
   checkout_require_terms: boolean;
@@ -219,6 +221,8 @@ export const NEUTRAL_THEME: ThemeSettings = {
   filter_material_enabled: true,
   filter_price_enabled: true,
   filter_category_enabled: true,
+  filters_on_home: true,
+  pdp_related_enabled: true,
   checkout_email_first: false,
   checkout_require_terms: true,
   checkout_container_width_px: 1100,

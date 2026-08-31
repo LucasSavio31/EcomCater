@@ -55,8 +55,9 @@ export default async function HomePage() {
 
   const showHero = theme.hero_enabled && hero.length > 0;
   const showFilterSummary =
-    (theme.filter_category_enabled && filterSummary.categories.length > 0) ||
-    (theme.filter_price_enabled && filterSummary.priceLinks.length > 0);
+    theme.filters_on_home &&
+    ((theme.filter_category_enabled && filterSummary.categories.length > 0) ||
+      (theme.filter_price_enabled && filterSummary.priceLinks.length > 0));
   const nothing = hero.length === 0 && showcase.length === 0 && featured.length === 0;
 
   return (

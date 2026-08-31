@@ -74,7 +74,7 @@ export default async function ProdutoPage({ params }: PageProps) {
             title: 'Sobre o produto',
             content: (
               <div
-                className="prose-sm max-w-none text-sm text-text-muted [&_a]:text-primary [&_a]:underline"
+                className="max-w-none text-sm leading-relaxed text-text-muted [&_a]:text-primary [&_a]:underline [&_h2]:mb-1.5 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-text [&_h3]:mb-1 [&_h3]:mt-2.5 [&_h3]:font-semibold [&_h3]:text-text [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5"
                 // HTML vindo do admin (conteúdo controlado internamente).
                 dangerouslySetInnerHTML={{ __html: product.description }}
               />
@@ -170,15 +170,6 @@ export default async function ProdutoPage({ params }: PageProps) {
         </section>
       )}
 
-      {product.related.length > 0 && (
-        <section aria-labelledby="related-title" className="flex flex-col gap-4">
-          <h2 id="related-title" className="text-lg font-semibold">
-            Quem viu também gostou
-          </h2>
-          <ProductCarousel products={product.related} ariaLabel="Produtos relacionados" />
-        </section>
-      )}
-
       <section aria-labelledby="reviews-title" className="flex flex-col gap-4">
         <h2 id="reviews-title" className="text-lg font-semibold">
           Avaliações {product.rating_count > 0 && `(${product.rating_count})`}
@@ -206,6 +197,16 @@ export default async function ProdutoPage({ params }: PageProps) {
           <ReviewForm slug={product.slug} />
         </div>
       </section>
+
+      {/* Relacionados: sempre no fim da página, acima do rodapé (se ligado no admin) */}
+      {theme.pdp_related_enabled && product.related.length > 0 && (
+        <section aria-labelledby="related-title" className="flex flex-col gap-4">
+          <h2 id="related-title" className="text-lg font-semibold">
+            Você também pode gostar
+          </h2>
+          <ProductCarousel products={product.related} ariaLabel="Produtos relacionados" />
+        </section>
+      )}
     </div>
   );
 }

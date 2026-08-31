@@ -415,6 +415,12 @@ export function ThemeTab() {
                 onChange={(v) => set('pdp_qty_selector_enabled', v)}
               />
               <Checkbox
+                label="Mostrar “Você também pode gostar” (relacionados)"
+                hint="Aparece sempre no fim da página do produto, abaixo das avaliações."
+                checked={theme.pdp_related_enabled}
+                onChange={(v) => set('pdp_related_enabled', v)}
+              />
+              <Checkbox
                 label="Ativar favoritos (coração + menu)"
                 checked={theme.wishlist_enabled}
                 onChange={(v) => set('wishlist_enabled', v)}

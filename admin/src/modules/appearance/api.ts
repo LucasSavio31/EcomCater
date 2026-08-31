@@ -64,6 +64,8 @@ export interface Theme {
   filter_material_enabled: boolean;
   filter_price_enabled: boolean;
   filter_category_enabled: boolean;
+  filters_on_home: boolean;
+  pdp_related_enabled: boolean;
   /** Modelo do checkout (menu "Checkout") */
   checkout_email_first: boolean;
   checkout_require_terms: boolean;

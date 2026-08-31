@@ -32,6 +32,7 @@ export default function FiltrosPage() {
       filter_category_enabled: theme.filter_category_enabled,
       filter_color_enabled: theme.filter_color_enabled,
       filter_material_enabled: theme.filter_material_enabled,
+      filters_on_home: theme.filters_on_home,
     });
     setSaving(false);
     if (!res.ok) {
@@ -83,6 +84,14 @@ export default function FiltrosPage() {
               checked={theme.filter_material_enabled}
               onChange={(v) => set('filter_material_enabled', v)}
             />
+            <div className="border-t border-surface-border pt-4">
+              <Checkbox
+                label="Mostrar atalhos de filtro também na home"
+                hint="Desligado: os filtros aparecem só nas telas de categoria."
+                checked={theme.filters_on_home}
+                onChange={(v) => set('filters_on_home', v)}
+              />
+            </div>
             <div className="flex items-center gap-3">
               <Button loading={saving} onClick={() => void save()}>
                 Salvar
