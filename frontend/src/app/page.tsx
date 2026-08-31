@@ -83,7 +83,7 @@ export default async function HomePage() {
         </>
       )}
 
-      {theme.filter_size_enabled && (
+      {theme.filters_on_home && theme.filter_size_enabled && (
         <SizeShortcuts shortcuts={shortcuts} heading="Compre por numeração" />
       )}
 

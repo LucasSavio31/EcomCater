@@ -87,7 +87,7 @@ export default function FiltrosPage() {
             <div className="border-t border-surface-border pt-4">
               <Checkbox
                 label="Mostrar atalhos de filtro também na home"
-                hint="Desligado: os filtros aparecem só nas telas de categoria."
+                hint="Inclui categorias, faixas de preço e “Compre por numeração”. Desligado: tudo isso aparece só nas telas de categoria."
                 checked={theme.filters_on_home}
                 onChange={(v) => set('filters_on_home', v)}
               />
