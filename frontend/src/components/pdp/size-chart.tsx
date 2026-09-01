@@ -95,7 +95,9 @@ export function SizeChartButton({
               <h2 className="text-base font-extrabold uppercase tracking-[0.3em]">
                 Tabela de medidas
               </h2>
-              {chart.name && <p className="mt-1 text-sm font-medium opacity-80">{chart.name}</p>}
+              {(chart.note || chart.name) && (
+                <p className="mt-1 text-sm font-medium opacity-80">{chart.note || chart.name}</p>
+              )}
             </div>
 
             {/* tabela (rola aqui dentro se for grande) */}
@@ -122,7 +124,6 @@ export function SizeChartButton({
                   ))}
                 </tbody>
               </table>
-              {chart.note && <p className="mt-4 text-xs opacity-60">{chart.note}</p>}
             </div>
           </div>
         </div>

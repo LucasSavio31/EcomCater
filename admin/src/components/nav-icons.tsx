@@ -171,3 +171,16 @@ export const IconRuler = (p: P) => (
     <path d="M8 11l2 2M11 8l2 2M14 5l2 2M5 14l2 2" />
   </svg>
 );
+export const IconShield = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6l-7-3Z" />
+    <path d="m9 12 2 2 4-4" />
+  </svg>
+);
+export const IconServer = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="7" rx="1.5" />
+    <rect x="3" y="13" width="18" height="7" rx="1.5" />
+    <path d="M7 7.5h.01M7 16.5h.01" />
+  </svg>
+);

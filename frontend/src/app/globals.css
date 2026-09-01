@@ -45,6 +45,22 @@ body {
   overflow-x: hidden;
 }
 
+/*
+ * Mobile: impede o "zoom automático" do iOS ao tocar num campo — ele acontece
+ * sempre que a fonte do campo é menor que 16px. Vale para a loja inteira.
+ */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  /* Os seletores de quantidade (− valor +) continuam compactos. */
+  .ecom-qty-stepper input {
+    font-size: 0.8125rem;
+  }
+}
+
 /* Barra de rolagem fina, arredondada e translúcida (trilho transparente). */
 * {
   scrollbar-width: thin;

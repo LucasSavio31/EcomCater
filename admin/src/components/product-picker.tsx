@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Input } from '@ecom/ui';
 import { productsApi } from '@/modules/catalog/api';
+import { foldAccents } from '@/lib/format';
 
 export interface PickerResult {
   id: string;
@@ -85,10 +86,10 @@ export function ProductPicker({
   }, []);
 
   const source = q.trim().length >= 2 ? results : base;
-  const needle = q.trim().toLowerCase();
+  const needle = foldAccents(q);
   const visible = source
     .filter((r) => !excludeIds.includes(r.id))
-    .filter((r) => (needle && q.trim().length < 2 ? r.name.toLowerCase().includes(needle) : true));
+    .filter((r) => (needle && q.trim().length < 2 ? foldAccents(r.name).includes(needle) : true));
 
   return (
     <div className="relative max-w-md" ref={wrap}>

@@ -55,6 +55,15 @@ async def featured(db: DbDep, limit: int = Query(12, ge=1, le=40)) -> list[dict]
     return await service.featured(db, limit)
 
 
+@router.get("/by-ids")
+async def by_ids(
+    db: DbDep,
+    ids: str = Query("", description="ids separados por vírgula"),
+) -> list[dict]:
+    parsed = [s.strip() for s in ids.split(",") if s.strip()]
+    return await service.by_ids(db, parsed)
+
+
 @router.get("/search")
 async def search(
     db: DbDep,

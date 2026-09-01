@@ -51,7 +51,21 @@ export function CouponField() {
           placeholder="Ex.: BEMVINDO10"
           className="flex-1"
         />
-        <Button type="submit" variant="outline" loading={busy} disabled={!code.trim()}>
+        <Button
+          type="submit"
+          variant="outline"
+          loading={busy}
+          disabled={!code.trim()}
+          className="border-2"
+          style={{
+            background: 'var(--color-cart-coupon-bg)',
+            color: 'var(--color-cart-coupon-fg)',
+            borderColor: 'var(--color-cart-coupon-border)',
+            borderRadius: 'var(--radius-cart-coupon, 0.75rem)',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-cart-coupon-hover)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-cart-coupon-bg)')}
+        >
           Aplicar
         </Button>
       </form>

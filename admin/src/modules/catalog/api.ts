@@ -95,6 +95,12 @@ export const productsApi = {
   setStatus: (id: string, value: ProductStatus) =>
     adminFetch<ProductDetail>(`/api/admin/products/${id}/status`, { method: 'POST', query: { value } }),
   remove: (id: string) => adminFetch<void>(`/api/admin/products/${id}`, { method: 'DELETE' }),
+  /** Promoção rápida: aplica (percent 1..90) ou remove (0) desconto em vários produtos. */
+  bulkDiscount: (productIds: string[], percent: number) =>
+    adminFetch<{ updated: number }>('/api/admin/products/bulk-discount', {
+      method: 'POST',
+      body: { product_ids: productIds, percent },
+    }),
   duplicate: (id: string) =>
     adminFetch<{ id: string; slug: string; name: string }>(
       `/api/admin/products/${id}/duplicate`,

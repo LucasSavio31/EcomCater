@@ -1,10 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@ecom/ui';
 import type { ProductDetail } from '@/modules/catalog/types';
 import { quoteShipping, type ShippingRate } from '@/modules/shipping/api';
 import { formatBRL } from '@/lib/format';
+
+/** Máscara de CEP BR — 00000-000. */
+function maskCep(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 8);
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+}
+
+/** Guarda o CEP p/ o carrinho herdar (sessionStorage). Só quando tem 8 dígitos. */
+function stashCep(masked: string): void {
+  const d = masked.replace(/\D/g, '');
+  try {
+    if (d.length === 8) window.sessionStorage.setItem('ecom:cep', d);
+  } catch {
+    /* ignore */
+  }
+}
 
 /** Simulador de frete na PDP (CEP + Calcular → opções de entrega). */
 export function ShippingCalculator({ product }: { product: ProductDetail }) {
@@ -12,6 +28,16 @@ export function ShippingCalculator({ product }: { product: ProductDetail }) {
   const [rates, setRates] = useState<ShippingRate[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Ao abrir a página do produto, zera o CEP herdado: o carrinho só recebe um
+  // CEP se ele for digitado AQUI. Sem isso, um CEP de outro produto "vazava".
+  useEffect(() => {
+    try {
+      window.sessionStorage.removeItem('ecom:cep');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const dims = product.dimensions_mm;
 
@@ -38,14 +64,18 @@ export function ShippingCalculator({ product }: { product: ProductDetail }) {
   return (
     <div className="rounded-card border border-surface-border p-4">
       <p className="mb-2 text-sm font-medium">Calcular frete e prazo</p>
-      <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2">
-        <label className="flex-1">
+      <form onSubmit={onSubmit} className="flex items-center gap-2">
+        <label className="min-w-0 flex-1">
           <span className="sr-only">CEP de entrega</span>
           <input
             type="text"
             inputMode="numeric"
             value={zip}
-            onChange={(e) => setZip(e.target.value)}
+            onChange={(e) => {
+              const m = maskCep(e.target.value);
+              setZip(m);
+              stashCep(m);
+            }}
             placeholder="00000-000"
             maxLength={9}
             className="min-h-touch w-full rounded-card border border-surface-border bg-surface px-3 text-sm"
@@ -55,18 +85,18 @@ export function ShippingCalculator({ product }: { product: ProductDetail }) {
           type="submit"
           variant="ghost"
           loading={loading}
-          className="border-2 border-var-border bg-var text-var-fg hover:opacity-90"
+          style={{
+            borderRadius: 'var(--radius-freight, 0.75rem)',
+            background: 'var(--color-freight-bg)',
+            color: 'var(--color-freight-fg)',
+            borderColor: 'var(--color-freight-border)',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-freight-hover)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-freight-bg)')}
+          className="shrink-0 border-2"
         >
           Calcular
         </Button>
-        <a
-          href="https://buscacepinter.correios.com.br/app/endereco/index.php"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-primary underline"
-        >
-          Não sei meu CEP
-        </a>
       </form>
 
       {error && (

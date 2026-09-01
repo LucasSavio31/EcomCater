@@ -1,46 +1,106 @@
-"""Fixtures de teste. Requer um Postgres acessível (o serviço `db` do compose).
+"""Fixtures de teste.
 
-`make test` roda dentro do container `api` com `API_ENV=test`; o schema é
-recriado a cada sessão a partir de `Base.metadata`.
+SEGURANÇA: a suíte roda num banco **separado** do de desenvolvimento. O nome do
+banco de teste é `<db>_test` (ou o que estiver em `TEST_DATABASE_URL`). Se, por
+qualquer motivo, a URL de teste apontar para o mesmo banco do dev, a coleta é
+abortada — o `drop_all`/`create_all` abaixo jamais deve rodar contra o dev.
+O banco de teste é criado automaticamente se não existir.
 """
 from __future__ import annotations
 
-import asyncio
-from collections.abc import AsyncGenerator
+import os
 
-import pytest
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+# Marca o ambiente ANTES de qualquer import de `app.*` (o settings é cacheado):
+# desliga rate limit, e-mails reais, etc.
+os.environ.setdefault("API_ENV", "test")
 
-from app.bootstrap import discover_modules
-from app.core.config import settings
-from app.core.database import get_db
-from app.main import app
-from app.models import Base
+from collections.abc import AsyncGenerator  # noqa: E402
+from urllib.parse import urlparse, urlunparse  # noqa: E402
+
+import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
+
+from app.bootstrap import discover_modules  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.core.database import get_db  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models import Base  # noqa: E402
 
 discover_modules()
 
-TEST_DB_URL = settings.database_url  # usa o mesmo banco; schema é dropado/recriado
+
+def _derive_test_url() -> str:
+    explicit = os.getenv("TEST_DATABASE_URL")
+    if explicit:
+        return explicit
+    parts = urlparse(settings.database_url)
+    db_name = parts.path.lstrip("/") or "ecom"
+    if db_name.endswith("_test"):
+        return settings.database_url
+    return urlunparse(parts._replace(path=f"/{db_name}_test"))
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
+TEST_DB_URL = _derive_test_url()
+
+# --- trava de segurança: nunca rodar contra o banco de desenvolvimento --------
+if TEST_DB_URL == settings.database_url and not urlparse(TEST_DB_URL).path.rstrip("/").endswith("_test"):
+    raise RuntimeError(
+        "ABORTADO: a suíte de testes apagaria o banco de desenvolvimento.\n"
+        f"  DATABASE_URL dev  = {settings.database_url}\n"
+        f"  URL de teste      = {TEST_DB_URL}\n"
+        "Defina TEST_DATABASE_URL para um banco cujo nome termina em '_test'."
+    )
 
 
-@pytest_asyncio.fixture(scope="session")
+async def _ensure_test_database() -> None:
+    """Cria o banco de teste se ele ainda não existir (conecta na base `postgres`)."""
+    import asyncpg  # driver já usado pelo SQLAlchemy async
+
+    parts = urlparse(TEST_DB_URL.replace("postgresql+asyncpg", "postgresql"))
+    target_db = parts.path.lstrip("/")
+    admin_conn = await asyncpg.connect(
+        host=parts.hostname, port=parts.port or 5432,
+        user=parts.username, password=parts.password, database="postgres",
+    )
+    try:
+        exists = await admin_conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", target_db)
+        if not exists:
+            await admin_conn.execute(f'CREATE DATABASE "{target_db}"')
+    finally:
+        await admin_conn.close()
+
+
+_schema_ready = False
+
+
+@pytest_asyncio.fixture
 async def engine():
+    """Engine por teste (evita conflito de event loop no pytest-asyncio 1.x no
+    Windows). O schema é (re)criado só uma vez por sessão."""
+    global _schema_ready
+    await _ensure_test_database()
     eng = create_async_engine(TEST_DB_URL, poolclass=None)
-    async with eng.begin() as conn:
-        await conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS pg_trgm")
-        await conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS citext")
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+    if not _schema_ready:
+        async with eng.begin() as conn:
+            await conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+            await conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS citext")
+            await conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS unaccent")
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+        _schema_ready = True
     yield eng
-    await eng.dispose()
+    # isola os testes: zera todas as tabelas ao fim de cada um
+    try:
+        async with eng.begin() as conn:
+            await conn.exec_driver_sql(
+                "TRUNCATE TABLE "
+                + ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
+                + " RESTART IDENTITY CASCADE"
+            )
+    finally:
+        await eng.dispose()
 
 
 @pytest_asyncio.fixture
@@ -52,9 +112,19 @@ async def db(engine) -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest_asyncio.fixture
-async def client(db) -> AsyncGenerator[AsyncClient, None]:
+async def client(engine, db) -> AsyncGenerator[AsyncClient, None]:
+    # Uma sessão nova POR REQUISIÇÃO, como em produção (o `get_db` real). Usar a
+    # mesma sessão do teste em todas as requisições mascara bugs de identity-map.
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+
     async def _override_get_db():
-        yield db
+        async with maker() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
 
     app.dependency_overrides[get_db] = _override_get_db
     transport = ASGITransport(app=app)
@@ -70,7 +140,7 @@ async def admin_token(client, db) -> str:
 
     db.add(
         AdminUser(
-            email="root@test.local",
+            email="root@test.example",
             name="Root",
             password_hash=hash_password("supersecret1"),
             role="super_admin",
@@ -80,7 +150,7 @@ async def admin_token(client, db) -> str:
     await db.commit()
     r = await client.post(
         "/api/admin/auth/login",
-        json={"email": "root@test.local", "password": "supersecret1"},
+        json={"email": "root@test.example", "password": "supersecret1"},
     )
     assert r.status_code == 200, r.text
     return r.json()["access_token"]

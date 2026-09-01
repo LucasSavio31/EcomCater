@@ -3,7 +3,7 @@
 import { useId, useState } from 'react';
 import { Button, Input } from '@ecom/ui';
 import { subscribeNewsletter } from '@/modules/newsletter/api';
-import { track } from '@/modules/analytics';
+import { track, identify } from '@/modules/analytics';
 
 type Status = 'idle' | 'loading' | 'success' | 'error';
 
@@ -30,6 +30,7 @@ export function NewsletterForm({
     setStatus('loading');
     const result = await subscribeNewsletter({ email, name: name || undefined });
     if (result.ok) {
+      identify({ email: email.trim(), firstName: name.trim().split(/\s+/)[0] || undefined });
       track('generate_lead', {});
       setStatus('success');
       setMessage('Pronto! Você vai receber nossas novidades.');

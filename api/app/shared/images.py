@@ -10,8 +10,35 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageOps
 
+from app.core.errors import ValidationError
 from app.core.config import settings
 from app.shared.storage import storage
+
+# limites de segurança do upload
+MAX_UPLOAD_BYTES = 15 * 1024 * 1024          # 15 MB por arquivo
+MAX_PIXELS = 40_000_000                       # ~ 6300x6300 — barra "decompression bomb"
+Image.MAX_IMAGE_PIXELS = MAX_PIXELS
+
+
+def _open_validated(raw: bytes) -> Image.Image:
+    """Abre o upload com as travas de tamanho/formato e orientação EXIF."""
+    if not raw:
+        raise ValidationError("Arquivo de imagem vazio.")
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise ValidationError(
+            f"Imagem muito grande (máx. {MAX_UPLOAD_BYTES // (1024 * 1024)} MB)."
+        )
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img.verify()  # detecta arquivo corrompido / não-imagem
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw)))
+    except ValidationError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise ValidationError("Arquivo enviado não é uma imagem válida.") from exc
+    if img.width * img.height > MAX_PIXELS:
+        raise ValidationError("Resolução da imagem acima do limite permitido.")
+    return img
 
 
 @dataclass
@@ -54,7 +81,7 @@ def whiten_bytes(raw: bytes) -> bytes:
 def process_favicon(raw: bytes, *, prefix: str = "theme") -> str:
     """Redimensiona para 50x50 (quadrado, sem distorcer) e salva como .ico
     (com 32 e 16 embutidos p/ compatibilidade). Retorna a storage key."""
-    img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw)))
+    img = _open_validated(raw)
     if img.mode not in ("RGB", "RGBA"):
         img = img.convert("RGBA")
     square = ImageOps.fit(img, (50, 50), Image.LANCZOS)
@@ -71,7 +98,7 @@ def process_image(
     *,
     prefix: str = "products",
 ) -> ProcessedImage:
-    img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw)))
+    img = _open_validated(raw)
     width, height = img.size
     q = settings.image_webp_quality
     folder = f"{prefix}/{uuid.uuid4().hex}"

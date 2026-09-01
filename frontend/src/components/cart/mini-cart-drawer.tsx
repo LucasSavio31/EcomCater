@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Button, Drawer } from '@ecom/ui';
 import { useCart } from '@/modules/cart/cart-context';
+import { track, cartToTrackItems } from '@/modules/analytics';
 import { resolveMediaUrl } from '@/lib/media';
 import { formatBRL } from '@/lib/format';
+import { FreeShippingProgress } from '@/components/layout/free-shipping-progress';
 
 /** Mini-carrinho lateral (abre à direita ao adicionar um produto). */
 export function MiniCartDrawer() {
@@ -14,16 +16,42 @@ export function MiniCartDrawer() {
   const { cart, miniCartOpen, closeMiniCart, updateItem, removeItem } = useCart();
   const [busy, setBusy] = useState<string | null>(null);
 
+  // view_cart quando o drawer é REALMENTE exibido com itens (uma vez por abertura)
+  const viewedOpen = useRef(false);
+  useEffect(() => {
+    if (!miniCartOpen) {
+      viewedOpen.current = false;
+      return;
+    }
+    if (viewedOpen.current || cart.items.length === 0) return;
+    viewedOpen.current = true;
+    track('view_cart', { items: cartToTrackItems(cart.items) });
+  }, [miniCartOpen, cart.items]);
+
+  /** item do carrinho com a QTD que mudou. */
+  const trackItem = (id: string, quantity: number) => {
+    const i = cart.items.find((x) => x.id === id);
+    return i ? cartToTrackItems([{ ...i, quantity }]) : null;
+  };
+
   async function change(id: string, qty: number, max: number) {
     if (qty < 1 || qty > max) return;
+    const cur = cart.items.find((x) => x.id === id)?.quantity ?? qty;
+    const delta = qty - cur;
+    const items = trackItem(id, Math.abs(delta));
     setBusy(id);
-    await updateItem(id, qty);
+    const res = await updateItem(id, qty);
     setBusy(null);
+    if (res.ok && items && delta !== 0) {
+      track(delta > 0 ? 'add_to_cart' : 'remove_from_cart', { items });
+    }
   }
   async function remove(id: string) {
+    const items = trackItem(id, cart.items.find((x) => x.id === id)?.quantity ?? 1);
     setBusy(id);
-    await removeItem(id);
+    const res = await removeItem(id);
     setBusy(null);
+    if (res.ok && items) track('remove_from_cart', { items });
   }
 
   return (
@@ -94,6 +122,7 @@ export function MiniCartDrawer() {
 
         {cart.items.length > 0 && (
           <div className="mt-3 flex flex-col gap-2 border-t border-surface-border pt-3">
+            <FreeShippingProgress variant="bar" className="mb-1 rounded-card bg-bg-subtle p-2.5" />
             <div className="flex justify-between text-sm">
               <span className="text-text-muted">Subtotal</span>
               <span>{formatBRL(cart.totals.items_total_cents)}</span>

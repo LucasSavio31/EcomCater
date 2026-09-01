@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { apiFetch } from '@/lib/api-client';
 import { resolveMediaUrl } from '@/lib/media';
 import { maskPhone } from '@/lib/phone';
+import { track, identify } from '@/modules/analytics';
 
 export interface LeadPopupConfig {
   enabled: boolean;
@@ -47,6 +48,12 @@ export function LeadPopup({
       body: { email: form.email.trim(), name: form.name.trim() || null, phone: form.phone.trim() || null, source: 'popup' },
     });
     if (res.ok) {
+      identify({
+        email: form.email.trim(),
+        phone: form.phone.replace(/\D/g, '') || undefined,
+        firstName: form.name.trim().split(/\s+/)[0] || undefined,
+      });
+      track('generate_lead', {});
       setCoupon(res.data.coupon ?? null);
       setStatus('done');
     } else {

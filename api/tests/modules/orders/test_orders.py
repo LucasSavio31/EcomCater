@@ -41,7 +41,7 @@ async def variant(client, admin_token, auth_headers):
     return v["id"]
 
 
-async def _order(client, variant, email="c@test.local", qty=1):
+async def _order(client, variant, email="c@test.example", qty=1):
     await client.post("/api/cart/items", json={"variant_id": variant, "quantity": qty})
     r = await client.post(
         "/api/orders/checkout", json={"email": email, "shipping_address": ADDRESS}
@@ -73,11 +73,16 @@ async def test_snapshot_and_stock_decrement(client, variant):
 
 @pytest.mark.asyncio
 async def test_guest_lookup_requires_email(client, variant):
-    order = await _order(client, variant, email="guest@test.local")
-    ok = await client.get(f"/api/orders/{order['number']}", params={"email": "guest@test.local"})
+    order = await _order(client, variant, email="guest@test.example")
+    ok = await client.get(f"/api/orders/{order['number']}", params={"email": "guest@test.example"})
     assert ok.status_code == 200
-    bad = await client.get(f"/api/orders/{order['number']}", params={"email": "outro@test.local"})
+    bad = await client.get(f"/api/orders/{order['number']}", params={"email": "outro@test.example"})
     assert bad.status_code == 404
+    # IDOR: sem e-mail nenhum não pode devolver o pedido (evita enumeração por número)
+    no_email = await client.get(f"/api/orders/{order['number']}")
+    assert no_email.status_code == 404
+    pulse = await client.get(f"/api/orders/{order['number']}/pulse")
+    assert pulse.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -86,9 +91,11 @@ async def test_admin_status_transitions(client, variant, admin_token, auth_heade
     order = await _order(client, variant)
     num = order["number"]
 
-    # pending_payment -> shipped é inválido
-    bad = await client.post(f"/api/admin/orders/{num}/status", json={"status": "shipped"}, headers=h)
-    assert bad.status_code == 422
+    # o admin pode pular para qualquer status (fluxo livre); status inexistente é 422
+    invalid = await client.post(f"/api/admin/orders/{num}/status", json={"status": "voando"}, headers=h)
+    assert invalid.status_code == 422
+    jump = await client.post(f"/api/admin/orders/{num}/status", json={"status": "shipped"}, headers=h)
+    assert jump.status_code == 200
 
     ok = await client.post(f"/api/admin/orders/{num}/status", json={"status": "paid"}, headers=h)
     assert ok.status_code == 200

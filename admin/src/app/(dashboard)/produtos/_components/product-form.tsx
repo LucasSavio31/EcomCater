@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
@@ -71,7 +71,7 @@ function buildPayload(s: GeneralState, status: ProductStatus): ProductInput {
     brand: s.brand.trim() || null,
     supplier: s.supplier.trim() || null,
     category_id: s.category_id || null,
-    extra_category_ids: s.extra_category_ids,
+    extra_category_ids: [...new Set(s.extra_category_ids)].filter((id) => id && id !== s.category_id),
     size_chart_id: s.size_chart_id || null,
     status,
     price_cents: inputToCents(s.price) ?? 0,
@@ -107,11 +107,25 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [sizeCharts, setSizeCharts] = useState<SizeChart[]>([]);
+  const savedSnapshot = useRef(JSON.stringify(toState(product)));
+  const dirty = JSON.stringify(state) !== savedSnapshot.current;
+
   useEffect(() => {
     void sizeChartsApi.list().then((r) => {
       if (r.ok) setSizeCharts(r.data);
     });
   }, []);
+
+  // aviso ao sair com alterações não salvas
+  useEffect(() => {
+    if (!dirty) return;
+    const h = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', h);
+    return () => window.removeEventListener('beforeunload', h);
+  }, [dirty]);
 
   const set = <K extends keyof GeneralState>(key: K, value: GeneralState[K]): void =>
     setState((prev) => ({ ...prev, [key]: value }));
@@ -146,6 +160,7 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
       return;
     }
     toast.success(isNew ? 'Produto criado.' : 'Produto salvo.');
+    savedSnapshot.current = JSON.stringify(state);
     onSaved(result.data);
     if (isNew) router.replace(`/produtos/${result.data.id}`);
   }
@@ -255,31 +270,40 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
             </div>
             <fieldset className="flex flex-col gap-2 rounded-card border border-surface-border p-3">
               <legend className="px-1 text-sm font-medium">Categorias adicionais</legend>
+              <p className="px-1 text-xs text-text-muted">
+                O produto também aparece nestas categorias. A principal já entra automaticamente.
+              </p>
               <div className="flex flex-wrap gap-2">
-                {categories.length === 0 && <span className="text-sm text-text-muted">Nenhuma categoria.</span>}
-                {categories.map((c) => {
-                  const checked = state.extra_category_ids.includes(c.id);
-                  return (
-                    <label
-                      key={c.id}
-                      className="flex items-center gap-1.5 rounded-card border border-surface-border px-2 py-1 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) =>
-                          set(
-                            'extra_category_ids',
-                            e.target.checked
-                              ? [...state.extra_category_ids, c.id]
-                              : state.extra_category_ids.filter((id) => id !== c.id),
-                          )
-                        }
-                      />
-                      {c.name}
-                    </label>
-                  );
-                })}
+                {categories.filter((c) => c.id !== state.category_id).length === 0 && (
+                  <span className="text-sm text-text-muted">Nenhuma outra categoria.</span>
+                )}
+                {categories
+                  .filter((c) => c.id !== state.category_id)
+                  .map((c) => {
+                    const checked = state.extra_category_ids.includes(c.id);
+                    return (
+                      <label
+                        key={c.id}
+                        className={`flex items-center gap-1.5 rounded-card border px-2 py-1 text-sm ${
+                          checked ? 'border-primary bg-primary/5' : 'border-surface-border'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) =>
+                            set(
+                              'extra_category_ids',
+                              e.target.checked
+                                ? [...state.extra_category_ids.filter((id) => id !== c.id), c.id]
+                                : state.extra_category_ids.filter((id) => id !== c.id),
+                            )
+                          }
+                        />
+                        {c.path ? c.path.replace(/\//g, ' › ') : c.name}
+                      </label>
+                    );
+                  })}
               </div>
             </fieldset>
             <Select
@@ -424,6 +448,28 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
         <p className="text-sm text-text-muted">
           Salve o produto para liberar as abas de variações, imagens, especificações e avaliações.
         </p>
+      )}
+
+      {/* barra fixa de ação quando há alterações não salvas */}
+      {dirty && !isNew && (
+        <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-3 rounded-card border border-surface-border bg-surface/95 px-3 py-2.5 shadow-lg backdrop-blur">
+          <span className="text-sm text-text-muted">Alterações não salvas nesta aba.</span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setState(toState(product));
+                setErrors({});
+              }}
+            >
+              Descartar
+            </Button>
+            <Button size="sm" loading={saving} onClick={() => void handleSave()}>
+              Salvar
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );

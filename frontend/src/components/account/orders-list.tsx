@@ -6,11 +6,13 @@ import { Card, Spinner } from '@ecom/ui';
 import { customerApi } from '@/modules/customer/api';
 import type { Order, OrderEvent } from '@/modules/checkout/types';
 import { formatBRL } from '@/lib/format';
+import { resolveMediaUrl } from '@/lib/media';
 
 const ORDER_STATUS_PT: Record<string, string> = {
   pending_payment: 'Aguardando pagamento',
   paid: 'Pago',
   processing: 'Em separação',
+  tracking_available: 'Rastreio disponível',
   shipped: 'Enviado',
   delivered: 'Entregue',
   canceled: 'Cancelado',
@@ -23,6 +25,29 @@ const PAYMENT_PT: Record<string, string> = {
   canceled: 'Cancelado',
   refunded: 'Estornado',
   failed: 'Não autorizado',
+};
+
+type Tone = 'neutral' | 'warning' | 'success' | 'danger' | 'accent' | 'info';
+
+const ORDER_TONE: Record<string, Tone> = {
+  pending_payment: 'warning',
+  paid: 'success',
+  processing: 'accent',
+  tracking_available: 'info',
+  shipped: 'accent',
+  delivered: 'success',
+  canceled: 'danger',
+  refunded: 'danger',
+};
+const PAYMENT_TONE: Record<string, Tone> = {
+  pending: 'warning',
+  awaiting_payment: 'warning',
+  authorized: 'accent',
+  paid: 'success',
+  failed: 'danger',
+  refunded: 'danger',
+  chargeback: 'danger',
+  canceled: 'danger',
 };
 const FULFILL_PT: Record<string, string> = {
   pending: 'Em preparação',
@@ -57,6 +82,11 @@ function fmtDateTime(iso: string | null): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+/** Link de rastreamento no site dos Correios. */
+function correiosTrackingUrl(code: string): string {
+  return `https://rastreamento.correios.com.br/app/index.php?objeto=${encodeURIComponent(code.trim())}`;
 }
 
 /** Mesmo visual da linha do tempo do painel: bolinha + fio + rótulo do status. */
@@ -202,8 +232,12 @@ export function OrdersList() {
                   <span className="ml-2 text-xs text-text-muted">{fmtDate(o.placed_at)}</span>
                 </span>
                 <span className="flex flex-wrap items-center gap-2">
-                  <Tag>{ORDER_STATUS_PT[o.status] ?? PAYMENT_PT[o.payment_status] ?? o.status}</Tag>
-                  <Tag>{FULFILL_PT[o.fulfillment_status] ?? o.fulfillment_status}</Tag>
+                  <Tag tone={ORDER_TONE[o.status] ?? 'neutral'}>
+                    {ORDER_STATUS_PT[o.status] ?? PAYMENT_PT[o.payment_status] ?? o.status}
+                  </Tag>
+                  {FULFILL_PT[o.fulfillment_status] && (
+                    <Tag>{FULFILL_PT[o.fulfillment_status]}</Tag>
+                  )}
                   <span className="font-semibold">{formatBRL(o.grand_total_cents)}</span>
                 </span>
               </button>
@@ -211,13 +245,15 @@ export function OrdersList() {
               {open && (
                 <div className="flex flex-col gap-4 border-t border-surface-border pt-3">
                   <ul className="flex flex-col gap-3">
-                    {o.items.map((i) => (
+                    {o.items.map((i) => {
+                      const img = resolveMediaUrl(i.image_url);
+                      return (
                       <li key={i.sku} className="flex items-center gap-3">
-                        <span className="h-14 w-14 shrink-0 overflow-hidden rounded-card bg-bg-subtle">
-                          {i.image_url && (
+                        <span className="h-14 w-14 shrink-0 overflow-hidden rounded-card border border-surface-border bg-bg-subtle">
+                          {img && (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={i.image_url}
+                              src={img}
                               alt=""
                               className="h-full w-full object-cover"
                               loading="lazy"
@@ -235,13 +271,29 @@ export function OrdersList() {
                           {formatBRL(i.total_cents)}
                         </span>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
 
                   <div className="text-sm text-text-muted">
                     Entrega: {o.shipping_address.recipient_name} — {o.shipping_address.street},{' '}
                     {o.shipping_address.number}, {o.shipping_address.city}/{o.shipping_address.state}
                   </div>
+
+                  {typeof o.shipping_service?.tracking_code === 'string' &&
+                    o.shipping_service.tracking_code && (
+                      <div className="text-sm">
+                        <span className="text-text-muted">Rastreio: </span>
+                        <a
+                          href={correiosTrackingUrl(o.shipping_service.tracking_code)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-primary underline"
+                        >
+                          {o.shipping_service.tracking_code}
+                        </a>
+                      </div>
+                    )}
 
                   {o.payment && (
                     <div className="flex flex-col gap-1">
@@ -251,9 +303,13 @@ export function OrdersList() {
                           <dt className="text-text-muted">Método</dt>
                           <dd>{PAYMENT_METHOD_PT[o.payment.method] ?? o.payment.method}</dd>
                         </div>
-                        <div className="flex justify-between gap-2">
+                        <div className="flex items-center justify-between gap-2">
                           <dt className="text-text-muted">Situação</dt>
-                          <dd>{PAYMENT_STATUS_PT[o.payment.status] ?? o.payment.status}</dd>
+                          <dd>
+                            <Tag tone={PAYMENT_TONE[o.payment.status] ?? 'neutral'}>
+                              {PAYMENT_STATUS_PT[o.payment.status] ?? o.payment.status}
+                            </Tag>
+                          </dd>
                         </div>
                         {o.payment.installments && o.payment.installments > 1 && (
                           <div className="flex justify-between gap-2">
@@ -283,8 +339,19 @@ export function OrdersList() {
   );
 }
 
-function Tag({ children }: { children: React.ReactNode }) {
+const TAG_TONE_CLASS: Record<Tone, string> = {
+  neutral: 'bg-bg-subtle text-text',
+  warning: 'bg-warning/10 text-warning',
+  success: 'bg-success/10 text-success',
+  danger: 'bg-danger/10 text-danger',
+  accent: 'bg-accent/10 text-accent',
+  info: 'bg-blue-600/10 text-blue-600',
+};
+
+function Tag({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: Tone }) {
   return (
-    <span className="rounded-card bg-bg-subtle px-2 py-0.5 text-xs font-medium">{children}</span>
+    <span className={`rounded-card px-2 py-0.5 text-xs font-medium ${TAG_TONE_CLASS[tone]}`}>
+      {children}
+    </span>
   );
 }

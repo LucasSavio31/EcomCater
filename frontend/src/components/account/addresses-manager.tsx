@@ -5,6 +5,7 @@ import { Button, Card, Input, Spinner } from '@ecom/ui';
 import { customerApi } from '@/modules/customer/api';
 import type { Address, AddressInput } from '@/modules/customer/types';
 import { lookupCep } from '@/lib/viacep';
+import { maskHouseNumber } from '@/lib/address';
 
 const maskCep = (v: string) => {
   const d = v.replace(/\D/g, '').slice(0, 8);
@@ -191,8 +192,10 @@ export function AddressesManager() {
               <Input
                 label="Número"
                 required
+                inputMode="numeric"
+                placeholder="Nº ou S/N"
                 value={form.number}
-                onChange={(e) => set('number', e.target.value)}
+                onChange={(e) => set('number', maskHouseNumber(e.target.value))}
               />
             </div>
             <Input

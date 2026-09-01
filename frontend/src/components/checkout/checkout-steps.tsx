@@ -1,13 +1,13 @@
 'use client';
 
-/** Linha do tempo do checkout: 1 Dados pessoais · 2 Entrega · 3 Pagamento. */
+/** Linha do tempo do checkout: 1 Identificação · 2 Dados · 3 Entrega · 4 Pagamento. */
 export type CheckoutStepId = 'identify' | 'profile' | 'shipping' | 'payment';
 
 const ORDER: CheckoutStepId[] = ['identify', 'profile', 'shipping', 'payment'];
 
 const LABELS: Record<CheckoutStepId, string> = {
   identify: 'Identificação',
-  profile: 'Dados pessoais',
+  profile: 'Dados',
   shipping: 'Entrega',
   payment: 'Pagamento',
 };
@@ -32,18 +32,29 @@ export function CheckoutStepsTimeline({
   const maxIdx = idx(furthest);
 
   return (
-    <ol className="mb-6 flex min-w-0 items-center gap-2 text-sm">
+    <ol className="mb-6 flex items-start">
       {steps.map((step, i) => {
         const done = i < curIdx;
         const active = i === curIdx;
         const reachable = i <= maxIdx;
         return (
-          <li key={step} className="flex min-w-0 flex-1 items-center gap-2">
+          <li key={step} className="relative flex flex-1 flex-col items-center gap-1.5">
+            {/* risquinho ligando esta bolinha à próxima (centralizado na altura da bolinha) */}
+            {i < steps.length - 1 && (
+              <span
+                aria-hidden
+                className={`absolute left-1/2 top-[13px] h-0.5 w-full ${
+                  i < curIdx ? 'bg-success' : 'bg-surface-border'
+                }`}
+              />
+            )}
             <button
               type="button"
               disabled={!reachable || !onJump}
               onClick={() => onJump?.(step)}
-              className={`flex min-w-0 items-center gap-2 ${reachable && onJump ? 'cursor-pointer' : 'cursor-default'}`}
+              className={`relative z-10 flex flex-col items-center gap-1.5 px-1 ${
+                reachable && onJump ? 'cursor-pointer' : 'cursor-default'
+              }`}
             >
               <span
                 style={
@@ -58,20 +69,19 @@ export function CheckoutStepsTimeline({
                       : 'bg-btn text-btn-fg'
                     : done
                       ? 'bg-success text-white'
-                      : 'border border-surface-border text-text-muted'
+                      : 'border border-surface-border bg-bg text-text-muted'
                 }`}
               >
                 {done ? '✓' : i + 1}
               </span>
               <span
-                className={`truncate ${active ? 'font-semibold text-text' : 'text-text-muted'}`}
+                className={`text-center text-xs leading-tight sm:text-sm ${
+                  active ? 'font-semibold text-text' : 'text-text-muted'
+                }`}
               >
                 {LABELS[step]}
               </span>
             </button>
-            {i < steps.length - 1 && (
-              <span className={`h-px flex-1 ${i < curIdx ? 'bg-success' : 'bg-surface-border'}`} />
-            )}
           </li>
         );
       })}

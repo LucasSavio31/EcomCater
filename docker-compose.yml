@@ -1,17 +1,19 @@
 # ============================================================
 #  Compose base — serviços comuns a dev e prod.
 #  Dev:  docker compose up            (usa docker-compose.override.yml automaticamente)
-#  Prod: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d   (fase 9)
+#  Prod: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 #  Regras:
 #   - db e redis NUNCA publicam porta no host (só rede interna).
 #   - Sem proxy reverso no Docker (LiteSpeed/aaPanel no host cuida disso).
+#   - Todo container do projeto tem "cater" no nome (container_name).
 # ============================================================
-name: ecom
+name: cater
 
 services:
   db:
     image: postgres:16-alpine
+    container_name: cater-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -28,6 +30,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    container_name: cater-redis
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
@@ -42,6 +45,7 @@ services:
     build:
       context: ./api
       target: prod
+    container_name: cater-api
     env_file: .env
     depends_on:
       db:
@@ -60,6 +64,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+    container_name: cater-frontend
     env_file: .env
     depends_on: [api]
     networks: [internal]
@@ -72,6 +77,7 @@ services:
       args:
         NEXT_PUBLIC_ADMIN_API_URL: ${NEXT_PUBLIC_ADMIN_API_URL}
         NEXT_PUBLIC_ADMIN_BASE_PATH: ${NEXT_PUBLIC_ADMIN_BASE_PATH}
+    container_name: cater-admin
     env_file: .env
     depends_on: [api]
     networks: [internal]

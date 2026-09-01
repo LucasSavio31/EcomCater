@@ -64,7 +64,7 @@ async def test_card_approved_flow(client, catalog):
 
     checkout = await client.post(
         "/api/orders/checkout",
-        json={"email": "maria@test.local", "shipping_address": ADDRESS},
+        json={"email": "maria@test.example", "shipping_address": ADDRESS},
     )
     assert checkout.status_code == 201, checkout.text
     order = checkout.json()
@@ -92,7 +92,7 @@ async def test_card_approved_flow(client, catalog):
     assert pay.status_code == 200, pay.text
     assert pay.json()["status"] == "paid"
 
-    final = (await client.get(f"/api/orders/{order['number']}", params={"email": "maria@test.local"})).json()
+    final = (await client.get(f"/api/orders/{order['number']}", params={"email": "maria@test.example"})).json()
     assert final["status"] == "processing"
     assert final["payment_status"] == "paid"
 
@@ -107,7 +107,7 @@ async def test_card_declined_then_retry(client, catalog):
     order = (
         await client.post(
             "/api/orders/checkout",
-            json={"email": "joao@test.local", "shipping_address": ADDRESS},
+            json={"email": "joao@test.example", "shipping_address": ADDRESS},
         )
     ).json()
 
@@ -128,7 +128,7 @@ async def test_card_declined_then_retry(client, catalog):
     # cobrança criada, mas recusada -> pedido cancelado
     assert declined.status_code == 200
     assert declined.json()["status"] in ("failed",)
-    cancelled = (await client.get(f"/api/orders/{order['number']}", params={"email": "joao@test.local"})).json()
+    cancelled = (await client.get(f"/api/orders/{order['number']}", params={"email": "joao@test.example"})).json()
     assert cancelled["status"] == "canceled"
 
 
@@ -138,7 +138,7 @@ async def test_pix_confirmed_by_webhook(client, catalog):
     order = (
         await client.post(
             "/api/orders/checkout",
-            json={"email": "ana@test.local", "shipping_address": ADDRESS},
+            json={"email": "ana@test.example", "shipping_address": ADDRESS},
         )
     ).json()
 
@@ -151,7 +151,7 @@ async def test_pix_confirmed_by_webhook(client, catalog):
 
     # ainda não pago
     assert (
-        await client.get(f"/api/orders/{order['number']}", params={"email": "ana@test.local"})
+        await client.get(f"/api/orders/{order['number']}", params={"email": "ana@test.example"})
     ).json()["status"] == "pending_payment"
 
     # webhook do gateway confirma
@@ -162,7 +162,7 @@ async def test_pix_confirmed_by_webhook(client, catalog):
     assert wh.status_code == 200, wh.text
     assert wh.json()["matched"] is True
 
-    paid = (await client.get(f"/api/orders/{order['number']}", params={"email": "ana@test.local"})).json()
+    paid = (await client.get(f"/api/orders/{order['number']}", params={"email": "ana@test.example"})).json()
     assert paid["status"] == "processing"
     assert paid["payment_status"] == "paid"
 

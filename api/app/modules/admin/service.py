@@ -10,12 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AuthError, ConflictError, ForbiddenError, NotFoundError, ValidationError
 from app.core.security import (
+    create_token,
     decode_token,
     hash_password,
     issue_pair,
     needs_rehash,
     verify_password,
 )
+from app.modules.admin import twofa
 from app.modules.admin.models import AdminUser, AuthRefreshToken
 
 VALID_ROLES = {"super_admin", "admin", "staff"}
@@ -38,16 +40,106 @@ async def _store_refresh(db: AsyncSession, admin_id: str, pair: dict) -> None:
     )
 
 
-async def authenticate(db: AsyncSession, email: str, password: str) -> tuple[AdminUser, dict]:
+async def verify_credentials(db: AsyncSession, email: str, password: str) -> AdminUser:
     admin = await db.scalar(select(AdminUser).where(AdminUser.email == email))
     if not admin or not admin.is_active or not verify_password(password, admin.password_hash):
         raise AuthError("E-mail ou senha inválidos.")
     if needs_rehash(admin.password_hash):
         admin.password_hash = hash_password(password)
+    return admin
+
+
+async def issue_session(db: AsyncSession, admin: AdminUser) -> dict:
     admin.last_login_at = datetime.now(UTC)
     pair = issue_pair(str(admin.id), scope="admin", extra={"role": admin.role})
     await _store_refresh(db, str(admin.id), pair)
-    return admin, pair
+    return pair
+
+
+async def authenticate(db: AsyncSession, email: str, password: str) -> tuple[AdminUser, dict]:
+    admin = await verify_credentials(db, email, password)
+    return admin, await issue_session(db, admin)
+
+
+def mfa_challenge_token(admin_id: str) -> str:
+    """Token curto emitido após a senha, trocado por sessão real com o código 2FA."""
+    token, _, _ = create_token(
+        str(admin_id), scope="admin_mfa", token_type="access", extra={"mfa_pending": True}
+    )
+    return token
+
+
+async def resolve_mfa_challenge(db: AsyncSession, mfa_token: str, code: str) -> tuple[AdminUser, dict]:
+    try:
+        payload = decode_token(mfa_token)
+    except Exception as exc:  # noqa: BLE001
+        raise AuthError("Sessão de verificação expirada. Faça login de novo.") from exc
+    if payload.get("scope") != "admin_mfa" or not payload.get("mfa_pending"):
+        raise AuthError("Token de verificação inválido.")
+    admin = await db.get(AdminUser, uuid.UUID(payload["sub"]))
+    if not admin or not admin.is_active:
+        raise AuthError("Conta inativa.")
+    if not check_2fa(admin, code):
+        raise AuthError("Código de verificação inválido.")
+    return admin, await issue_session(db, admin)
+
+
+# --------------------------------------------------------------------- 2FA
+async def start_2fa(db: AsyncSession, admin: AdminUser) -> dict:
+    if admin.totp_enabled:
+        raise ValidationError("A verificação em duas etapas já está ativa.")
+    secret = twofa.new_secret()
+    admin.totp_secret = secret
+    await db.flush()
+    uri = twofa.provisioning_uri(secret, admin.email)
+    return {"secret": secret, "otpauth_uri": uri, "qr_svg": twofa.qr_svg(uri)}
+
+
+async def confirm_2fa(db: AsyncSession, admin: AdminUser, code: str) -> list[str]:
+    if not admin.totp_secret:
+        raise ValidationError("Comece a configuração antes de confirmar.")
+    if not twofa.verify_totp(admin.totp_secret, code):
+        raise AuthError("Código inválido. Confira o horário do celular e tente de novo.")
+    admin.totp_enabled = True
+    codes = twofa.gen_recovery_codes()
+    admin.recovery_codes_json = [twofa.hash_code(c) for c in codes]
+    await db.flush()
+    return codes
+
+
+async def disable_2fa(db: AsyncSession, admin: AdminUser, password: str) -> None:
+    if not verify_password(password, admin.password_hash):
+        raise AuthError("Senha incorreta.")
+    admin.totp_secret = None
+    admin.totp_enabled = False
+    admin.recovery_codes_json = []
+    await db.flush()
+
+
+def check_2fa(admin: AdminUser, code: str) -> bool:
+    if twofa.verify_totp(admin.totp_secret, code):
+        return True
+    h = twofa.hash_code(code)
+    codes = list(admin.recovery_codes_json or [])
+    if h in codes:
+        codes.remove(h)  # código de recuperação é de uso único
+        admin.recovery_codes_json = codes
+        return True
+    return False
+
+
+async def update_own_profile(db: AsyncSession, admin: AdminUser, name: str | None, email: str | None) -> AdminUser:
+    if name and name.strip():
+        admin.name = name.strip()
+    if email and email.strip().lower() != admin.email.lower():
+        dup = await db.scalar(
+            select(AdminUser).where(AdminUser.email == email.strip(), AdminUser.id != admin.id)
+        )
+        if dup:
+            raise ConflictError("Já existe outra conta com esse e-mail.")
+        admin.email = email.strip()
+    await db.flush()
+    return admin
 
 
 async def refresh(db: AsyncSession, refresh_token: str) -> dict:

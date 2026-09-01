@@ -6,12 +6,14 @@ import { getMenu } from '@/modules/menus/api';
 import { getAnalyticsConfig } from '@/modules/analytics/get-config';
 import { AnalyticsHeadScripts, AnalyticsBodyNoScript } from '@/modules/analytics/scripts';
 import { AnalyticsRouteTracker } from '@/modules/analytics/route-tracker';
+import { AnalyticsIdentity } from '@/components/analytics/analytics-identity';
 import { ServiceWorker } from '@/components/service-worker';
 import { ScrollToTop } from '@/components/scroll-to-top';
 import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
 import { StorefrontShell } from '@/components/layout/storefront-shell';
 import { CookieConsent } from '@/components/layout/cookie-consent';
+import { LeadPopupAuto } from '@/components/lead-popup-auto';
 import { CartProvider } from '@/modules/cart/cart-context';
 import { MiniCartDrawer } from '@/components/cart/mini-cart-drawer';
 import { AuthProvider } from '@/modules/customer/auth-context';
@@ -38,6 +40,10 @@ export const viewport: Viewport = {
   themeColor: '#111111',
   width: 'device-width',
   initialScale: 1,
+  // Sem zoom no mobile. (O iOS ainda pode permitir pinça por acessibilidade;
+  // o que trava mesmo o "zoom ao focar campo" é a regra de fonte 16px no CSS.)
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default async function RootLayout({
@@ -63,6 +69,7 @@ export default async function RootLayout({
         <Suspense fallback={null}>
           <AnalyticsRouteTracker />
         </Suspense>
+        <AnalyticsIdentity />
         <ScrollToTop />
 
         {/* CSS vars do tema — antes do primeiro paint (sem FOUC). */}
@@ -88,6 +95,20 @@ export default async function RootLayout({
         <CookieConsent
           enabled={theme.cookie_consent_enabled}
           text={theme.cookie_consent_text}
+        />
+        <LeadPopupAuto
+          config={{
+            enabled: theme.lead_popup_enabled,
+            title: theme.lead_popup_title,
+            subtitle: theme.lead_popup_subtitle,
+            logoUrl: theme.lead_popup_show_logo
+              ? theme.lead_popup_logo_url || theme.logo_url || null
+              : null,
+            bg: theme.lead_popup_bg_color,
+            text: theme.lead_popup_text_color,
+            btn: theme.lead_popup_button_color,
+            btnText: theme.lead_popup_button_text_color,
+          }}
         />
         <ServiceWorker />
       </body>

@@ -75,8 +75,11 @@ export interface Theme {
   checkout_allow_qty_change: boolean;
   checkout_footer_note: string | null;
   checkout_animated_card: boolean;
+  checkout_payment_icons_enabled: boolean;
+  checkout_steps_enabled: boolean;
   checkout_show_review: boolean;
   checkout_review_position: 'side' | 'top';
+  checkout_order_notes_enabled: boolean;
   checkout_orderbump_enabled: boolean;
   checkout_orderbump_product_id: string | null;
   checkout_orderbump_product_ids: string[];
@@ -102,6 +105,7 @@ export interface Theme {
   newsletter_button_text_color: string;
   discount_badge_enabled: boolean;
   lead_popup_enabled: boolean;
+  lead_popup_pdp_enabled: boolean;
   lead_capture_enabled: boolean;
   lead_popup_title: string;
   lead_popup_subtitle: string;
@@ -110,8 +114,47 @@ export interface Theme {
   lead_popup_text_color: string;
   lead_popup_button_color: string;
   lead_popup_button_text_color: string;
+  lead_popup_logo_url?: string | null;
+  lead_popup_show_logo: boolean;
   /** Raio das bordas dos botões (px) */
   button_radius_px: number;
+  variation_radius_px: number;
+  pdp_reassurance_enabled: boolean;
+  pdp_reassurance_items: string[];
+  freight_button_bg_color: string;
+  freight_button_text_color: string;
+  freight_button_hover_color: string;
+  freight_button_border_color: string;
+  freight_button_radius_px: number;
+  promo_badge_bg_color: string;
+  promo_badge_text_color: string;
+  promo_badge_border_color: string;
+  promo_badge_radius_px: number;
+  promo_badge_card_enabled: boolean;
+  promo_badge_pdp_enabled: boolean;
+  cart_checkout_btn_bg_color: string;
+  cart_checkout_btn_text_color: string;
+  cart_checkout_btn_hover_color: string;
+  cart_checkout_btn_border_color: string;
+  cart_checkout_btn_radius_px: number;
+  cart_freight_btn_bg_color: string;
+  cart_freight_btn_text_color: string;
+  cart_freight_btn_hover_color: string;
+  cart_freight_btn_border_color: string;
+  cart_freight_btn_radius_px: number;
+  cart_qty_bg_color: string;
+  cart_qty_text_color: string;
+  cart_qty_radius_px: number;
+  cart_coupon_btn_bg_color: string;
+  cart_coupon_btn_text_color: string;
+  cart_coupon_btn_hover_color: string;
+  cart_coupon_btn_border_color: string;
+  cart_coupon_btn_radius_px: number;
+  cart_badge_bg_color: string;
+  cart_badge_text_color: string;
+  pdp_wishlist_bg_color: string;
+  pdp_wishlist_border_color: string;
+  pdp_wishlist_icon_color: string;
   pdp_qty_selector_enabled: boolean;
   size_chart_bg_color: string;
   size_chart_header_bg_color: string;
@@ -152,7 +195,7 @@ export interface FooterSeals {
   security: FooterSealColumn;
 }
 
-export type ThemeImageKind = 'logo' | 'logo_mobile' | 'favicon';
+export type ThemeImageKind = 'logo' | 'logo_mobile' | 'favicon' | 'lead_popup_logo';
 
 /* ------------------------------- Settings ------------------------------- */
 
@@ -257,6 +300,8 @@ export const appearanceApi = {
     form.append('file', file);
     return uploadMultipart<Theme>(`/api/admin/theme/image/${kind}`, form);
   },
+  removeThemeImage: (kind: ThemeImageKind) =>
+    adminFetch<Theme>(`/api/admin/theme/image/${kind}`, { method: 'DELETE' }),
   uploadSealImage: (column: SealColumn, index: number, file: File, whiten = false) => {
     const form = new FormData();
     form.append('file', file);

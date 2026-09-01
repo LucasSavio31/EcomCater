@@ -3,11 +3,12 @@ import type { BadgeTone } from '@ecom/ui';
 
 const ORDER_STATUS: Record<string, { label: string; tone: BadgeTone }> = {
   pending_payment: { label: 'Aguardando pagamento', tone: 'warning' },
-  paid: { label: 'Pago', tone: 'success' },
+  paid: { label: 'Gerar Envio', tone: 'accent' },
   processing: { label: 'Em separação', tone: 'accent' },
+  tracking_available: { label: 'Rastreio disponível', tone: 'info' },
   shipped: { label: 'Enviado', tone: 'accent' },
   delivered: { label: 'Entregue', tone: 'success' },
-  canceled: { label: 'Cancelado', tone: 'neutral' },
+  canceled: { label: 'Cancelado', tone: 'danger' },
   refunded: { label: 'Reembolsado', tone: 'danger' },
 };
 
@@ -18,6 +19,7 @@ const PAYMENT_STATUS: Record<string, { label: string; tone: BadgeTone }> = {
   failed: { label: 'Falhou', tone: 'danger' },
   refunded: { label: 'Reembolsado', tone: 'danger' },
   chargeback: { label: 'Chargeback', tone: 'danger' },
+  canceled: { label: 'Cancelado', tone: 'danger' },
 };
 
 const PRODUCT_STATUS: Record<string, { label: string; tone: BadgeTone }> = {

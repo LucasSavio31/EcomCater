@@ -26,6 +26,7 @@ from app.modules.products.schemas import (
     SpecIn,
     VariantIn,
 )
+from app.shared.search import ilike_unaccent
 
 router = APIRouter()
 
@@ -45,7 +46,7 @@ async def list_products(
 ) -> dict:
     stmt = select(Product).options(selectinload(Product.variants), selectinload(Product.images))
     if q:
-        stmt = stmt.where(Product.name.ilike(f"%{q}%"))
+        stmt = stmt.where(ilike_unaccent(Product.name, q))
     if status_filter:
         stmt = stmt.where(Product.status == status_filter)
     from sqlalchemy import func
@@ -62,6 +63,49 @@ async def list_products(
     }
 
 
+class BulkDiscountIn(BaseModel):
+    product_ids: list[str]
+    percent: int  # 1..90 aplica; 0 remove a promoção (volta o preço "de")
+
+
+@router.post("/bulk-discount")
+async def bulk_discount(body: BulkDiscountIn, db: DbDep, _: EditorDep) -> dict:
+    """Promoção rápida: aplica (ou remove) um % de desconto em vários produtos."""
+    import uuid as _uuid
+
+    pct = max(0, min(90, int(body.percent)))
+    ids: list[_uuid.UUID] = []
+    for raw in body.product_ids:
+        try:
+            ids.append(_uuid.UUID(raw))
+        except ValueError:
+            continue
+    if not ids:
+        return {"updated": 0}
+
+    rows = list(await db.scalars(select(Product).where(Product.id.in_(ids))))
+    updated = 0
+    for p in rows:
+        if pct == 0:
+            # remove promoção: se há "preço de", volta pra ele
+            if p.compare_at_price_cents and p.compare_at_price_cents > p.price_cents:
+                p.price_cents = p.compare_at_price_cents
+            p.compare_at_price_cents = None
+        else:
+            base = (
+                p.compare_at_price_cents
+                if p.compare_at_price_cents and p.compare_at_price_cents > p.price_cents
+                else p.price_cents
+            )
+            if not base:
+                continue
+            p.compare_at_price_cents = base
+            p.price_cents = round(base * (100 - pct) / 100)
+        updated += 1
+    await db.flush()
+    return {"updated": updated}
+
+
 @router.get("/{product_id}", response_model=None)
 async def get_product(product_id: str, db: DbDep, _: AdminDep) -> dict:
     return await service.get_detail_by_slug(
@@ -75,10 +119,10 @@ async def create_product(body: ProductCreateIn, db: DbDep, _: EditorDep) -> dict
     return {"id": str(product.id), "slug": product.slug}
 
 
-@router.patch("/{product_id}")
+@router.patch("/{product_id}", response_model=None)
 async def update_product(product_id: str, body: ProductUpdateIn, db: DbDep, _: EditorDep) -> dict:
     product = await service.update(db, product_id, body.model_dump(exclude_unset=True))
-    return {"id": str(product.id), "slug": product.slug, "status": product.status}
+    return await service.get_detail_by_slug(db, product.slug, include_unpublished=True)
 
 
 @router.post("/{product_id}/status")

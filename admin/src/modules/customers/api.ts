@@ -68,13 +68,21 @@ interface Paginated<T> {
   page_size: number;
 }
 
+export interface CustomerStats {
+  registered: number;
+  purchased: number;
+  recurring: number;
+  recurrence_rate_pct: number;
+}
+
 const BASE = '/api/admin/customers';
 
 export const customersApi = {
-  list: (q: string, page: number) =>
+  list: (q: string, page: number, minOrders = 0) =>
     adminFetch<Paginated<CustomerListItem>>(BASE, {
-      query: { q: q || undefined, page, page_size: 25 },
+      query: { q: q || undefined, page, page_size: 25, min_orders: minOrders || undefined },
     }),
+  stats: () => adminFetch<CustomerStats>(`${BASE}/stats`),
   get: (id: string) => adminFetch<CustomerDetail>(`${BASE}/${id}`),
   update: (id: string, body: CustomerPatch) =>
     adminFetch<CustomerDetail & { orders_updated: number }>(`${BASE}/${id}`, {
@@ -87,8 +95,9 @@ export const customersApi = {
     adminFetch<CustomerAddress>(`${BASE}/${id}/addresses/${aid}`, { method: 'PATCH', body }),
   deleteAddress: (id: string, aid: string) =>
     adminFetch<void>(`${BASE}/${id}/addresses/${aid}`, { method: 'DELETE' }),
-  remove: (id: string) => adminFetch<void>(`${BASE}/${id}`, { method: 'DELETE' }),
+  remove: (id: string) =>
+    adminFetch<void>(`${BASE}/${id}`, { method: 'DELETE', query: { confirm: true } }),
   removeMany: (ids: string[]) =>
-    adminFetch<{ deleted: number }>(`${BASE}/delete`, { method: 'POST', body: { ids } }),
+    adminFetch<{ deleted: number }>(`${BASE}/delete`, { method: 'POST', body: { ids, confirm: true } }),
   ordersByEmail: (email: string) => ordersApi.list({ q: email, page_size: 100 }),
 };

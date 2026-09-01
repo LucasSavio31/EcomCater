@@ -28,6 +28,11 @@ class CheckoutIn(BaseModel):
     customer_note: str | None = None
     shipping_service_id: str | None = None
     idempotency_key: str | None = None
+    # atribuição p/ Meta CAPI (cookies _fbp / _fbc) + GA4 refund (client_id) + landing page
+    fbp: str | None = Field(default=None, max_length=128)
+    fbc: str | None = Field(default=None, max_length=512)
+    ga_client_id: str | None = Field(default=None, max_length=64)
+    landing_url: str | None = Field(default=None, max_length=1024)
 
 
 class OrderItemOut(BaseModel):
@@ -93,6 +98,12 @@ class OrderListItem(BaseModel):
 
 
 class StatusChangeIn(BaseModel):
+    status: str
+    message: str | None = None
+
+
+class BulkStatusIn(BaseModel):
+    numbers: list[str]
     status: str
     message: str | None = None
 

@@ -19,7 +19,12 @@ function Etiqueta({ order, remetente }: { order: OrderDetail; remetente: Remeten
     <div className="etiqueta">
       <div className="et-topo">
         <strong>Pedido {order.number}</strong>
-        <span>{order.shipping_service || order.shipping_method || 'Encomenda'}</span>
+        <span>
+          {order.shipping_service?.carrier ||
+            order.shipping_service?.service ||
+            order.shipping_method ||
+            'Encomenda'}
+        </span>
       </div>
       <div className="et-dest">
         <span className="et-rot">DESTINATÁRIO</span>

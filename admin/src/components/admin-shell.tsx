@@ -25,6 +25,8 @@ import {
   IconPromotions,
   IconRuler,
   IconSeals,
+  IconServer,
+  IconShield,
   IconShipping,
   IconStar,
   IconUsers,
@@ -88,6 +90,8 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Sistema',
     items: [
+      { href: '/minha-conta', label: 'Minha conta', icon: IconShield },
+      { href: '/infraestrutura', label: 'Infraestrutura', icon: IconServer },
       { href: '/modulos', label: 'Módulos', icon: IconModules },
       { href: '/smtp', label: 'E-mail (SMTP)', icon: IconMail },
       { href: '/usuarios', label: 'Usuários', icon: IconUsers },

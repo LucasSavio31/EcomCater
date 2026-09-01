@@ -132,7 +132,8 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
         </ul>
       )}
 
-      {/* Carrossel (mobile) */}
+      {/* Carrossel (mobile) — altura limitada p/ preço + numeração + Comprar
+          entrarem na dobra */}
       <div
         ref={trackRef}
         className="flex snap-x snap-mandatory gap-2 overflow-x-auto rounded-card md:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -142,7 +143,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
           return (
             <div
               key={image.id}
-              className="relative aspect-square w-full shrink-0 snap-center overflow-hidden rounded-card border border-surface-border bg-bg-subtle"
+              className="relative h-[min(88vw,58vh)] w-full shrink-0 snap-center overflow-hidden rounded-card border border-surface-border bg-bg-subtle"
             >
               <Image
                 src={src}
@@ -156,6 +157,11 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
           );
         })}
       </div>
+      {images.length > 1 && (
+        <p className="text-center text-xs text-text-muted md:hidden" aria-hidden>
+          {images.length} fotos — arraste para o lado
+        </p>
+      )}
     </div>
   );
 }

@@ -24,9 +24,21 @@ export interface RecoveryMessage {
 
 export type RecoveryMessageInput = Omit<RecoveryMessage, 'id'>;
 
+export interface RecoveryStats {
+  total: number;
+  recovered: number;
+  abandoned: number;
+  reminded: number;
+  recovered_after_email: number;
+  recovery_rate_pct: number;
+  email_recovery_rate_pct: number;
+  recovered_revenue_cents: number;
+}
+
 const BASE = '/api/admin/cart-recovery';
 
 export const cartRecoveryApi = {
+  stats: () => adminFetch<RecoveryStats>(`${BASE}/stats`),
   listCarts: () => adminFetch<AbandonedCart[]>(`${BASE}/carts`),
   deleteCarts: (ids: string[]) =>
     adminFetch<{ ok: boolean; deleted: number }>(`${BASE}/carts/delete`, {

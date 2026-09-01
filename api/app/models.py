@@ -66,6 +66,13 @@ from app.modules.menus.models import Menu, MenuItem  # noqa: F401
 # --- size charts ---
 from app.modules.size_charts.models import SizeChart  # noqa: F401
 
+# --- system (saúde + backup) ---
+from app.modules.system.models import (  # noqa: F401
+    BackupRecord,
+    BackupSettings,
+    HealthSample,
+)
+
 # --- theme ---
 from app.modules.theme.models import Page, ThemeSettings  # noqa: F401
 

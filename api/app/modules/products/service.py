@@ -23,6 +23,7 @@ from app.modules.products.models import (
     VariantOptionType,
     VariantOptionValue,
 )
+from app.shared.search import like_pattern_unaccent
 from app.shared.slugify import make_slug
 from app.shared.storage import storage
 
@@ -111,6 +112,8 @@ def list_item(product: Product) -> dict:
         "id": str(product.id),
         "name": product.name,
         "slug": product.slug,
+        # identidade comercial p/ analytics/feed do Merchant Center (item_group_id)
+        "sku_root": product.sku_root,
         "brand": product.brand,
         "price_cents": price,
         "compare_at_price_cents": product.compare_at_price_cents,
@@ -122,6 +125,7 @@ def list_item(product: Product) -> dict:
         "hover_image_url": storage.url(imgs[1].medium_key) if len(imgs) > 1 else None,
         "rating_avg": float(product.rating_avg or 0),
         "rating_count": product.rating_count,
+        "status": product.status,
     }
 
 
@@ -203,6 +207,12 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
         raise NotFoundError("Produto não encontrado.")
 
     category = await db.get(Category, product.category_id) if product.category_id else None
+    extra_category_ids = [
+        str(cid)
+        for cid in await db.scalars(
+            select(ProductCategory.category_id).where(ProductCategory.product_id == product.id)
+        )
+    ]
     size_chart = None
     if product.size_chart_id:
         from app.modules.size_charts.models import SizeChart
@@ -229,6 +239,21 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
         )
         by_id = {p.id: p for p in rel}
         related = [list_item(by_id[i]) for i in related_ids if i in by_id]
+    if not related and product.category_id:
+        # sem relacionados explícitos: completa com produtos da mesma categoria
+        fallback = await db.scalars(
+            _detail_loader(
+                select(Product)
+                .where(
+                    Product.category_id == product.category_id,
+                    Product.id != product.id,
+                    Product.status == "active",
+                )
+                .order_by(Product.is_featured.desc(), Product.published_at.desc().nullslast())
+                .limit(8)
+            )
+        )
+        related = [list_item(p) for p in fallback]
 
     def _value_out(v: VariantOptionValue) -> dict:
         img = v.image
@@ -314,8 +339,12 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
         "size_chart": size_chart,
         **({"size_chart_id": str(product.size_chart_id) if product.size_chart_id else None}
            if include_unpublished else {}),
-        # fornecedor: só no contexto admin (nunca na loja)
+        # fornecedor + vínculos de categoria: só no contexto admin (nunca na loja)
         **({"supplier": product.supplier} if include_unpublished else {}),
+        **({
+            "category_id": str(product.category_id) if product.category_id else None,
+            "extra_category_ids": extra_category_ids,
+        } if include_unpublished else {}),
     }
 
 
@@ -502,17 +531,60 @@ async def featured(db: AsyncSession, limit: int = 12) -> list[dict]:
     return [list_item(p) for p in rows]
 
 
+async def by_ids(db: AsyncSession, ids: list[str], limit: int = 100) -> list[dict]:
+    """Produtos ativos por lista de ids (favoritos). Preserva a ordem recebida."""
+    clean = [i for i in dict.fromkeys(ids) if i][:limit]
+    if not clean:
+        return []
+    rows = await db.scalars(
+        select(Product)
+        .where(Product.status == "active", Product.id.in_(clean))
+        .options(selectinload(Product.variants), selectinload(Product.images))
+    )
+    order = {pid: n for n, pid in enumerate(clean)}
+    items = sorted(rows, key=lambda p: order.get(str(p.id), len(order)))
+    return [list_item(p) for p in items]
+
+
 async def search(db: AsyncSession, q: str, limit: int = 8) -> list[dict]:
     q = q.strip()
     if len(q) < 2:
         return []
+    # casa singular/plural simples ("bota" <-> "botas") sem depender de stemmer
+    like = f"%{q}%"
+    like_sing = f"%{q.rstrip('s')}%" if q.lower().endswith("s") else f"%{q}%"
+    like_plur = f"%{q}s%" if not q.lower().endswith("s") else f"%{q}%"
+
     sim = func.similarity(Product.name, q)
+    # categorias (e seus ancestrais) cujo nome bate → traz os produtos delas
+    cat_ids_stmt = select(Category.id).where(
+        Category.is_active.is_(True),
+        or_(
+            like_pattern_unaccent(Category.name, like),
+            like_pattern_unaccent(Category.name, like_sing),
+            like_pattern_unaccent(Category.name, like_plur),
+            func.similarity(Category.name, q) > 0.2,
+        ),
+    )
+
     prod_rows = await db.scalars(
         select(Product)
         .where(Product.status == "active")
-        .where(or_(Product.name.ilike(f"%{q}%"), sim > 0.1))
+        .where(
+            or_(
+                like_pattern_unaccent(Product.name, like),
+                like_pattern_unaccent(Product.brand, like),
+                sim > 0.15,
+                Product.category_id.in_(cat_ids_stmt),
+                Product.id.in_(
+                    select(ProductCategory.product_id).where(
+                        ProductCategory.category_id.in_(cat_ids_stmt)
+                    )
+                ),
+            )
+        )
         .options(selectinload(Product.variants), selectinload(Product.images))
-        .order_by(sim.desc(), Product.is_featured.desc())
+        .order_by(sim.desc(), Product.is_featured.desc(), Product.published_at.desc().nullslast())
         .limit(limit)
     )
     results: list[dict] = []
@@ -522,6 +594,8 @@ async def search(db: AsyncSession, q: str, limit: int = 8) -> list[dict]:
             {
                 "type": "product",
                 "id": item["id"],
+                "sku_root": p.sku_root,
+                "brand": p.brand,
                 "name": p.name,
                 "slug": p.slug,
                 "url": f"/produto/{p.slug}",
@@ -533,15 +607,32 @@ async def search(db: AsyncSession, q: str, limit: int = 8) -> list[dict]:
     cat_rows = await db.scalars(
         select(Category)
         .where(Category.is_active.is_(True))
-        .where(or_(Category.name.ilike(f"%{q}%"), func.similarity(Category.name, q) > 0.1))
-        .limit(4)
+        .where(
+            or_(
+                like_pattern_unaccent(Category.name, like),
+                like_pattern_unaccent(Category.name, like_sing),
+                like_pattern_unaccent(Category.name, like_plur),
+                func.similarity(Category.name, q) > 0.2,
+            )
+        )
+        # topo primeiro (path sem "/") p/ o dedupe por nome escolher a categoria "chapa"
+        .order_by(func.length(Category.path) - func.length(func.replace(Category.path, "/", "")))
+        .limit(12)
     )
+    seen: set[str] = set()
+    cats_out: list[dict] = []
     for c in cat_rows:
-        results.append(
+        key = c.name.strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cats_out.append(
             {"type": "category", "id": str(c.id), "name": c.name, "slug": c.slug,
              "url": f"/categoria/{c.path}", "price_cents": None, "image_url": None}
         )
-    return results
+        if len(cats_out) >= 4:
+            break
+    return results + cats_out
 
 
 # --------------------------------------------------------------------- CRUD admin
@@ -795,6 +886,7 @@ async def update(db: AsyncSession, product_id: str, data: dict) -> Product:
         for pos, rid in enumerate(related):
             if _uuid(rid) != product.id:
                 db.add(ProductRelated(product_id=product.id, related_product_id=_uuid(rid), position=pos))
+    await db.flush()
     return product
 
 

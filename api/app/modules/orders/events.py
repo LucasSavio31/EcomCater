@@ -137,6 +137,7 @@ async def _on_paid(payload: dict) -> None:
 _STATUS_TEMPLATE = {
     "paid": "payment_confirmed",
     "processing": "order_processing",
+    "tracking_available": "order_tracking_available",
     "shipped": "order_shipped",
     "in_transit": "order_in_transit",  # sub-status vindo do rastreio
     "delivered": "order_delivered",

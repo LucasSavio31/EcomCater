@@ -6,6 +6,8 @@ import { resolveMediaUrl } from '@/lib/media';
 import { formatBRL } from '@/lib/format';
 import { buildMetadata } from '@/lib/seo';
 import { TrackOnMount } from '@/components/analytics/track-on-mount';
+import { TrackSelectLink } from '@/components/analytics/track-select-link';
+import { itemFromSearchResult } from '@/modules/analytics';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,20 +36,31 @@ export default async function BuscaPage({ searchParams }: PageProps) {
   const results = q ? await searchProducts(q, 20) : [];
   const products = results.filter((r) => r.type === 'product');
   const categories = results.filter((r) => r.type === 'category');
+  const searchItems = products
+    .slice(0, 10)
+    .map((p, i) =>
+      itemFromSearchResult(p, {
+        index: i,
+        list: { id: 'search_results', name: `Busca: ${q}` },
+      }),
+    );
 
   return (
     <div className="flex flex-col gap-6">
       {q && (
-        <TrackOnMount
-          event="search"
-          dedupeKey={`search:${q}`}
-          searchTerm={q}
-          items={products.slice(0, 10).map((p) => ({
-            id: p.id,
-            name: p.name,
-            price: typeof p.price_cents === 'number' ? p.price_cents / 100 : 0,
-          }))}
-        />
+        <>
+          {/* ação: o usuário pesquisou — sem itens (padrão GA4) */}
+          <TrackOnMount event="search" dedupeKey={`search:${q}`} searchTerm={q} />
+          {/* estado: os resultados foram apresentados (com itens p/ remarketing) */}
+          <TrackOnMount
+            event="view_search_results"
+            dedupeKey={`vsr:${q}`}
+            searchTerm={q}
+            itemListId="search_results"
+            itemListName={`Busca: ${q}`}
+            items={searchItems}
+          />
+        </>
       )}
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-bold sm:text-2xl">
@@ -82,7 +95,9 @@ export default async function BuscaPage({ searchParams }: PageProps) {
 
       {q && products.length === 0 && (
         <p className="rounded-card border border-dashed border-surface-border p-8 text-center text-sm text-text-muted">
-          Nada encontrado para “{q}”. Tente outro termo.
+          {categories.length > 0
+            ? `Nenhum produto com esse nome. Veja as categorias relacionadas acima.`
+            : `Nada encontrado para “${q}”. Tente outro termo (ex.: “tênis”, “masculino”, a marca).`}
         </p>
       )}
 
@@ -92,8 +107,15 @@ export default async function BuscaPage({ searchParams }: PageProps) {
             const img = resolveMediaUrl(product.image_url);
             return (
               <li key={product.id}>
-                <Link
+                <TrackSelectLink
                   href={product.url}
+                  listId="search_results"
+                  listName={`Busca: ${q}`}
+                  index={i}
+                  item={itemFromSearchResult(product, {
+                    index: i,
+                    list: { id: 'search_results', name: `Busca: ${q}` },
+                  })}
                   className="group flex h-full flex-col overflow-hidden rounded-card border border-surface-border bg-surface transition hover:shadow-sm"
                 >
                   <span className="relative block aspect-[3/4] overflow-hidden bg-bg-subtle">
@@ -122,7 +144,7 @@ export default async function BuscaPage({ searchParams }: PageProps) {
                       </span>
                     )}
                   </span>
-                </Link>
+                </TrackSelectLink>
               </li>
             );
           })}

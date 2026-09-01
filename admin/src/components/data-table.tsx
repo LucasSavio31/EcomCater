@@ -14,6 +14,10 @@ export interface Column<T> {
   mobileLabel?: string;
   /** Não renderiza rótulo no card mobile (para a coluna "principal"). */
   primary?: boolean;
+  /** Coluna com controle clicável (checkbox etc.) — a área da célula vira uma
+   * "zona de segurança" que nunca deixa o clique vazar pro `onRowClick` da
+   * linha/card, mesmo que o toque caia perto do controle e não exatamente nele. */
+  stopRowClick?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -78,7 +82,11 @@ export function DataTable<T>({
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
               {columns.map((col) => (
-                <div key={col.key} className="flex flex-col gap-0.5">
+                <div
+                  key={col.key}
+                  className={cn('flex flex-col gap-0.5', col.stopRowClick && '-m-2 p-2')}
+                  onClick={col.stopRowClick ? (e) => e.stopPropagation() : undefined}
+                >
                   {!col.primary && (
                     <span className="text-xs font-medium uppercase tracking-wide text-text-muted">
                       {col.mobileLabel ?? (typeof col.header === 'string' ? col.header : '')}
@@ -117,7 +125,11 @@ export function DataTable<T>({
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className={cn('px-3 py-2 align-middle', col.className)}>
+                  <td
+                    key={col.key}
+                    className={cn('px-3 py-2 align-middle', col.className)}
+                    onClick={col.stopRowClick ? (e) => e.stopPropagation() : undefined}
+                  >
                     {col.cell(row)}
                   </td>
                 ))}

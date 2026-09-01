@@ -25,6 +25,7 @@ class AnalyticsAdminConfig(AnalyticsPublicConfig):
     meta_capi_enabled: bool
     meta_test_event_code: str | None
     meta_capi_token_set: bool
+    ga4_api_secret_set: bool
 
 
 class AnalyticsUpdateIn(BaseModel):
@@ -33,6 +34,8 @@ class AnalyticsUpdateIn(BaseModel):
 
     ga4_enabled: bool | None = None
     ga4_measurement_id: str | None = None
+    # string vazia limpa o api_secret; None (ausente) mantém o atual
+    ga4_api_secret: str | None = None
 
     google_ads_enabled: bool | None = None
     google_ads_conversion_id: str | None = None

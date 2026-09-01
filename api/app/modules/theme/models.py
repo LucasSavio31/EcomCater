@@ -29,7 +29,7 @@ class ThemeSettings(Base):
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, default=1)
     primary_color: Mapped[str] = mapped_column(String(9), default="#111111")
     secondary_color: Mapped[str] = mapped_column(String(9), default="#4B5563")
-    accent_color: Mapped[str] = mapped_column(String(9), default="#DC2626")
+    accent_color: Mapped[str] = mapped_column(String(9), default="#FFC400")
     text_color: Mapped[str] = mapped_column(String(9), default="#111827")
     bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF")
 
@@ -167,8 +167,14 @@ class ThemeSettings(Base):
     checkout_allow_qty_change: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     checkout_footer_note: Mapped[str | None] = mapped_column(String(240))
     checkout_animated_card: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    # Ícones ao lado de cada forma de pagamento (PIX / cartão / boleto)
+    checkout_payment_icons_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    # Linha do tempo das etapas (1 2 3 4) no topo do checkout
+    checkout_steps_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     checkout_show_review: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     checkout_review_position: Mapped[str] = mapped_column(String(8), default="side", server_default="side", nullable=False)  # side | top
+    # Caixa "Observações do pedido (opcional)" no checkout — desligada por padrão
+    checkout_order_notes_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     checkout_orderbump_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     checkout_orderbump_product_id: Mapped[str | None] = mapped_column(String(200))  # legado (1 slug)
     # Order bump: lista de ids/slugs de produtos oferecidos no checkout
@@ -179,13 +185,13 @@ class ThemeSettings(Base):
     checkout_bg_color: Mapped[str] = mapped_column(String(9), default="#F7F7F7", server_default="#F7F7F7", nullable=False)
     checkout_header_bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
     checkout_header_text_color: Mapped[str] = mapped_column(String(9), default="#111827", server_default="#111827", nullable=False)
-    checkout_button_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    checkout_button_color: Mapped[str] = mapped_column(String(9), default="#FFC400", server_default="#111111", nullable=False)
     checkout_button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
     checkout_accent_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
     checkout_footer_bg_color: Mapped[str] = mapped_column(String(9), default="#111827", server_default="#111827", nullable=False)
     checkout_footer_text_color: Mapped[str] = mapped_column(String(9), default="#E5E7EB", server_default="#E5E7EB", nullable=False)
     # botões "Avançar"/"Calcular frete" das etapas
-    checkout_step_button_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    checkout_step_button_color: Mapped[str] = mapped_column(String(9), default="#FFC400", server_default="#111111", nullable=False)
     checkout_step_button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
     # bolinha da etapa ativa (1,2,3,4) na linha do tempo
     checkout_step_active_bg_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
@@ -202,6 +208,8 @@ class ThemeSettings(Base):
 
     # Popup de captura de leads (link "Cadastre-se e ganhe X% OFF")
     lead_popup_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
+    # Link "Cadastre-se e ganhe..." na página do produto (abre o mesmo popup ao clicar)
+    lead_popup_pdp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     lead_capture_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     lead_popup_title: Mapped[str] = mapped_column(String(160), default="Cadastre-se para 10% OFF na primeira compra", server_default="Cadastre-se para 10% OFF na primeira compra", nullable=False)
     lead_popup_subtitle: Mapped[str] = mapped_column(String(280), default="Receba promoções e conteúdos exclusivos.", server_default="Receba promoções e conteúdos exclusivos.", nullable=False)
@@ -210,6 +218,9 @@ class ThemeSettings(Base):
     lead_popup_text_color: Mapped[str] = mapped_column(String(9), default="#111827", server_default="#111827", nullable=False)
     lead_popup_button_color: Mapped[str] = mapped_column(String(9), default="#F5B301", server_default="#F5B301", nullable=False)
     lead_popup_button_text_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    # logo próprio do popup (opcional). Vazio + show_logo=true => usa o logo da loja.
+    lead_popup_logo_key: Mapped[str | None] = mapped_column(String(300))
+    lead_popup_show_logo: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
 
     # Selo de desconto (-XX%) calculado do preço "de" x preço promocional
     discount_badge_enabled: Mapped[bool] = mapped_column(
@@ -220,10 +231,81 @@ class ThemeSettings(Base):
     button_radius_px: Mapped[int] = mapped_column(
         Integer, default=12, server_default="12", nullable=False
     )
+    # Raio das caixas de variação (numeração/cor na PDP) — CSS var --radius-var
+    variation_radius_px: Mapped[int] = mapped_column(
+        Integer, default=12, server_default="12", nullable=False
+    )
+
+    # PDP — bloco de reassurance abaixo do botão de compra
+    pdp_reassurance_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    pdp_reassurance_items: Mapped[list] = mapped_column(
+        JSONB,
+        default=lambda: [
+            "🔄 Troca fácil em até 30 dias",
+            "🔒 Site 100% seguro — pagamento criptografado",
+            "📦 Enviamos para todo o Brasil pelos Correios",
+        ],
+        server_default=(
+            '["🔄 Troca fácil em até 30 dias", '
+            '"🔒 Site 100% seguro — pagamento criptografado", '
+            '"📦 Enviamos para todo o Brasil pelos Correios"]'
+        ),
+        nullable=False,
+    )
+
+    # Botão "Calcular frete" na PDP — cores próprias
+    freight_button_bg_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    freight_button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    freight_button_hover_color: Mapped[str] = mapped_column(String(9), default="#333333", server_default="#333333", nullable=False)
+    freight_button_border_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    freight_button_radius_px: Mapped[int] = mapped_column(Integer, default=12, server_default="12", nullable=False)
+
+    # Selo de promoção (-XX%) — cor de fundo e texto
+    promo_badge_bg_color: Mapped[str] = mapped_column(String(9), default="#DC2626", server_default="#DC2626", nullable=False)
+    promo_badge_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    promo_badge_border_color: Mapped[str] = mapped_column(String(9), default="#DC2626", server_default="#DC2626", nullable=False)
+    promo_badge_radius_px: Mapped[int] = mapped_column(Integer, default=6, server_default="6", nullable=False)
+    # Exibir o selo (-XX%) por superfície (só quando discount_badge_enabled está ligado)
+    promo_badge_card_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    promo_badge_pdp_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+
+    # ---- Carrinho (menu "Carrinho" na Aparência) ----
+    # Botão "Finalizar compra"
+    cart_checkout_btn_bg_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    cart_checkout_btn_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    cart_checkout_btn_hover_color: Mapped[str] = mapped_column(String(9), default="#333333", server_default="#333333", nullable=False)
+    cart_checkout_btn_border_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    cart_checkout_btn_radius_px: Mapped[int] = mapped_column(Integer, default=12, server_default="12", nullable=False)
+    # Botão "Calcular" (frete) no carrinho
+    cart_freight_btn_bg_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    cart_freight_btn_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    cart_freight_btn_hover_color: Mapped[str] = mapped_column(String(9), default="#333333", server_default="#333333", nullable=False)
+    cart_freight_btn_border_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    cart_freight_btn_radius_px: Mapped[int] = mapped_column(Integer, default=12, server_default="12", nullable=False)
+    # Caixinhas de quantidade (−/valor/+) no carrinho
+    cart_qty_bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    cart_qty_text_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    cart_qty_radius_px: Mapped[int] = mapped_column(Integer, default=12, server_default="12", nullable=False)
+    # Botão "Aplicar" do cupom no carrinho
+    cart_coupon_btn_bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    cart_coupon_btn_text_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    cart_coupon_btn_hover_color: Mapped[str] = mapped_column(String(9), default="#F3F3F3", server_default="#F3F3F3", nullable=False)
+    cart_coupon_btn_border_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    cart_coupon_btn_radius_px: Mapped[int] = mapped_column(Integer, default=12, server_default="12", nullable=False)
+
+    # Bolinha de contagem na sacola (cabeçalho)
+    cart_badge_bg_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    cart_badge_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
 
     # PDP / cards
     pdp_qty_selector_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     wishlist_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    # Botão de favoritar (coração) na página do produto
+    pdp_wishlist_bg_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    pdp_wishlist_border_color: Mapped[str] = mapped_column(String(9), default="#DC2626", server_default="#DC2626", nullable=False)
+    pdp_wishlist_icon_color: Mapped[str] = mapped_column(String(9), default="#DC2626", server_default="#DC2626", nullable=False)
     card_hover_zoom_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     card_buy_button_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     card_buy_button_label: Mapped[str] = mapped_column(String(40), default="COMPRAR", server_default="COMPRAR", nullable=False)

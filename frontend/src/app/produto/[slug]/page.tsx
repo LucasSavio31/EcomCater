@@ -11,6 +11,7 @@ import { PdpMain } from '@/components/pdp/pdp-main';
 import { ReviewForm } from '@/components/pdp/review-form';
 import { FreeShippingProgress } from '@/components/layout/free-shipping-progress';
 import { TrackOnMount } from '@/components/analytics/track-on-mount';
+import { itemFromDetail, itemFromListItem } from '@/modules/analytics';
 import {
   breadcrumbJsonLd,
   buildMetadata,
@@ -113,20 +114,23 @@ export default async function ProdutoPage({ params }: PageProps) {
 
   return (
     <div className="flex flex-col gap-8">
-      <TrackOnMount
-        event="view_item"
-        dedupeKey={product.slug}
-        value={product.price_cents / 100}
-        items={[
-          {
-            id: product.sku_root ?? product.id,
-            name: product.name,
-            price: product.price_cents / 100,
-            brand: product.brand ?? undefined,
-            category: product.category?.name ?? undefined,
-          },
-        ]}
-      />
+      <TrackOnMount event="view_item" dedupeKey={product.slug} items={[itemFromDetail(product)]} />
+      {product.related.length > 0 && (
+        <TrackOnMount
+          event="view_item_list"
+          dedupeKey={`related:${product.slug}`}
+          itemListId="related_products"
+          itemListName="Produtos relacionados"
+          items={product.related
+            .slice(0, 20)
+            .map((p, i) =>
+              itemFromListItem(p, {
+                index: i,
+                list: { id: 'related_products', name: 'Produtos relacionados' },
+              }),
+            )}
+        />
+      )}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -204,7 +208,12 @@ export default async function ProdutoPage({ params }: PageProps) {
           <h2 id="related-title" className="text-lg font-semibold">
             Você também pode gostar
           </h2>
-          <ProductCarousel products={product.related} ariaLabel="Produtos relacionados" />
+          <ProductCarousel
+            products={product.related}
+            ariaLabel="Produtos relacionados"
+            listId="related_products"
+            listName="Produtos relacionados"
+          />
         </section>
       )}
     </div>

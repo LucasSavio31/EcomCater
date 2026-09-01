@@ -9,6 +9,7 @@ interface Props {
   value?: number;
   currency?: string;
   searchTerm?: string;
+  itemListId?: string;
   itemListName?: string;
   /** chave que, se mudar, permite disparar de novo (ex.: slug do produto). */
   dedupeKey?: string;
@@ -25,6 +26,7 @@ export function TrackOnMount({
   value,
   currency,
   searchTerm,
+  itemListId,
   itemListName,
   dedupeKey,
 }: Props) {
@@ -39,6 +41,7 @@ export function TrackOnMount({
       value,
       currency,
       search_term: searchTerm,
+      item_list_id: itemListId,
       item_list_name: itemListName,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

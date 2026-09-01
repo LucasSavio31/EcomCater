@@ -53,7 +53,7 @@ export default async function CheckoutPage() {
         className="mx-auto w-full px-4 py-6 sm:py-8"
         style={{ maxWidth: `${theme.checkout_container_width_px}px` }}
       >
-        <h1 className="mb-4 text-xl font-semibold sm:text-2xl">Finalizar compra</h1>
+        <h1 className="mb-4 text-xl font-semibold sm:text-2xl">Finalizar Compra</h1>
         <CheckoutView
           orderBumps={orderBumps}
           settings={{
@@ -67,8 +67,11 @@ export default async function CheckoutPage() {
             stepActiveBg: theme.checkout_step_active_bg_color,
             stepActiveText: theme.checkout_step_active_text_color,
             animatedCard: theme.checkout_animated_card,
+            paymentIcons: theme.checkout_payment_icons_enabled,
+            stepsTimeline: theme.checkout_steps_enabled,
             showReview: theme.checkout_show_review,
             reviewPosition: theme.checkout_review_position,
+            orderNotes: theme.checkout_order_notes_enabled,
           }}
         />
       </main>

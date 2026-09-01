@@ -6,7 +6,7 @@ Fluxo:
    15 min). Cada mensagem ativa é enviada quando `agora - captura >= delay`
    e ainda não foi enviada.
 3. O CTA do e-mail aponta para `GET /r/{id}` → recoloca o cookie do carrinho
-   e manda para o /checkout.
+   e manda para o /carrinho.
 4. Quando o pedido é criado (evento `order.created`), o carrinho abandonado
    do mesmo e-mail é marcado como recuperado.
 """
@@ -105,7 +105,8 @@ async def recover_link(rec_id: str, db: DbDep) -> Response:
     except ValueError as exc:
         raise NotFoundError("Link inválido.") from exc
     row = await db.get(AbandonedCart, rid)
-    target = f"{settings.site_url.rstrip('/')}/checkout"
+    # volta para o CARRINHO (o cliente revê os itens antes de finalizar)
+    target = f"{settings.site_url.rstrip('/')}/carrinho"
     resp = RedirectResponse(url=target, status_code=302)
     if row:
         resp.set_cookie(
@@ -199,6 +200,71 @@ async def delete_carts(db: DbDep, _: EditorDep, ids: list[str] = Body(..., embed
     if uids:
         await db.execute(AbandonedCart.__table__.delete().where(AbandonedCart.id.in_(uids)))
     return {"ok": True, "deleted": len(uids)}
+
+
+@admin_router.get("/stats")
+async def recovery_stats(db: DbDep, _: AdminDep) -> dict:
+    """Métricas de recuperação de carrinho (histórico completo).
+
+    O rastreio já existe: o e-mail é capturado no checkout (`/capture`) e
+    amarrado ao carrinho pelo cookie `cart_token`; quando um pedido é criado
+    com o mesmo e-mail (`order.created` → `mark_recovered`), o carrinho é
+    marcado como recuperado.
+    """
+    from sqlalchemy import func
+
+    total = int(
+        await db.scalar(select(func.count()).select_from(AbandonedCart)) or 0
+    )
+    recovered = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(AbandonedCart)
+            .where(AbandonedCart.recovered_at.is_not(None))
+        )
+        or 0
+    )
+    # recuperados DEPOIS de pelo menos um lembrete (mérito da automação)
+    recovered_after_email = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(AbandonedCart)
+            .where(
+                AbandonedCart.recovered_at.is_not(None),
+                AbandonedCart.reminders_sent > 0,
+            )
+        )
+        or 0
+    )
+    reminded = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(AbandonedCart)
+            .where(AbandonedCart.reminders_sent > 0)
+        )
+        or 0
+    )
+    recovered_revenue = int(
+        await db.scalar(
+            select(func.coalesce(func.sum(AbandonedCart.total_cents), 0)).where(
+                AbandonedCart.recovered_at.is_not(None)
+            )
+        )
+        or 0
+    )
+    abandoned = total - recovered
+    return {
+        "total": total,
+        "recovered": recovered,
+        "abandoned": abandoned,
+        "reminded": reminded,
+        "recovered_after_email": recovered_after_email,
+        "recovery_rate_pct": round(recovered / total * 100, 1) if total else 0.0,
+        "email_recovery_rate_pct": (
+            round(recovered_after_email / reminded * 100, 1) if reminded else 0.0
+        ),
+        "recovered_revenue_cents": recovered_revenue,
+    }
 
 
 @admin_router.get("/carts")

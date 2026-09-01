@@ -58,6 +58,17 @@ export async function getProduct(slug: string): Promise<ProductDetail | null> {
   return res.ok ? res.data : null;
 }
 
+/** Produtos por lista de ids (favoritos). Isomórfico. Ordem = ordem dos ids. */
+export async function getProductsByIds(ids: string[]): Promise<ProductListItem[]> {
+  const clean = [...new Set(ids.filter(Boolean))];
+  if (clean.length === 0) return [];
+  const res = await apiFetch<ProductListItem[]>('/api/products/by-ids', {
+    query: { ids: clean.join(',') },
+    cache: 'no-store',
+  });
+  return res.ok ? res.data : [];
+}
+
 export async function getCategoryTree(): Promise<CategoryNode[]> {
   const res = await apiFetch<CategoryNode[]>('/api/categories/tree', {
     next: { tags: ['categories'], revalidate: 300 },

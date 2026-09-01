@@ -25,6 +25,20 @@ async def _main() -> None:
 
             await seed_catalog(db)
 
+    # estrutura de navegação (categorias + páginas + menus estilo catlifestyle)
+    if "--no-site-content" not in sys.argv:
+        from app.seed.site_content import run as seed_site_content
+
+        async with SessionLocal() as db:
+            await seed_site_content(db)
+
+    # avaliações de demonstração (estrelas nos cards + nota na PDP)
+    if "--catalog" in sys.argv or "--reviews" in sys.argv:
+        from app.seed.reviews import run as seed_reviews
+
+        async with SessionLocal() as db:
+            await seed_reviews(db)
+
 
 if __name__ == "__main__":
     asyncio.run(_main())

@@ -142,25 +142,22 @@ export default function ProdutosPage() {
         header: 'Destaque',
         cell: (p) => (p.is_featured ? <Badge tone="accent">Sim</Badge> : <span className="text-text-muted">—</span>),
       },
-      {
-        key: 'actions',
-        header: 'Ações',
-        cell: (p) => (
-          <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="sm"
-              variant="outline"
-              loading={dupId === p.id}
-              onClick={() => void duplicate(p.id)}
-            >
-              Duplicar
-            </Button>
-          </div>
-        ),
-      },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dupId, duplicate, allChecked, selected],
+    [allChecked, selected],
+  );
+
+  const changeStatus = useCallback(
+    async (id: string, value: ProductStatus) => {
+      const res = await productsApi.setStatus(id, value);
+      if (!res.ok) {
+        toast.error(res.error.message);
+        return;
+      }
+      toast.success(value === 'archived' ? 'Produto arquivado.' : 'Produto reativado.');
+      reload();
+    },
+    [reload, toast],
   );
 
   return (
@@ -238,6 +235,35 @@ export default function ProdutosPage() {
         error={error}
         emptyMessage="Nenhum produto encontrado."
         onRowClick={(p) => router.push(`/produtos/${p.id}`)}
+        rowActions={(p) => (
+          <>
+            <Button size="sm" variant="outline" onClick={() => router.push(`/produtos/${p.id}`)}>
+              Editar
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              loading={dupId === p.id}
+              onClick={() => void duplicate(p.id)}
+            >
+              Duplicar
+            </Button>
+            {p.status === 'archived' ? (
+              <Button size="sm" variant="ghost" onClick={() => void changeStatus(p.id, 'active')}>
+                Reativar
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-danger"
+                onClick={() => void changeStatus(p.id, 'archived')}
+              >
+                Arquivar
+              </Button>
+            )}
+          </>
+        )}
       />
 
       {data && data.total > 0 && (
@@ -245,27 +271,29 @@ export default function ProdutosPage() {
           <span className="text-text-muted">
             {data.total} {data.total === 1 ? 'produto' : 'produtos'}
           </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Anterior
-            </Button>
-            <span>
-              Página {page} de {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Próxima
-            </Button>
-          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Anterior
+              </Button>
+              <span>
+                Página {page} de {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Próxima
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

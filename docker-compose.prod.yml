@@ -1,14 +1,18 @@
 # ============================================================
-#  Override de PROD — ESQUELETO. Só entra em uso na Fase 9.
-#  Portas expostas apenas em 127.0.0.1 (loopback); o LiteSpeed
-#  no host faz o reverse proxy via vhosts. Cloudflare na borda (TLS).
-#  Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#  Override de PROD. Portas expostas apenas em 127.0.0.1 (loopback);
+#  o LiteSpeed no host faz o reverse proxy via vhosts. Cloudflare na borda (TLS).
+#  Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 # ============================================================
 services:
   api:
     build:
       target: prod
     restart: unless-stopped
+    # aplica as migrations pendentes ANTES de subir o servidor (idempotente)
+    command:
+      - sh
+      - -c
+      - "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
     ports:
       - "127.0.0.1:8000:8000"
 

@@ -17,7 +17,7 @@ from app.core.config import settings
 
 _ph = PasswordHasher()
 
-Scope = Literal["customer", "admin"]
+Scope = Literal["customer", "admin", "admin_mfa"]
 TokenType = Literal["access", "refresh"]
 
 

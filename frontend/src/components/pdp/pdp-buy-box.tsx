@@ -8,7 +8,7 @@ import { useCart } from '@/modules/cart/cart-context';
 import { applyPixDiscount, formatBRL, installmentsText } from '@/lib/format';
 import { HeartIcon } from '@/components/icons';
 import { useWishlist } from '@/modules/wishlist/use-wishlist';
-import { track, type TrackItem } from '@/modules/analytics';
+import { track, itemFromDetail } from '@/modules/analytics';
 import { LeadPopup, type LeadPopupConfig } from '@/components/lead-popup';
 import { SizeChartButton, type SizeChartColors } from '@/components/pdp/size-chart';
 
@@ -42,6 +42,7 @@ export function PdpBuyBox({
   const [added, setAdded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [triedBuy, setTriedBuy] = useState(false);
 
   const hasVariants = product.option_types.length > 0 && product.variants.length > 0;
 
@@ -93,6 +94,13 @@ export function PdpBuyBox({
   };
 
   const onBuy = async () => {
+    if (needsSelection) {
+      setTriedBuy(true);
+      document
+        .querySelector<HTMLElement>('[data-variation-picker]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     if (!canBuy || !buyVariant) return;
     setBusy(true);
     setError(null);
@@ -102,9 +110,9 @@ export function PdpBuyBox({
       setError(res.error ?? 'Não foi possível adicionar ao carrinho.');
       return;
     }
+    // confirmado pela API (res.ok) → dispara com a variante e a qtd realmente adicionada
     track('add_to_cart', {
-      value: (priceCents / 100) * qty,
-      items: [{ ...baseTrackItem(), price: priceCents / 100, quantity: qty }],
+      items: [itemFromDetail(product, { variant: buyVariant, quantity: qty })],
     });
     if (miniCart) {
       openMiniCart();
@@ -118,17 +126,6 @@ export function PdpBuyBox({
     window.setTimeout(() => setAdded(false), 2500);
   };
 
-  function baseTrackItem(): TrackItem {
-    return {
-      id: selectedVariant?.sku ?? product.sku_root ?? product.id,
-      name: product.name,
-      price: priceCents / 100,
-      brand: product.brand ?? undefined,
-      category: product.category?.name ?? undefined,
-      variant: selectedVariant?.option_labels?.join(' / ') || undefined,
-    };
-  }
-
   return (
     <div className="flex flex-col gap-5">
       {/* Preço */}
@@ -136,7 +133,7 @@ export function PdpBuyBox({
         {onSale && (
           <div className="flex items-center gap-2">
             <span className="text-sm text-text-muted line-through">{formatBRL(compareAt as number)}</span>
-            <span className="ecom-discount-badge rounded-[4px] bg-accent px-1.5 py-0.5 text-xs font-bold text-white">
+            <span className="ecom-discount-badge ecom-promo-pill ecom-promo-pill--pdp rounded-[4px] px-1.5 py-0.5 text-xs font-bold">
               -{discountPct}%
             </span>
           </div>
@@ -154,9 +151,11 @@ export function PdpBuyBox({
       </div>
 
       {/* Eixos de variação → caixinhas (numeração/tamanho etc.) */}
-      {product.option_types.map((type) => (
-          <fieldset key={type.id} className="flex flex-col gap-2">
-            <legend className="mb-1 flex w-full items-center justify-between text-sm font-semibold uppercase tracking-wide">
+      {product.option_types.map((type) => {
+        const missing = triedBuy && !effectiveSelected[type.id];
+        return (
+          <fieldset key={type.id} data-variation-picker className="flex flex-col gap-2">
+            <legend className={`mb-1 flex w-full items-center justify-between text-sm font-semibold uppercase tracking-wide ${missing ? 'text-danger' : ''}`}>
               <span>
                 {type.name}
                 {effectiveSelected[type.id] && (
@@ -180,11 +179,17 @@ export function PdpBuyBox({
                     role="radio"
                     aria-checked={isSelected}
                     aria-disabled={!available}
-                    onClick={() => chooseValue(type.id, value.id)}
-                    className={`relative flex h-11 min-w-[3rem] items-center justify-center rounded-card border-2 px-3 text-sm font-medium transition ${
+                    onClick={() => {
+                      setTriedBuy(false);
+                      chooseValue(type.id, value.id);
+                    }}
+                    style={{ borderRadius: 'var(--radius-var, 0.75rem)' }}
+                    className={`relative flex h-11 min-w-[3rem] items-center justify-center border-2 px-3 text-sm font-medium transition ${
                       isSelected
                         ? 'border-var-border bg-var text-var-fg'
-                        : 'border-surface-border bg-surface hover:border-var-border'
+                        : missing
+                          ? 'border-danger bg-surface'
+                          : 'border-surface-border bg-surface hover:border-var-border'
                     } ${!available ? 'text-text-muted' : ''}`}
                   >
                     <span className={!available ? 'line-through decoration-2' : ''}>{value.value}</span>
@@ -192,11 +197,15 @@ export function PdpBuyBox({
                 );
               })}
             </div>
+            {missing && (
+              <p className="text-xs font-medium text-danger">Escolha {type.name.toLowerCase()}.</p>
+            )}
           </fieldset>
-        ))}
+        );
+      })}
 
-      {needsSelection && (
-        <p className="text-xs text-text-muted">Selecione as opções para continuar.</p>
+      {needsSelection && !triedBuy && (
+        <p className="text-xs text-text-muted">Selecione a numeração para continuar.</p>
       )}
       {outOfStock && <p className="text-sm font-medium text-danger">Combinação esgotada.</p>}
 
@@ -231,11 +240,11 @@ export function PdpBuyBox({
             size="lg"
             onClick={() => void onBuy()}
             loading={busy}
-            disabled={!canBuy}
-            className="flex-1 gap-2 text-sm font-semibold uppercase tracking-wide"
+            disabled={busy || outOfStock}
+            className="flex-1 gap-2 text-lg font-extrabold uppercase tracking-wide"
           >
             {!busy && (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="9" cy="21" r="1" />
                 <circle cx="20" cy="21" r="1" />
                 <path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" />
@@ -247,35 +256,42 @@ export function PdpBuyBox({
             <button
               type="button"
               onClick={() => {
+                // favoritos é local (localStorage) → só dispara quando de fato ADICIONA
                 if (!isWished(product.id)) {
                   track('add_to_wishlist', {
-                    value: priceCents / 100,
-                    items: [{ ...baseTrackItem(), price: priceCents / 100 }],
+                    items: [itemFromDetail(product, { variant: selectedVariant })],
                   });
                 }
                 toggleWish(product.id);
               }}
               aria-pressed={isWished(product.id)}
               aria-label={isWished(product.id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-              className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-card border ${
-                isWished(product.id)
-                  ? 'border-accent text-accent'
-                  : 'border-surface-border text-text-muted hover:text-text'
+              className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-card border-2 ${
+                isWished(product.id) ? '' : 'border-surface-border text-text-muted hover:text-text'
               }`}
+              style={
+                isWished(product.id)
+                  ? {
+                      background: 'var(--color-wish-bg)',
+                      borderColor: 'var(--color-wish-border)',
+                      color: 'var(--color-wish-icon)',
+                    }
+                  : undefined
+              }
             >
-              <HeartIcon className="h-5 w-5" />
+              <HeartIcon className="h-5 w-5" fill={isWished(product.id) ? 'currentColor' : 'none'} />
             </button>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() =>
-            leadPopup?.enabled ? setLeadOpen(true) : router.push('/minha-conta')
-          }
-          className="w-fit text-xs font-medium text-primary underline"
-        >
-          Cadastre-se e ganhe promoções e cupons exclusivos
-        </button>
+        {leadPopup?.enabled && (
+          <button
+            type="button"
+            onClick={() => setLeadOpen(true)}
+            className="w-fit text-xs font-medium text-primary underline"
+          >
+            Cadastre-se e ganhe promoções e cupons exclusivos
+          </button>
+        )}
       </div>
 
       {leadPopup?.enabled && (

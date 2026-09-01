@@ -156,7 +156,7 @@ async def remove_item(db: AsyncSession, cart: Cart, item_id: str) -> Cart:
 
 
 async def set_zip(db: AsyncSession, cart: Cart, zip_code: str) -> Cart:
-    cart.shipping_zip = zip_code
+    cart.shipping_zip = zip_code or None
     cart.selected_shipping_json = None  # invalida frete escolhido
     await db.flush()
     return cart

@@ -1,8 +1,11 @@
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image';
 import { Badge } from '@ecom/ui';
 import type { ProductListItem } from '@/modules/catalog/types';
 import { resolveMediaUrl } from '@/lib/media';
+import { track, itemFromListItem } from '@/modules/analytics';
 import { PriceBlock } from './price-block';
 import { Stars } from './stars';
 
@@ -13,6 +16,11 @@ interface ProductCardProps {
   className?: string;
   /** Rótulo do botão "Comprar" abaixo do card. Vazio/omitido = sem botão. */
   buyButtonLabel?: string;
+  /** Lista de origem do clique (GA4 `select_item` / Meta `SelectItem`). */
+  listId?: string;
+  listName?: string;
+  /** Posição do item na lista (0-based). */
+  index?: number;
 }
 
 const CARD_SIZES =
@@ -28,16 +36,30 @@ export function ProductCard({
   priority = false,
   className,
   buyButtonLabel,
+  listId,
+  listName,
+  index,
 }: ProductCardProps) {
   const primary = resolveMediaUrl(product.primary_image_url);
   const hover = resolveMediaUrl(product.hover_image_url);
   const href = `/produto/${product.slug}`;
 
+  const onSelect = () =>
+    track('select_item', {
+      item_list_id: listId,
+      item_list_name: listName,
+      items: [itemFromListItem(product, { index, list: { id: listId, name: listName } })],
+    });
+
   return (
     <article
       className={`group relative flex flex-col overflow-hidden rounded-card bg-surface transition ${className ?? ''}`}
     >
-      <Link href={href} className="relative block aspect-square overflow-hidden rounded-card bg-white">
+      <Link
+        href={href}
+        onClick={onSelect}
+        className="relative block aspect-square overflow-hidden rounded-card bg-white"
+      >
         {primary ? (
           <>
             <Image
@@ -66,7 +88,7 @@ export function ProductCard({
         )}
 
         {typeof product.discount_pct === 'number' && product.discount_pct > 0 && (
-          <Badge tone="accent" className="ecom-discount-badge absolute left-2 top-2">
+          <Badge tone="accent" className="ecom-discount-badge ecom-promo-pill ecom-promo-pill--card absolute left-2 top-2">
             -{product.discount_pct}%
           </Badge>
         )}

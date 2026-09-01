@@ -18,9 +18,30 @@ export interface ModuleInfo {
 export interface ShippingConfig {
   active_provider: string;
   origin_zip: string;
-  melhor_envio_token: string;
+  /** O GET não devolve o token (segurança) — use `has_token`. Enviar vazio no PUT = manter. */
+  melhor_envio_token?: string;
+  /** true quando já há um token salvo. */
+  has_token?: boolean;
+  /** true quando o token vem do .env do servidor (não removível pelo painel). */
+  token_from_env?: boolean;
+  /** ISO 8601 de expiração do access_token (quando conhecido). */
+  token_expires_at?: string | null;
   melhor_envio_sandbox: boolean;
-  webhook_token: string;
+  /** CPF do responsável pelo envio — obrigatório p/ gerar etiqueta no ME. */
+  sender_cpf?: string;
+  /** Impressão de etiquetas: térmica 10x15 (1/página) ou A4 4-up. */
+  label_format?: 'termica_10x15' | 'a4_4up';
+  /** Anexar a Declaração de Conteúdo após cada etiqueta. */
+  print_declaration?: boolean;
+  /** Intervalo (segundos) da rotina que consulta a API do Melhor Envio. 0 = padrão do servidor; mínimo 120. */
+  me_poll_interval_seconds?: number;
+  webhook_token?: string;
+  /** OAuth: app Melhor Envio. */
+  melhor_envio_client_id?: string;
+  melhor_envio_client_secret?: string;
+  has_client_secret?: boolean;
+  /** Redirect URI a cadastrar no app do Melhor Envio (read-only). */
+  oauth_redirect_uri?: string;
   /** URL de webhook que o lojista cadastra no painel do provedor (read-only). */
   webhook_url?: string;
   default_package: {
@@ -29,6 +50,8 @@ export interface ShippingConfig {
     width_mm?: number;
     height_mm?: number;
   };
+  /** Serviços mostrados ao cliente (minúsculas): ex. ['pac','sedex']. */
+  allowed_services?: string[];
   free_shipping_services: string[];
   /** Frete grátis para tudo — checkout não calcula frete */
   free_shipping_all?: boolean;
@@ -89,6 +112,10 @@ export const configApi = {
   getShipping: () => adminFetch<ShippingConfig>('/api/admin/shipping/config'),
   putShipping: (body: Partial<ShippingConfig>) =>
     adminFetch<ShippingConfig>('/api/admin/shipping/config', { method: 'PUT', body }),
+  melhorEnvioAuthorizeUrl: () =>
+    adminFetch<{ url: string }>('/api/admin/shipping/melhor-envio/authorize'),
+  melhorEnvioDisconnect: () =>
+    adminFetch<{ ok: boolean }>('/api/admin/shipping/melhor-envio/disconnect', { method: 'POST' }),
   testQuote: (destZip: string) =>
     adminFetch<{ rates: ShippingQuoteRate[] }>('/api/admin/shipping/test-quote', {
       method: 'POST',

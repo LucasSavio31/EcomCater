@@ -265,6 +265,8 @@ async def refund(db: AsyncSession, order_number: str, amount_cents: int | None) 
 
 
 def charge_out(payment: Payment, order_number: str) -> dict:
+    from app.modules.payment.codes import boleto_barcode_data_uri, pix_qr_data_uri
+
     return {
         "payment_id": str(payment.id),
         "order_number": order_number,
@@ -272,7 +274,11 @@ def charge_out(payment: Payment, order_number: str) -> dict:
         "status": payment.status,
         "amount_cents": payment.amount_cents,
         "pix_qr_code": payment.pix_qr_code,
+        "pix_qr_data_uri": pix_qr_data_uri(payment.pix_qr_code) if payment.pix_qr_code else None,
         "pix_expires_at": payment.pix_expires_at.isoformat() if payment.pix_expires_at else None,
         "boleto_url": payment.boleto_url,
         "boleto_barcode": payment.boleto_barcode,
+        "boleto_barcode_data_uri": (
+            boleto_barcode_data_uri(payment.boleto_barcode) if payment.boleto_barcode else None
+        ),
     }

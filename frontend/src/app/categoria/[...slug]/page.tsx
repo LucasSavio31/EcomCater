@@ -9,6 +9,7 @@ import { PlpSort } from '@/components/catalog/plp-sort';
 import { PlpFilters, PlpFiltersDrawer } from '@/components/catalog/plp-filters';
 import { buildMetadata, breadcrumbJsonLd, jsonLdScript } from '@/lib/seo';
 import { TrackOnMount } from '@/components/analytics/track-on-mount';
+import { itemFromListItem } from '@/modules/analytics';
 
 export const dynamic = 'force-dynamic';
 
@@ -151,12 +152,13 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
       <TrackOnMount
         event="view_item_list"
         dedupeKey={`${title}:${result.page}`}
+        itemListId={`category:${path}`}
         itemListName={title}
-        items={result.items.slice(0, 20).map((p) => ({
-          id: p.slug,
-          name: p.name,
-          price: p.price_cents / 100,
-        }))}
+        items={result.items
+          .slice(0, 20)
+          .map((p, i) =>
+            itemFromListItem(p, { index: i, list: { id: `category:${path}`, name: title } }),
+          )}
       />
       <script
         type="application/ld+json"
@@ -196,6 +198,8 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
           <PlpSort total={result.total} />
           <InfiniteProductGrid
             initial={result}
+            listId={`category:${path}`}
+            listName={title}
             buyButtonLabel={
               theme.card_buy_button_enabled ? theme.card_buy_button_label : undefined
             }

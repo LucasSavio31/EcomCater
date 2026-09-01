@@ -5,16 +5,21 @@ import type { CartTotals } from '@/modules/cart/types';
 export function OrderTotals({
   totals,
   hasShipping = false,
+  freeShipping = false,
 }: {
   totals: CartTotals;
   /** Há uma opção de frete escolhida? Se não, o frete aparece como "a calcular". */
   hasShipping?: boolean;
+  /** Pedido já qualifica para frete grátis — mostra "Grátis" mesmo sem opção escolhida. */
+  freeShipping?: boolean;
 }) {
-  const shipping = !hasShipping
-    ? 'A calcular'
-    : totals.shipping_cents > 0
-      ? formatBRL(totals.shipping_cents)
-      : 'Grátis';
+  const shipping = freeShipping
+    ? 'Grátis'
+    : !hasShipping
+      ? 'A calcular'
+      : totals.shipping_cents > 0
+        ? formatBRL(totals.shipping_cents)
+        : 'Grátis';
 
   return (
     <dl className="flex flex-col gap-2 text-sm">

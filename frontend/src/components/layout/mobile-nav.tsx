@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import type { MenuItem } from '@/modules/menus/types';
 import { ChevronDownIcon, HeadsetIcon, HeartIcon, UserIcon } from '@/components/icons';
+import { useAuth } from '@/modules/customer/auth-context';
 
 interface MobileNavProps {
   items: MenuItem[];
@@ -13,6 +14,8 @@ interface MobileNavProps {
 
 /** Conteúdo do drawer mobile: nav em acordeão + atalhos de conta/atendimento. */
 export function MobileNav({ items, onNavigate, whatsappHref }: MobileNavProps) {
+  const { customer } = useAuth();
+  const favoritesHref = customer ? '/minha-conta/favoritos' : '/favoritos';
   return (
     <div className="flex flex-col gap-4">
       <span id="mobile-nav-title" className="sr-only">
@@ -34,7 +37,7 @@ export function MobileNav({ items, onNavigate, whatsappHref }: MobileNavProps) {
           <UserIcon className="h-5 w-5" /> Minha conta
         </Link>
         <Link
-          href="/minha-conta/favoritos"
+          href={favoritesHref}
           onClick={onNavigate}
           className="inline-flex min-h-touch items-center gap-2 rounded-card px-2 text-sm hover:bg-bg-subtle"
         >

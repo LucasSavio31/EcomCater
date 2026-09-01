@@ -28,6 +28,12 @@ tenacity = "^9.0.0"
 nh3 = "^0.2.18"
 pyotp = "^2.9.0"
 segno = "^1.6.1"
+paramiko = "^3.4"
+tzdata = "^2024.1"
+pypdf = "^6.0"
+playwright = "^1.48"
+ppf-datamatrix = "^0.2"
+python-barcode = "^0.16"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
@@ -46,6 +52,7 @@ select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 addopts = "-q"
 

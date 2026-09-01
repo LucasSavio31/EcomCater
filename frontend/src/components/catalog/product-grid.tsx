@@ -7,6 +7,9 @@ interface ProductGridProps {
   priorityCount?: number;
   emptyMessage?: string;
   buyButtonLabel?: string;
+  /** Lista de origem (GA4 `select_item`). */
+  listId?: string;
+  listName?: string;
 }
 
 /** Grade responsiva: 2 col mobile / 3 col tablet / 4 col desktop. */
@@ -15,6 +18,8 @@ export function ProductGrid({
   priorityCount = 0,
   emptyMessage = 'Nenhum produto encontrado.',
   buyButtonLabel,
+  listId,
+  listName,
 }: ProductGridProps) {
   if (products.length === 0) {
     return (
@@ -33,6 +38,9 @@ export function ProductGrid({
             priority={i < priorityCount}
             className="w-full"
             buyButtonLabel={buyButtonLabel}
+            listId={listId}
+            listName={listName}
+            index={i}
           />
         </li>
       ))}

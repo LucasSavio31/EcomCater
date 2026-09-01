@@ -39,7 +39,8 @@ _THEME_FIELDS = {
     "checkout_footer_bg_color", "checkout_footer_text_color",
     "checkout_step_button_color", "checkout_step_button_text_color",
     "checkout_step_active_bg_color", "checkout_step_active_text_color",
-    "checkout_animated_card", "checkout_show_review", "checkout_review_position",
+    "checkout_animated_card", "checkout_payment_icons_enabled", "checkout_steps_enabled",
+    "checkout_show_review", "checkout_review_position", "checkout_order_notes_enabled",
     "checkout_orderbump_enabled", "checkout_orderbump_product_id",
     "checkout_orderbump_product_ids",
     "filter_size_enabled", "filter_price_enabled", "filter_category_enabled",
@@ -50,8 +51,23 @@ _THEME_FIELDS = {
     "newsletter_bg_color", "newsletter_text_color",
     "newsletter_button_color", "newsletter_button_text_color",
     "discount_badge_enabled",
-    "button_radius_px",
+    "button_radius_px", "variation_radius_px",
+    "pdp_reassurance_enabled", "pdp_reassurance_items",
+    "freight_button_bg_color", "freight_button_text_color",
+    "freight_button_hover_color", "freight_button_border_color", "freight_button_radius_px",
+    "promo_badge_bg_color", "promo_badge_text_color", "promo_badge_border_color",
+    "promo_badge_radius_px",
+    "promo_badge_card_enabled", "promo_badge_pdp_enabled",
+    "cart_checkout_btn_bg_color", "cart_checkout_btn_text_color",
+    "cart_checkout_btn_hover_color", "cart_checkout_btn_border_color", "cart_checkout_btn_radius_px",
+    "cart_freight_btn_bg_color", "cart_freight_btn_text_color",
+    "cart_freight_btn_hover_color", "cart_freight_btn_border_color", "cart_freight_btn_radius_px",
+    "cart_qty_bg_color", "cart_qty_text_color", "cart_qty_radius_px",
+    "cart_coupon_btn_bg_color", "cart_coupon_btn_text_color", "cart_coupon_btn_hover_color",
+    "cart_coupon_btn_border_color", "cart_coupon_btn_radius_px",
+    "cart_badge_bg_color", "cart_badge_text_color",
     "pdp_qty_selector_enabled", "wishlist_enabled",
+    "pdp_wishlist_bg_color", "pdp_wishlist_border_color", "pdp_wishlist_icon_color",
     "size_chart_bg_color", "size_chart_header_bg_color",
     "size_chart_header_text_color", "size_chart_text_color",
     "card_hover_zoom_enabled", "card_buy_button_enabled", "card_buy_button_label",
@@ -59,10 +75,11 @@ _THEME_FIELDS = {
     "email_header_bg_color", "email_header_text_color",
     "email_body_bg_color", "email_text_color",
     "email_button_color", "email_button_text_color", "email_footer_text",
-    "lead_popup_enabled", "lead_capture_enabled",
+    "lead_popup_enabled", "lead_popup_pdp_enabled", "lead_capture_enabled",
     "lead_popup_title", "lead_popup_subtitle", "lead_popup_coupon_code",
     "lead_popup_bg_color", "lead_popup_text_color",
     "lead_popup_button_color", "lead_popup_button_text_color",
+    "lead_popup_show_logo",
 }
 
 _BOOL_FIELDS = {
@@ -73,13 +90,16 @@ _BOOL_FIELDS = {
     "hero_enabled", "footer_seals_enabled", "cart_redirect_after_add",
     "mini_cart_enabled",
     "checkout_email_first", "checkout_require_terms", "checkout_show_coupon", "checkout_allow_qty_change",
-    "checkout_animated_card", "checkout_show_review", "checkout_orderbump_enabled",
+    "checkout_animated_card", "checkout_payment_icons_enabled", "checkout_steps_enabled",
+    "checkout_show_review", "checkout_order_notes_enabled", "checkout_orderbump_enabled",
     "filter_size_enabled", "filter_price_enabled", "filter_category_enabled",
     "filters_on_home", "pdp_related_enabled",
     "filter_color_enabled", "filter_material_enabled",
     "newsletter_enabled", "discount_badge_enabled",
+    "promo_badge_card_enabled", "promo_badge_pdp_enabled",
     "cookie_consent_enabled",
-    "lead_popup_enabled", "lead_capture_enabled",
+    "lead_popup_enabled", "lead_popup_pdp_enabled", "lead_capture_enabled", "lead_popup_show_logo",
+    "pdp_reassurance_enabled",
     "pdp_qty_selector_enabled", "wishlist_enabled",
     "card_hover_zoom_enabled", "card_buy_button_enabled",
 }
@@ -129,6 +149,7 @@ def theme_out(row: ThemeSettings) -> dict:
         "logo_url": storage.url(row.logo_key) if row.logo_key else None,
         "logo_mobile_url": storage.url(row.logo_mobile_key) if row.logo_mobile_key else None,
         "favicon_url": storage.url(row.favicon_key) if row.favicon_key else None,
+        "lead_popup_logo_url": storage.url(row.lead_popup_logo_key) if row.lead_popup_logo_key else None,
     }
 
 
@@ -166,12 +187,19 @@ async def update_theme(db: AsyncSession, data: dict) -> ThemeSettings:
             v = str(v).strip() or None
         if k == "lead_popup_coupon_code":
             v = str(v).strip().upper() or None
+        if k == "font_family":
+            # a fonte entra num <style> na loja — impede injeção de CSS
+            v = re.sub(r'[^A-Za-z0-9 ,"\'\-]', "", str(v))[:200] or "Inter, system-ui, sans-serif"
         if k == "checkout_orderbump_product_ids":
             v = [str(x).strip() for x in v if str(x).strip()][:20] if isinstance(v, list) else []
         if k == "hero_mode":
             v = "static" if str(v) == "static" else "carousel"
         if k == "hero_autoplay_seconds":
             v = max(0, min(30, int(v)))
+        if k.endswith("_radius_px"):
+            v = max(0, min(40, int(v or 0)))
+        if k == "pdp_reassurance_items":
+            v = [str(x).strip()[:120] for x in v if str(x).strip()][:6] if isinstance(v, list) else []
         if k in _BOOL_FIELDS:
             v = bool(v)
         if k == "footer_seals_json":
@@ -249,8 +277,11 @@ async def remove_seal_image(db: AsyncSession, column: str, index: int) -> ThemeS
     return row
 
 
+_IMAGE_KINDS = ("logo", "logo_mobile", "favicon", "lead_popup_logo")
+
+
 async def set_theme_image(db: AsyncSession, kind: str, raw: bytes, filename: str) -> ThemeSettings:
-    if kind not in ("logo", "logo_mobile", "favicon"):
+    if kind not in _IMAGE_KINDS:
         raise ValidationError("Tipo de imagem inválido.")
     row = await get_theme(db)
     if kind == "favicon":
@@ -259,6 +290,15 @@ async def set_theme_image(db: AsyncSession, kind: str, raw: bytes, filename: str
     else:
         processed = process_image(raw, filename, prefix="theme")
         setattr(row, f"{kind}_key", processed.medium_key)
+    row.updated_at = datetime.now(UTC)
+    return row
+
+
+async def remove_theme_image(db: AsyncSession, kind: str) -> ThemeSettings:
+    if kind not in _IMAGE_KINDS:
+        raise ValidationError("Tipo de imagem inválido.")
+    row = await get_theme(db)
+    setattr(row, f"{kind}_key", None)
     row.updated_at = datetime.now(UTC)
     return row
 

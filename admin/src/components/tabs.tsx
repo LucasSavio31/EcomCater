@@ -24,7 +24,7 @@ export function Tabs({ tabs, active, onChange, children }: TabsProps) {
       <div
         role="tablist"
         aria-label="Seções"
-        className="flex flex-wrap gap-1 overflow-x-auto rounded-card border border-surface-border bg-bg-subtle p-1"
+        className="flex gap-1 overflow-x-auto rounded-card border border-surface-border bg-bg-subtle p-1 [scrollbar-width:none] sm:flex-wrap [&::-webkit-scrollbar]:hidden"
       >
         {tabs.map((tab) => {
           const selected = tab.id === active;

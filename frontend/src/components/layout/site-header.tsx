@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -8,6 +8,7 @@ import { Badge, Drawer } from '@ecom/ui';
 import type { ThemeSettings } from '@/modules/theme';
 import type { Menu, MenuItem } from '@/modules/menus/types';
 import { useCart } from '@/modules/cart/cart-context';
+import { useAuth } from '@/modules/customer/auth-context';
 import { resolveMediaUrl } from '@/lib/media';
 import { formatBRL } from '@/lib/format';
 import {
@@ -37,9 +38,24 @@ function whatsappHref(raw?: string | null): string | null {
 export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
   const pathname = usePathname();
   const { count, openMiniCart, subtotalCents, cart } = useCart();
+  const { customer } = useAuth();
+  const favoritesHref = customer ? '/minha-conta/favoritos' : '/favoritos';
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openMega, setOpenMega] = useState<string | null>(null);
+  // hover-intent: pequeno atraso ao fechar, para dar tempo de o cursor
+  // atravessar o vão entre o item e o painel sem que ele suma.
+  const megaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openMegaNow = (id: string): void => {
+    if (megaTimer.current) clearTimeout(megaTimer.current);
+    setOpenMega(id);
+  };
+  const closeMegaSoon = (id: string): void => {
+    if (megaTimer.current) clearTimeout(megaTimer.current);
+    megaTimer.current = setTimeout(() => {
+      setOpenMega((cur) => (cur === id ? null : cur));
+    }, 180);
+  };
 
   // Fecha overlays ao trocar de rota.
   useEffect(() => {
@@ -47,6 +63,10 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
     setMobileOpen(false);
     setOpenMega(null);
   }, [pathname]);
+
+  useEffect(() => () => {
+    if (megaTimer.current) clearTimeout(megaTimer.current);
+  }, []);
 
   const items = menu?.items ?? [];
   const logo = resolveMediaUrl(theme.logo_url);
@@ -107,7 +127,7 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
       )}
 
       {/* Barra principal */}
-      <div className="mx-auto flex max-w-header items-center gap-3 px-4 py-3">
+      <div className="relative mx-auto flex max-w-header items-center gap-3 px-4 py-3">
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
@@ -117,10 +137,21 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
           <MenuIcon />
         </button>
 
-        <Link href="/" className="flex shrink-0 items-center gap-2" aria-label={`${storeName} — início`}>
+        <Link
+          href="/"
+          className="absolute left-1/2 flex shrink-0 -translate-x-1/2 items-center gap-2 lg:static lg:left-auto lg:translate-x-0"
+          aria-label={`${storeName} — início`}
+        >
           {logo ? (
-            <span className="relative block h-8 w-[140px]">
-              <Image src={logo} alt={storeName} fill sizes="140px" className="object-contain object-left" priority />
+            <span className="relative block h-8 w-[128px] lg:h-14 lg:w-[240px]">
+              <Image
+                src={logo}
+                alt={storeName}
+                fill
+                sizes="(min-width: 1024px) 240px, 128px"
+                className="object-contain object-center lg:object-left"
+                priority
+              />
             </span>
           ) : (
             <span className="text-lg font-bold">{storeName}</span>
@@ -135,8 +166,8 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
                 key={item.id}
                 item={item}
                 open={openMega === item.id}
-                onOpen={() => setOpenMega(item.id)}
-                onClose={() => setOpenMega((cur) => (cur === item.id ? null : cur))}
+                onOpen={() => openMegaNow(item.id)}
+                onClose={() => closeMegaSoon(item.id)}
               />
             ))}
           </ul>
@@ -155,7 +186,7 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
           </button>
           {theme.wishlist_enabled && (
             <Link
-              href="/minha-conta/favoritos"
+              href={favoritesHref}
               aria-label="Favoritos"
               className="hidden min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10 sm:inline-flex"
             >
@@ -176,7 +207,7 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
           <Link
             href="/minha-conta"
             aria-label="Minha conta"
-            className="min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10"
+            className="hidden min-h-touch min-w-touch rounded-card p-2 hover:bg-header-fg/10 lg:inline-flex"
           >
             <UserIcon />
           </Link>
@@ -191,6 +222,7 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
               {count > 0 && (
                 <Badge
                   tone="accent"
+                  style={{ background: 'var(--color-cart-badge-bg)', color: 'var(--color-cart-badge-fg)' }}
                   className="absolute -right-0.5 -top-0.5 min-w-[1.1rem] justify-center px-1 py-0 text-[10px] leading-4"
                 >
                   {count > 99 ? '99+' : count}
@@ -207,6 +239,7 @@ export function SiteHeader({ theme, menu, storeName }: SiteHeaderProps) {
               {count > 0 && (
                 <Badge
                   tone="accent"
+                  style={{ background: 'var(--color-cart-badge-bg)', color: 'var(--color-cart-badge-fg)' }}
                   className="absolute -right-0.5 -top-0.5 min-w-[1.1rem] justify-center px-1 py-0 text-[10px] leading-4"
                 >
                   {count > 99 ? '99+' : count}
@@ -283,7 +316,11 @@ function DesktopNavItem({ item, open, onOpen, onClose }: DesktopNavItemProps) {
       </Link>
 
       {open && (
-        <div className="absolute inset-x-0 top-full z-30 border-t border-surface-border bg-surface text-text shadow-lg">
+        <div
+          onMouseEnter={onOpen}
+          onMouseLeave={onClose}
+          className="absolute inset-x-0 top-full z-30 border-t border-surface-border bg-surface text-text shadow-lg before:absolute before:inset-x-0 before:-top-3 before:h-3 before:content-['']"
+        >
           <div className="mx-auto grid max-w-header gap-6 px-4 py-6 md:grid-cols-[1fr_auto]">
             <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
               {item.children.map((col) => (

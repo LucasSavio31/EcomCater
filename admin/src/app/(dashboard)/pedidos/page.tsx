@@ -1,26 +1,33 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { Select } from '@/components/form-controls';
 import { StatusBadge } from '@/components/status-badge';
-import { IconEdit, IconPrinter, IconTag, IconTrash } from '@/components/nav-icons';
+import { DataTable, type Column } from '@/components/data-table';
+import {
+  DateRangeFilter,
+  PageSizeSelect,
+  DEFAULT_PAGE_SIZE,
+} from '@/components/date-range-filter';
+import { IconPrinter, IconTag } from '@/components/nav-icons';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { formatBRL, formatDateTime } from '@/lib/format';
+import { ADMIN_API_BASE_URL } from '@/lib/admin-api-client';
+import { getSession } from '@/lib/auth-storage';
 import { ordersApi } from '@/modules/orders/api';
 import type { OrderListItem, OrderStatus } from '@/modules/orders/types';
 
-const PAGE_SIZE = 50;
-
 const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: 'pending_payment', label: 'Aguardando pagamento' },
-  { value: 'paid', label: 'Pago' },
+  { value: 'paid', label: 'Gerar Envio' },
   { value: 'processing', label: 'Em separação' },
+  { value: 'tracking_available', label: 'Rastreio disponível' },
   { value: 'shipped', label: 'Enviado' },
   { value: 'delivered', label: 'Entregue' },
   { value: 'canceled', label: 'Cancelado' },
@@ -34,17 +41,29 @@ const PAYMENT_OPTIONS = [
 ];
 
 export default function PedidosPage() {
+  return (
+    <Suspense fallback={null}>
+      <PedidosPageInner />
+    </Suspense>
+  );
+}
+
+function PedidosPageInner() {
   const router = useRouter();
   const toast = useToast();
+  const sp = useSearchParams();
   const [qInput, setQInput] = useState('');
   const [q, setQ] = useState('');
-  const [status, setStatus] = useState<OrderStatus | ''>('');
-  const [paymentStatus, setPaymentStatus] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [status, setStatus] = useState<OrderStatus | ''>((sp.get('status') as OrderStatus) || '');
+  const [paymentStatus, setPaymentStatus] = useState(sp.get('payment_status') || '');
+  const [dateFrom, setDateFrom] = useState(sp.get('from') || '');
+  const [dateTo, setDateTo] = useState(sp.get('to') || '');
+  const [bucket, setBucket] = useState(sp.get('bucket') || '');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(Number(sp.get('page_size')) || DEFAULT_PAGE_SIZE);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState<string[] | null>(null);
+  const [bulkStatusTo, setBulkStatusTo] = useState<OrderStatus | null>(null);
   const [busy, setBusy] = useState(false);
 
   const fetcher = useCallback(
@@ -55,21 +74,65 @@ export default function PedidosPage() {
         payment_status: paymentStatus as never,
         date_from: dateFrom,
         date_to: dateTo,
+        bucket,
         page,
-        page_size: PAGE_SIZE,
+        page_size: pageSize,
       }),
-    [q, status, paymentStatus, dateFrom, dateTo, page],
+    [q, status, paymentStatus, dateFrom, dateTo, bucket, page, pageSize],
   );
-  const { data, loading, error, reload } = useResource(fetcher, [
+  const { data, loading, error, reload, setData } = useResource(fetcher, [
     q,
     status,
     paymentStatus,
     dateFrom,
     dateTo,
+    bucket,
     page,
+    pageSize,
   ]);
   const rows = data?.items ?? [];
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+
+  // Atualização em tempo real: revalida a lista a cada 8s sem piscar a tela
+  // (só troca os dados quando algo muda). Pausa fora de foco / durante ações.
+  const lastSig = useRef('');
+  useEffect(() => {
+    const tick = async (): Promise<void> => {
+      if (busy || deleting || bulkStatusTo || document.visibilityState !== 'visible') return;
+      const res = await ordersApi.list({
+        q,
+        status,
+        payment_status: paymentStatus as never,
+        date_from: dateFrom,
+        date_to: dateTo,
+        bucket,
+        page,
+        page_size: pageSize,
+      });
+      if (!res.ok) return;
+      const sig = JSON.stringify([
+        res.data.total,
+        res.data.items.map((o) => [
+          o.number,
+          o.status,
+          o.payment_status,
+          o.fulfillment_status,
+          o.me_label,
+        ]),
+      ]);
+      if (lastSig.current && lastSig.current !== sig) setData(res.data);
+      lastSig.current = sig;
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 8_000);
+    const onFocus = (): void => void tick();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('focus', onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, status, paymentStatus, dateFrom, dateTo, bucket, page, pageSize, busy, deleting, bulkStatusTo]);
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / pageSize)) : 1;
 
   const allChecked = rows.length > 0 && rows.every((o) => selected.has(o.number));
   const someChecked = selected.size > 0;
@@ -94,16 +157,128 @@ export default function PedidosPage() {
   const printHref = (kind: 'imprimir' | 'etiquetas', ids: string) =>
     `/pedidos/${kind}?ids=${encodeURIComponent(ids)}`;
 
+  const columns: Array<Column<OrderListItem>> = [
+    {
+      key: 'sel',
+      header: (
+        <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Selecionar todos" />
+      ),
+      className: 'w-10',
+      mobileLabel: '',
+      stopRowClick: true,
+      cell: (o) => (
+        <input
+          type="checkbox"
+          checked={selected.has(o.number)}
+          onChange={() => toggle(o.number)}
+          aria-label={`Selecionar ${o.number}`}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+    },
+    {
+      key: 'number',
+      header: 'Pedido',
+      primary: true,
+      cell: (o) => <span className="font-medium text-accent">{o.number}</span>,
+    },
+    {
+      key: 'customer',
+      header: 'Cliente',
+      cell: (o) => (
+        <span className="flex flex-col">
+          <span className="font-medium text-text">{o.customer_name}</span>
+          <span className="text-xs text-text-muted">{o.email}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'items',
+      header: 'Itens',
+      cell: (o) => (
+        <span>
+          {o.items_summary}
+          {o.items_count > 1 && <span className="text-text-muted"> · {o.items_count} un.</span>}
+          {o.suppliers.length > 0 && (
+            <span className="block text-xs text-text-muted">Forn.: {o.suppliers.join(', ')}</span>
+          )}
+        </span>
+      ),
+    },
+    { key: 'status', header: 'Status', cell: (o) => <StatusBadge kind="order" value={o.status} /> },
+    {
+      key: 'payment',
+      header: 'Pagamento',
+      cell: (o) => <StatusBadge kind="payment" value={o.payment_status} />,
+    },
+    { key: 'total', header: 'Total', cell: (o) => formatBRL(o.grand_total_cents) },
+    {
+      key: 'me_label',
+      header: 'Etiqueta',
+      cell: (o) =>
+        o.me_label === 'ready' ? (
+          <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+            ● liberada
+          </span>
+        ) : o.me_label === 'waiting' ? (
+          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+            aguardando
+          </span>
+        ) : o.me_label === 'purchased' ? (
+          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+            gerando…
+          </span>
+        ) : (
+          <span className="text-xs text-text-muted">—</span>
+        ),
+    },
+    {
+      key: 'date',
+      header: 'Data',
+      cell: (o) => (
+        <span className="text-text-muted">{formatDateTime(o.placed_at ?? o.created_at)}</span>
+      ),
+    },
+  ];
+
   async function confirmDelete() {
     if (!deleting) return;
     setBusy(true);
     const results = await Promise.all(deleting.map((n) => ordersApi.remove(n)));
     setBusy(false);
-    const failed = results.filter((r) => !r.ok).length;
+    const failMsgs = results
+      .filter((r): r is Extract<typeof r, { ok: false }> => !r.ok)
+      .map((r) => r.error.message);
     setDeleting(null);
     setSelected(new Set());
-    if (failed) toast.error(`${failed} pedido(s) não puderam ser excluídos.`);
-    else toast.success('Pedido(s) excluído(s).');
+    if (failMsgs.length) {
+      toast.error(
+        `${failMsgs.length} pedido(s) não excluído(s).${failMsgs[0] ? ` ${failMsgs[0]}` : ''}`,
+      );
+    }
+    if (failMsgs.length < results.length) toast.success('Pedido(s) excluído(s).');
+    reload();
+  }
+
+  async function applyBulkStatus() {
+    if (!bulkStatusTo) return;
+    setBusy(true);
+    const res = await ordersApi.bulkStatus(selectedList, bulkStatusTo);
+    setBusy(false);
+    setBulkStatusTo(null);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return;
+    }
+    const fail = res.data.results.filter((r) => !r.ok);
+    const ok = res.data.results.length - fail.length;
+    if (ok) toast.success(`${ok} pedido(s) atualizado(s).`);
+    if (fail.length) {
+      toast.error(
+        `${fail.length} não atualizado(s).${fail[0]?.message ? ` ${fail[0].message}` : ''}`,
+      );
+    }
+    setSelected(new Set());
     reload();
   }
 
@@ -117,17 +292,113 @@ export default function PedidosPage() {
     }
     const ok = res.data.results.filter((r) => r.ok).length;
     const fail = res.data.results.filter((r) => !r.ok);
-    if (ok) toast.success(`${ok} pedido(s) enviado(s) ao Melhor Envio.`);
+    if (ok) toast.success(`${ok} etiqueta(s) gerada(s) no Melhor Envio.`);
     if (fail.length) toast.error(fail[0]?.message ?? 'Alguns pedidos falharam.');
+    setSelected(new Set());
+    reload();
   }
+
+  const [labelBusy, setLabelBusy] = useState(false);
+  async function downloadLabels(numbers: string[]) {
+    if (!numbers.length) return;
+    setLabelBusy(true);
+    const t = getSession()?.accessToken ?? '';
+    try {
+      const r = await fetch(
+        `${ADMIN_API_BASE_URL}/api/admin/orders/melhor-envio/labels?numbers=${encodeURIComponent(
+          numbers.join(','),
+        )}`,
+        { headers: { Authorization: `Bearer ${t}` } },
+      );
+      if (!r.ok) {
+        let msg = 'Não foi possível gerar o PDF das etiquetas.';
+        try {
+          const j = await r.json();
+          msg = j?.error?.message ?? j?.detail ?? msg;
+        } catch {
+          /* corpo não-JSON */
+        }
+        toast.error(typeof msg === 'string' ? msg : 'Falha ao gerar etiquetas.');
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setSelected(new Set());
+    } catch {
+      toast.error('Falha de rede ao baixar as etiquetas.');
+    } finally {
+      setLabelBusy(false);
+    }
+  }
+
+  type SyncInfo = Extract<
+    Awaited<ReturnType<typeof ordersApi.melhorEnvioSyncStatus>>,
+    { ok: true }
+  >['data'];
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncInfo, setSyncInfo] = useState<SyncInfo | null>(null);
+  const loadSyncStatus = useCallback(async () => {
+    const r = await ordersApi.melhorEnvioSyncStatus();
+    if (r.ok) setSyncInfo(r.data);
+  }, []);
+  useEffect(() => {
+    void loadSyncStatus();
+    const id = window.setInterval(() => void loadSyncStatus(), 20_000);
+    return () => window.clearInterval(id);
+  }, [loadSyncStatus]);
+
+  async function syncTracking() {
+    setSyncBusy(true);
+    const res = await ordersApi.syncMelhorEnvioTracking();
+    setSyncBusy(false);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return;
+    }
+    if (res.data.reason) toast.push(res.data.reason);
+    else toast.success(`Rastreio sincronizado: ${res.data.updated ?? 0} pedido(s) atualizado(s).`);
+    void loadSyncStatus();
+    reload();
+  }
+
+  const fmtMin = (secs: number | null | undefined): string => {
+    if (secs == null) return '—';
+    if (secs < 60) return `${secs}s`;
+    const m = Math.round(secs / 60);
+    return `${m} min`;
+  };
+  const syncStatusText = (() => {
+    const s = syncInfo;
+    if (!s) return null;
+    if (!s.enabled) return 'Sincronização automática desativada.';
+    const parts = [`Sincronização automática a cada ${fmtMin(s.interval_seconds)}`];
+    if (s.seconds_until_next_run != null) parts.push(`próxima em ${fmtMin(s.seconds_until_next_run)}`);
+    if (s.seconds_since_last_run != null) parts.push(`última há ${fmtMin(s.seconds_since_last_run)}`);
+    return parts.join(' · ');
+  })();
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Pedidos" description="Todos os pedidos da loja." />
+      <PageHeader
+        title="Pedidos"
+        description="Todos os pedidos da loja."
+        actions={
+          <div className="flex flex-col items-end gap-1">
+            <Button size="sm" variant="outline" loading={syncBusy} onClick={() => void syncTracking()}>
+              Sincronizar rastreio (ME)
+            </Button>
+            {syncStatusText && (
+              <span className="text-right text-xs text-text-muted">{syncStatusText}</span>
+            )}
+          </div>
+        }
+      />
 
-      <Card variant="outline">
+      <Card variant="outline" className="flex flex-col gap-4">
         <form
-          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
+          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
           onSubmit={(e) => {
             e.preventDefault();
             setPage(1);
@@ -147,6 +418,7 @@ export default function PedidosPage() {
             options={STATUS_OPTIONS}
             onChange={(e) => {
               setPage(1);
+              setBucket('');
               setStatus(e.target.value as OrderStatus | '');
             }}
           />
@@ -157,40 +429,49 @@ export default function PedidosPage() {
             options={PAYMENT_OPTIONS}
             onChange={(e) => {
               setPage(1);
+              setBucket('');
               setPaymentStatus(e.target.value);
             }}
           />
-          <label className="flex flex-col gap-1 text-sm font-medium text-text">
-            De
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => {
-                setPage(1);
-                setDateFrom(e.target.value);
-              }}
-              className="min-h-touch rounded-card border border-surface-border bg-surface px-3 text-sm"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-medium text-text">
-            Até
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => {
-                setPage(1);
-                setDateTo(e.target.value);
-              }}
-              className="min-h-touch rounded-card border border-surface-border bg-surface px-3 text-sm"
-            />
-          </label>
         </form>
+        <DateRangeFilter
+          from={dateFrom}
+          to={dateTo}
+          onApply={(f, t) => {
+            setPage(1);
+            setBucket('');
+            setDateFrom(f);
+            setDateTo(t);
+          }}
+          onClear={() => {
+            setPage(1);
+            setDateFrom('');
+            setDateTo('');
+          }}
+        />
       </Card>
 
       {/* Barra de ações em massa */}
       {someChecked && (
         <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-card border border-surface-border bg-surface p-3 shadow-sm">
           <span className="text-sm font-medium">{selected.size} selecionado(s)</span>
+          <select
+            aria-label="Mudar status dos selecionados"
+            value=""
+            onChange={(e) => {
+              const v = e.target.value as OrderStatus;
+              if (v) setBulkStatusTo(v);
+              e.currentTarget.value = '';
+            }}
+            className="min-h-touch rounded-card border border-surface-border bg-surface px-3 text-sm"
+          >
+            <option value="">Mudar status para…</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
           <Link
             href={printHref('imprimir', selectedList.join(','))}
             target="_blank"
@@ -198,15 +479,16 @@ export default function PedidosPage() {
           >
             <IconPrinter width={16} height={16} /> PDF resumo (por fornecedor)
           </Link>
-          <Link
-            href={printHref('etiquetas', selectedList.join(','))}
-            target="_blank"
-            className="inline-flex items-center gap-1.5 rounded-card border border-surface-border px-3 py-1.5 text-sm text-text hover:border-primary"
-          >
-            <IconTag width={16} height={16} /> Etiquetas (A4, 4/página)
-          </Link>
           <Button size="sm" variant="outline" loading={busy} onClick={() => void sendToME()}>
-            Enviar ao Melhor Envio
+            Gerar etiquetas (ME)
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            loading={labelBusy}
+            onClick={() => void downloadLabels(selectedList)}
+          >
+            <IconTag width={16} height={16} /> Baixar etiquetas (PDF)
           </Button>
           <Button
             size="sm"
@@ -219,134 +501,71 @@ export default function PedidosPage() {
         </div>
       )}
 
-      {/* Tabela */}
-      <div className="overflow-x-auto rounded-card border border-surface-border">
-        <table className="w-full min-w-[860px] text-sm">
-          <thead className="bg-bg-subtle text-left text-xs uppercase tracking-wide text-text-muted">
-            <tr>
-              <th className="w-10 px-3 py-2">
-                <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Selecionar todos" />
-              </th>
-              <th className="px-3 py-2">Pedido</th>
-              <th className="px-3 py-2">Cliente</th>
-              <th className="px-3 py-2">Itens</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Pagamento</th>
-              <th className="px-3 py-2">Total</th>
-              <th className="px-3 py-2">Data</th>
-              <th className="px-3 py-2 text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-surface-border">
-            {loading && (
-              <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-text-muted">
-                  Carregando…
-                </td>
-              </tr>
-            )}
-            {!loading && rows.length === 0 && (
-              <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-text-muted">
-                  Nenhum pedido encontrado.
-                </td>
-              </tr>
-            )}
-            {rows.map((o: OrderListItem) => (
-              <tr key={o.number} className="hover:bg-bg-subtle">
-                <td className="px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(o.number)}
-                    onChange={() => toggle(o.number)}
-                    aria-label={`Selecionar ${o.number}`}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <Link href={`/pedidos/${o.number}`} className="font-medium text-accent hover:underline">
-                    {o.number}
-                  </Link>
-                </td>
-                <td className="px-3 py-2">
-                  <span className="block font-medium text-text">{o.customer_name}</span>
-                  <span className="block text-xs text-text-muted">{o.email}</span>
-                </td>
-                <td className="px-3 py-2">
-                  {o.items_summary}
-                  {o.items_count > 1 && (
-                    <span className="text-text-muted"> · {o.items_count} un.</span>
-                  )}
-                  {o.suppliers.length > 0 && (
-                    <span className="block text-xs text-text-muted">
-                      Forn.: {o.suppliers.join(', ')}
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  <StatusBadge kind="order" value={o.status} />
-                </td>
-                <td className="px-3 py-2">
-                  <StatusBadge kind="payment" value={o.payment_status} />
-                </td>
-                <td className="px-3 py-2">{formatBRL(o.grand_total_cents)}</td>
-                <td className="px-3 py-2 text-text-muted">
-                  {formatDateTime(o.placed_at ?? o.created_at)}
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex items-center justify-end gap-1 text-text">
-                    <Link
-                      href={printHref('imprimir', o.number)}
-                      target="_blank"
-                      title="Gerar PDF do pedido"
-                      className="rounded p-1.5 hover:bg-bg-subtle"
-                    >
-                      <IconPrinter width={16} height={16} />
-                    </Link>
-                    <button
-                      type="button"
-                      title="Editar"
-                      onClick={() => router.push(`/pedidos/${o.number}`)}
-                      className="rounded p-1.5 hover:bg-bg-subtle"
-                    >
-                      <IconEdit width={16} height={16} />
-                    </button>
-                    <button
-                      type="button"
-                      title="Excluir pedido"
-                      onClick={() => setDeleting([o.number])}
-                      className="rounded p-1.5 hover:bg-bg-subtle"
-                    >
-                      <IconTrash width={16} height={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(o) => o.number}
+        loading={loading}
+        error={error}
+        emptyMessage="Nenhum pedido encontrado."
+        onRowClick={(o) => router.push(`/pedidos/${o.number}`)}
+        rowActions={(o) => (
+          <>
+            <Link
+              href={`/pedidos/fatura?id=${o.number}`}
+              target="_blank"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1.5 rounded-card border border-surface-border px-2.5 py-1.5 text-xs hover:border-primary"
+            >
+              <IconPrinter width={14} height={14} /> Fatura
+            </Link>
+            <Button size="sm" variant="outline" onClick={() => router.push(`/pedidos/${o.number}`)}>
+              Abrir
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-danger"
+              onClick={() => setDeleting([o.number])}
+            >
+              Excluir
+            </Button>
+          </>
+        )}
+      />
 
       {data && data.total > 0 && (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-text-muted">
-            {data.total} {data.total === 1 ? 'pedido' : 'pedidos'}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-              Anterior
-            </Button>
-            <span>
-              Página {page} de {totalPages}
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          <div className="flex items-center gap-4">
+            <span className="text-text-muted">
+              {data.total} {data.total === 1 ? 'pedido' : 'pedidos'}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Próxima
-            </Button>
+            <PageSizeSelect
+              value={pageSize}
+              onChange={(n) => {
+                setPage(1);
+                setPageSize(n);
+              }}
+            />
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                Anterior
+              </Button>
+              <span>
+                Página {page} de {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Próxima
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -355,6 +574,26 @@ export default function PedidosPage() {
           Recarregar
         </button>
       )}
+
+      <ConfirmDialog
+        open={bulkStatusTo !== null}
+        title="Mudar status em massa"
+        description={
+          bulkStatusTo
+            ? `Mudar ${selected.size} pedido(s) para "${
+                STATUS_OPTIONS.find((s) => s.value === bulkStatusTo)?.label ?? bulkStatusTo
+              }"?${
+                bulkStatusTo === 'canceled' || bulkStatusTo === 'refunded'
+                  ? ' O estoque dos itens é devolvido.'
+                  : ''
+              }`
+            : ''
+        }
+        confirmLabel="Aplicar"
+        loading={busy}
+        onCancel={() => setBulkStatusTo(null)}
+        onConfirm={() => void applyBulkStatus()}
+      />
 
       <ConfirmDialog
         open={deleting !== null}

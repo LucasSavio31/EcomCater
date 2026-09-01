@@ -31,7 +31,9 @@ async def test_product_crud_and_slug(client, admin_token, auth_headers):
     detail = await client.get(f"/api/products/{p['slug']}")
     assert detail.status_code == 200
     assert detail.json()["price_cents"] == 12990
-    assert detail.json()["breadcrumb"][0]["name"] == "Home"
+    # o breadcrumb traz a cadeia de categorias (o front prefixa "Início");
+    # não há mais um item "Home" repetido vindo da API.
+    assert detail.json()["breadcrumb"][0]["name"] == "Feminino"
 
 
 @pytest.mark.asyncio
@@ -136,11 +138,25 @@ async def test_review_flow(client, admin_token, auth_headers):
     cat = await _mk_category(client, h)
     p = await _mk_product(client, h, cat["id"])
 
+    # avaliação exige cliente autenticado
+    anon = await client.post(
+        f"/api/products/{p['slug']}/reviews",
+        json={"rating": 5, "title": "Amei", "body": "Perfeito"},
+    )
+    assert anon.status_code == 401
+
+    reg = await client.post(
+        "/api/customers/auth/register",
+        json={"full_name": "Maria", "email": "maria@test.example", "password": "clientsecret1"},
+    )
+    ch = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
     r = await client.post(
         f"/api/products/{p['slug']}/reviews",
-        json={"author_name": "Maria", "rating": 5, "title": "Amei", "body": "Perfeito"},
+        json={"rating": 5, "title": "Amei", "body": "Perfeito"},
+        headers=ch,
     )
-    assert r.status_code == 201
+    assert r.status_code == 201, r.text
     review_id = r.json()["id"]
 
     # ainda não aparece (pending)

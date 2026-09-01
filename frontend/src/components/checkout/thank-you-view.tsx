@@ -7,21 +7,35 @@ import { Button, Card, Spinner } from '@ecom/ui';
 import { checkoutApi } from '@/modules/checkout/api';
 import type { ChargeResult, Order } from '@/modules/checkout/types';
 import { formatBRL } from '@/lib/format';
+import { resolveMediaUrl } from '@/lib/media';
 import { track, orderToTrackItems } from '@/modules/analytics';
 
-/** Dispara `purchase` uma única vez por pedido (sobrevive a refresh via sessionStorage). */
+/**
+ * Dispara `purchase` UMA vez por pedido. Dupla proteção:
+ *  1) guarda em módulo — sobrevive a re-render / React Strict Mode no mesmo load;
+ *  2) `sessionStorage` — sobrevive a refresh da página de obrigado / retorno.
+ * `transaction_id` = número real do pedido, permite deduplicar também no GA4/Ads.
+ */
+const purchaseSent = new Set<string>();
+
 function trackPurchaseOnce(order: Order): void {
+  if (purchaseSent.has(order.number)) return;
   const key = `ecom:purchase-tracked:${order.number}`;
   try {
-    if (sessionStorage.getItem(key)) return;
+    if (sessionStorage.getItem(key)) {
+      purchaseSent.add(order.number);
+      return;
+    }
     sessionStorage.setItem(key, '1');
   } catch {
     /* sem sessionStorage: ainda dispara, só não deduplica em refresh */
   }
+  purchaseSent.add(order.number);
+  // GA4: value = Σ(price × quantity) dos itens (frete e impostos vão à parte)
   track('purchase', {
     transaction_id: order.number,
-    value: order.grand_total_cents / 100,
     shipping: order.shipping_cents / 100,
+    tax: 0,
     coupon: order.coupon_code ?? undefined,
     event_id: `purchase.${order.number}`,
     items: orderToTrackItems(order.items),
@@ -47,6 +61,7 @@ export function ThankYouView() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [boletoCopied, setBoletoCopied] = useState(false);
   const charge = useRef<ChargeResult | null>(null);
 
   if (charge.current === null && number && typeof window !== 'undefined') {
@@ -124,8 +139,10 @@ export function ThankYouView() {
     tone: 'text-text',
   };
   const pixCode = charge.current?.pix_qr_code ?? null;
+  const pixQrImg = charge.current?.pix_qr_data_uri ?? null;
   const boletoUrl = charge.current?.boleto_url ?? null;
   const boletoBarcode = charge.current?.boleto_barcode ?? null;
+  const boletoBarcodeImg = charge.current?.boleto_barcode_data_uri ?? null;
   const isPaid = (paymentStatus ?? order.payment_status) === 'paid';
 
   function copyPix() {
@@ -133,6 +150,14 @@ export function ThankYouView() {
     void navigator.clipboard.writeText(pixCode).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2500);
+    });
+  }
+
+  function copyBoleto() {
+    if (!boletoBarcode) return;
+    void navigator.clipboard.writeText(boletoBarcode).then(() => {
+      setBoletoCopied(true);
+      window.setTimeout(() => setBoletoCopied(false), 2500);
     });
   }
 
@@ -151,12 +176,20 @@ export function ThankYouView() {
 
       {/* Instruções de pagamento */}
       {!isPaid && pixCode && (
-        <Card variant="outline" className="flex flex-col gap-3">
+        <Card variant="outline" className="flex flex-col items-center gap-3 text-center">
           <h2 className="text-base font-semibold">Pague com PIX</h2>
           <p className="text-sm text-text-muted">
-            Copie o código abaixo e cole no app do seu banco, na opção PIX Copia e Cola.
+            Escaneie o QR Code no app do seu banco, ou copie o código abaixo (PIX Copia e Cola).
           </p>
-          <code className="block break-all rounded-card bg-bg-subtle p-3 text-xs">{pixCode}</code>
+          {pixQrImg && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={pixQrImg}
+              alt="QR Code do PIX"
+              className="h-48 w-48 rounded-card border border-surface-border p-2"
+            />
+          )}
+          <code className="block w-full break-all rounded-card bg-bg-subtle p-3 text-xs">{pixCode}</code>
           <Button variant="outline" onClick={copyPix}>
             {copied ? 'Código copiado ✓' : 'Copiar código PIX'}
           </Button>
@@ -166,10 +199,23 @@ export function ThankYouView() {
       {!isPaid && (boletoUrl || boletoBarcode) && (
         <Card variant="outline" className="flex flex-col gap-3">
           <h2 className="text-base font-semibold">Boleto bancário</h2>
+          {boletoBarcodeImg && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={boletoBarcodeImg}
+              alt="Código de barras do boleto"
+              className="w-full rounded-card border border-surface-border bg-white p-2"
+            />
+          )}
           {boletoBarcode && (
-            <code className="block break-all rounded-card bg-bg-subtle p-3 text-xs">
-              {boletoBarcode}
-            </code>
+            <>
+              <code className="block break-all rounded-card bg-bg-subtle p-3 text-xs">
+                {boletoBarcode}
+              </code>
+              <Button variant="outline" onClick={copyBoleto}>
+                {boletoCopied ? 'Código copiado ✓' : 'Copiar código do boleto'}
+              </Button>
+            </>
           )}
           {boletoUrl && (
             <a
@@ -187,16 +233,25 @@ export function ThankYouView() {
       {/* Resumo */}
       <Card variant="outline" className="flex flex-col gap-3">
         <h2 className="text-base font-semibold">Itens</h2>
-        <ul className="flex flex-col gap-2 text-sm">
-          {order.items.map((i) => (
-            <li key={i.sku} className="flex justify-between gap-2">
-              <span>
-                {i.quantity}× {i.name}
-                {i.variant_label ? ` · ${i.variant_label}` : ''}
-              </span>
-              <span className="shrink-0">{formatBRL(i.total_cents)}</span>
-            </li>
-          ))}
+        <ul className="flex flex-col gap-3 text-sm">
+          {order.items.map((i) => {
+            const img = resolveMediaUrl(i.image_url);
+            return (
+              <li key={i.sku} className="flex items-center gap-3">
+                <span className="h-14 w-14 shrink-0 overflow-hidden rounded-card border border-surface-border bg-bg-subtle">
+                  {img && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={img} alt="" className="h-full w-full object-cover" />
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">
+                  {i.quantity}× {i.name}
+                  {i.variant_label ? ` · ${i.variant_label}` : ''}
+                </span>
+                <span className="shrink-0">{formatBRL(i.total_cents)}</span>
+              </li>
+            );
+          })}
         </ul>
         <dl className="flex flex-col gap-1 border-t border-surface-border pt-3 text-sm">
           <div className="flex justify-between">
@@ -231,6 +286,22 @@ export function ThankYouView() {
           {order.shipping_address.district} · {order.shipping_address.city}/
           {order.shipping_address.state} · CEP {order.shipping_address.zip}
         </p>
+        {typeof order.shipping_service?.tracking_code === 'string' &&
+          order.shipping_service.tracking_code && (
+            <p>
+              <span className="text-text-muted">Rastreio: </span>
+              <a
+                href={`https://rastreamento.correios.com.br/app/index.php?objeto=${encodeURIComponent(
+                  order.shipping_service.tracking_code,
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-primary underline"
+              >
+                {order.shipping_service.tracking_code}
+              </a>
+            </p>
+          )}
       </Card>
 
       <div className="flex flex-wrap gap-3">

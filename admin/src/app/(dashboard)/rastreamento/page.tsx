@@ -10,7 +10,7 @@ import { useResource } from '@/lib/use-resource';
 import { analyticsApi, type AnalyticsConfig, type AnalyticsUpdate } from '@/modules/analytics/api';
 import { revalidateStore } from '@/lib/revalidate-store';
 
-type Draft = AnalyticsConfig & { meta_capi_access_token?: string };
+type Draft = AnalyticsConfig & { meta_capi_access_token?: string; ga4_api_secret?: string };
 
 export default function RastreamentoPage() {
   const toast = useToast();
@@ -43,6 +43,9 @@ export default function RastreamentoPage() {
     };
     if (typeof cfg.meta_capi_access_token === 'string') {
       body.meta_capi_access_token = cfg.meta_capi_access_token;
+    }
+    if (typeof cfg.ga4_api_secret === 'string') {
+      body.ga4_api_secret = cfg.ga4_api_secret;
     }
     const res = await analyticsApi.put(body);
     setSaving(false);
@@ -100,6 +103,28 @@ export default function RastreamentoPage() {
                 onChange={(e) => set('ga4_measurement_id', e.target.value.trim() || null)}
                 disabled={!cfg.ga4_enabled}
               />
+              <Input
+                label="API secret (Measurement Protocol) — opcional"
+                type="password"
+                placeholder={
+                  cfg.ga4_api_secret_set
+                    ? '•••••••••• (segredo salvo — preencha para substituir)'
+                    : 'Admin > Fluxos de dados > Measurement Protocol'
+                }
+                value={cfg.ga4_api_secret ?? ''}
+                onChange={(e) => set('ga4_api_secret', e.target.value)}
+                disabled={!cfg.ga4_enabled}
+                hint="Só usado para enviar o evento 'refund' quando um pedido é estornado no painel."
+              />
+              {cfg.ga4_api_secret_set && (
+                <button
+                  type="button"
+                  className="self-start text-sm text-danger underline"
+                  onClick={() => set('ga4_api_secret', '')}
+                >
+                  Remover segredo salvo
+                </button>
+              )}
             </Card>
 
             {/* Google Ads */}

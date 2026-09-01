@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,15 +34,68 @@ DbDep = Annotated[AsyncSession, Depends(get_db)]
 CurrentAdmin = Annotated[AdminUser, Depends(get_current_admin)]
 
 
+class _MfaVerifyIn(BaseModel):
+    mfa_token: str
+    code: str
+
+
+class _CodeIn(BaseModel):
+    code: str
+
+
+class _PasswordIn(BaseModel):
+    password: str
+
+
+class _ProfileIn(BaseModel):
+    name: str | None = None
+    email: str | None = None
+
+
 # ---------------------------------------------------------------- auth
-@router.post("/auth/login", response_model=TokenOut)
+@router.post("/auth/login")
 async def login(
     body: AdminLoginIn,
     db: DbDep,
     _rl: Annotated[None, Depends(rate_limit("10/minute", scope="admin-login"))],
 ):
-    _, pair = await service.authenticate(db, body.email, body.password)
+    admin = await service.verify_credentials(db, body.email, body.password)
+    if admin.totp_enabled:
+        return {"mfa_required": True, "mfa_token": service.mfa_challenge_token(str(admin.id))}
+    pair = await service.issue_session(db, admin)
+    return {"mfa_required": False, **TokenOut(**pair).model_dump()}
+
+
+@router.post("/auth/2fa/verify", response_model=TokenOut)
+async def mfa_verify(
+    body: _MfaVerifyIn,
+    db: DbDep,
+    _rl: Annotated[None, Depends(rate_limit("10/minute", scope="admin-login"))],
+):
+    _, pair = await service.resolve_mfa_challenge(db, body.mfa_token, body.code)
     return TokenOut(**pair)
+
+
+@router.post("/auth/2fa/start")
+async def mfa_start(db: DbDep, admin: CurrentAdmin) -> dict:
+    return await service.start_2fa(db, admin)
+
+
+@router.post("/auth/2fa/confirm")
+async def mfa_confirm(body: _CodeIn, db: DbDep, admin: CurrentAdmin) -> dict:
+    codes = await service.confirm_2fa(db, admin, body.code)
+    return {"recovery_codes": codes}
+
+
+@router.post("/auth/2fa/disable", status_code=status.HTTP_204_NO_CONTENT)
+async def mfa_disable(body: _PasswordIn, db: DbDep, admin: CurrentAdmin) -> None:
+    await service.disable_2fa(db, admin, body.password)
+
+
+@router.patch("/auth/me", response_model=AdminUserOut)
+async def update_me(body: _ProfileIn, db: DbDep, admin: CurrentAdmin):
+    updated = await service.update_own_profile(db, admin, body.name, body.email)
+    return AdminUserOut.model_validate({**updated.__dict__, "id": str(updated.id)})
 
 
 @router.post("/auth/refresh", response_model=TokenOut)
@@ -155,89 +209,173 @@ async def dashboard(
     _: CurrentAdmin,
     date_from: str | None = None,
     date_to: str | None = None,
+    metric: str = "revenue",
 ):
-    from datetime import UTC, date, datetime, time
+    from datetime import UTC, datetime, timedelta
 
-    from app.modules.orders.models import Order
-    from app.modules.products.models import ProductVariant
+    from app.modules.orders.models import Order, OrderItem, OrderNumberCounter
 
     now = datetime.now(UTC)
+    if metric not in ("revenue", "canceled", "refunded"):
+        metric = "revenue"
+
+    # "AAAA-MM-DD" é interpretado como dia no FUSO DA LOJA e convertido para
+    # UTC (início/fim do dia). Sem isso, o "Até" cortava o dia e pedidos da
+    # noite caíam no dia errado — o filtro de datas não batia com a lista.
+    from app.shared.timez import parse_day_bound as _parse_bound
 
     def _parse(raw: str | None, *, end: bool) -> datetime | None:
-        """Aceita ISO completo (com fuso, vindo do navegador) ou só a data."""
-        if not raw:
-            return None
-        try:
-            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-            return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
-        except ValueError:
-            pass
-        try:
-            d = date.fromisoformat(raw)
-            return datetime.combine(d, time.max if end else time.min, tzinfo=UTC)
-        except ValueError:
-            return None
+        return _parse_bound(raw, end=end)
 
-    # janela de análise: filtro informado, senão "hoje" (contagem) e "mês" (receita)
+    # Janela: filtro informado, senão os últimos 30 dias.
     win_start = _parse(date_from, end=False)
     win_end = _parse(date_to, end=True)
+    if win_start is None and win_end is None:
+        win_end = now
+        win_start = now - timedelta(days=30)
+    elif win_start is None:
+        win_start = win_end - timedelta(days=30)
+    elif win_end is None:
+        win_end = now
+    window_days = max(1, (win_end - win_start).days or 1)
 
-    start_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    start_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    ranged = win_start is not None or win_end is not None
+    def _in_window(col):
+        return [col >= win_start, col <= win_end]
 
-    count_start = win_start if ranged else start_day
-    rev_start = win_start if ranged else start_month
-
-    def _between(col):
-        conds = []
-        if count_start is not None:
-            conds.append(col >= count_start)
-        if win_end is not None:
-            conds.append(col <= win_end)
-        return conds
-
-    orders_today = await db.scalar(
-        select(func.count()).select_from(Order).where(*_between(Order.placed_at))
+    orders_period = await db.scalar(
+        select(func.count()).select_from(Order).where(*_in_window(Order.placed_at))
     )
     orders_pending = await db.scalar(
         select(func.count()).select_from(Order).where(Order.status == "pending_payment")
     )
-    rev_conds = [Order.payment_status == "paid"]
-    if rev_start is not None:
-        rev_conds.append(Order.placed_at >= rev_start)
-    if win_end is not None:
-        rev_conds.append(Order.placed_at <= win_end)
-    revenue_month = await db.scalar(
-        select(func.coalesce(func.sum(Order.grand_total_cents), 0)).where(*rev_conds)
+    orders_canceled = await db.scalar(
+        select(func.count())
+        .select_from(Order)
+        .where(Order.status == "canceled", *_in_window(Order.created_at))
     )
-    low_stock = await db.scalar(
-        select(func.count()).select_from(ProductVariant).where(
-            ProductVariant.is_active.is_(True), ProductVariant.stock_qty <= 3
+    orders_refunded = await db.scalar(
+        select(func.count())
+        .select_from(Order)
+        .where(Order.status == "refunded", *_in_window(Order.created_at))
+    )
+    revenue_period = await db.scalar(
+        select(func.coalesce(func.sum(Order.grand_total_cents), 0)).where(
+            Order.payment_status == "paid", *_in_window(Order.placed_at)
         )
     )
-    recent_stmt = select(Order)
-    if ranged:
-        recent_stmt = recent_stmt.where(*_between(Order.placed_at))
-    recent = await db.scalars(
-        recent_stmt.order_by(Order.placed_at.desc().nullslast()).limit(10)
+
+    _to_ship_status = ("paid", "processing", "tracking_available")
+    orders_to_ship = await db.scalar(
+        select(func.count()).select_from(Order).where(Order.status.in_(_to_ship_status))
     )
+    orders_late = await db.scalar(
+        select(func.count())
+        .select_from(Order)
+        .where(
+            Order.status.in_(_to_ship_status),
+            Order.placed_at < now - timedelta(days=2),
+        )
+    )
+    # total histórico de pedidos — contador monotônico por ano, nunca diminui.
+    total_all_time = await db.scalar(
+        select(func.coalesce(func.sum(OrderNumberCounter.last_seq), 0))
+    )
+
+    # --- série temporal: período atual x período anterior (mesma duração) --
+    span = max(win_end - win_start, timedelta(hours=1))
+    if span <= timedelta(days=2):
+        step = timedelta(hours=1)
+    else:
+        days = span.days + 1
+        step = timedelta(days=max(1, days // 31 + (1 if days % 31 else 0)))
+    n_buckets = max(1, min(60, int(span / step) + 1))
+
+    async def _series(anchor_start):
+        pts = []
+        for i in range(n_buckets):
+            b0 = anchor_start + step * i
+            b1 = b0 + step
+            if metric == "revenue":
+                val = await db.scalar(
+                    select(func.coalesce(func.sum(Order.grand_total_cents), 0)).where(
+                        Order.payment_status == "paid",
+                        Order.placed_at >= b0,
+                        Order.placed_at < b1,
+                    )
+                )
+            else:
+                st = "canceled" if metric == "canceled" else "refunded"
+                val = await db.scalar(
+                    select(func.count())
+                    .select_from(Order)
+                    .where(Order.status == st, Order.created_at >= b0, Order.created_at < b1)
+                )
+            label = b0.strftime("%d/%m") if step >= timedelta(days=1) else b0.strftime("%d/%m %Hh")
+            pts.append({"label": label, "cents": int(val or 0)})
+        return pts
+
+    series_current = await _series(win_start)
+    series_previous = await _series(win_start - step * n_buckets)
+
+    # --- curva ABC + top 10 (por receita dos itens de pedidos pagos) -------
+    item_conds = [
+        Order.payment_status == "paid",
+        Order.placed_at >= win_start,
+        Order.placed_at <= win_end,
+    ]
+
+    agg_rows = (
+        await db.execute(
+            select(
+                func.coalesce(OrderItem.name, "—").label("name"),
+                func.min(OrderItem.sku).label("sku"),
+                func.sum(OrderItem.quantity).label("units"),
+                func.sum(OrderItem.total_cents).label("revenue"),
+            )
+            .join(Order, Order.id == OrderItem.order_id)
+            .where(*item_conds)
+            .group_by(OrderItem.name)
+            .order_by(func.sum(OrderItem.total_cents).desc())
+        )
+    ).all()
+
+    total_rev = sum(int(r.revenue or 0) for r in agg_rows) or 1
+    abc_curve = []
+    running = 0
+    for r in agg_rows:
+        rev = int(r.revenue or 0)
+        running += rev
+        cum = running / total_rev * 100
+        cls = "A" if cum <= 80 else "B" if cum <= 95 else "C"
+        abc_curve.append(
+            {"name": r.name, "revenue_cents": rev, "cum_pct": round(cum, 1), "cls": cls}
+        )
+
+    top_products = [
+        {
+            "name": r.name,
+            "sku": r.sku or "",
+            "units": int(r.units or 0),
+            "revenue_cents": int(r.revenue or 0),
+        }
+        for r in agg_rows[:10]
+    ]
+
     return DashboardOut(
-        orders_today=int(orders_today or 0),
+        window_days=window_days,
+        orders_period=int(orders_period or 0),
         orders_pending=int(orders_pending or 0),
-        revenue_month_cents=int(revenue_month or 0),
-        low_stock_count=int(low_stock or 0),
-        recent_orders=[
-            {
-                "number": o.number,
-                "status": o.status,
-                "payment_status": o.payment_status,
-                "total_cents": o.grand_total_cents,
-                "email": o.email,
-                "placed_at": o.placed_at.isoformat() if o.placed_at else None,
-            }
-            for o in recent
-        ],
+        orders_late=int(orders_late or 0),
+        orders_to_ship=int(orders_to_ship or 0),
+        orders_canceled=int(orders_canceled or 0),
+        orders_refunded=int(orders_refunded or 0),
+        revenue_period_cents=int(revenue_period or 0),
+        total_orders_all_time=int(total_all_time or 0),
+        series_metric=metric,
+        series_current=series_current,
+        series_previous=series_previous,
+        abc_curve=abc_curve,
+        top_products=top_products,
     )
 
 

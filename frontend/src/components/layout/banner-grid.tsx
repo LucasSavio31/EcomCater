@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { Banner } from '@/modules/banners/types';
 import { resolveMediaUrl } from '@/lib/media';
+import { TrackedPromotion } from '@/components/analytics/tracked-promotion';
 
 interface BannerGridProps {
   banners: Banner[];
@@ -48,13 +49,22 @@ export function BannerGrid({ banners, variant = 'hero', priority = false }: Bann
 
         return (
           <li key={banner.id}>
-            {banner.link_url ? (
-              <Link href={banner.link_url} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-                {inner}
-              </Link>
-            ) : (
-              inner
-            )}
+            <TrackedPromotion
+              promo={{
+                promotion_id: banner.id,
+                promotion_name: banner.title ?? undefined,
+                creative_name: banner.title ?? `${banner.slot}-${i + 1}`,
+                creative_slot: banner.slot,
+              }}
+            >
+              {banner.link_url ? (
+                <Link href={banner.link_url} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                  {inner}
+                </Link>
+              ) : (
+                inner
+              )}
+            </TrackedPromotion>
           </li>
         );
       })}

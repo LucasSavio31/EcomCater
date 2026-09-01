@@ -46,6 +46,15 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         "<h2>Estamos preparando seu pedido 📦</h2>"
         "<p>O pedido <b>{{ number }}</b> entrou em separação e logo será enviado.</p>",
     ),
+    "order_tracking_available": (
+        "Pedido {{ number }}: código de rastreio disponível",
+        "<h2>Seu rastreio já está disponível 🔎</h2>"
+        "<p>A etiqueta do pedido <b>{{ number }}</b> foi emitida e o código de "
+        "rastreio já está disponível."
+        "{% if tracking %} Código: <b>{{ tracking }}</b>{% endif %}</p>"
+        "{% if tracking_url %}<p><a href='{{ tracking_url }}'>Acompanhar entrega</a></p>{% endif %}"
+        "<p>Assim que o objeto for postado nos Correios você recebe um novo aviso.</p>",
+    ),
     "order_shipped": (
         "Seu pedido {{ number }} foi enviado",
         "<h2>Pedido a caminho 🚚</h2>"
@@ -232,19 +241,23 @@ async def send(
     msg.add_alternative(html, subtype="html")
 
     status, error = "sent", None
-    try:
-        await aiosmtplib.send(
-            msg,
-            hostname=conf["host"],
-            port=conf["port"],
-            username=conf["username"] or None,
-            password=conf["password"] or None,
-            start_tls=bool(conf["use_tls"]),
-            timeout=15,
-        )
-    except Exception as exc:  # noqa: BLE001
-        status, error = "failed", str(exc)[:400]
-        logger.warning("falha ao enviar e-mail '%s' para %s: %s", template, to, error)
+    if settings.api_env == "test":
+        # não abre conexão SMTP real na suíte; só registra o EmailLog
+        pass
+    else:
+        try:
+            await aiosmtplib.send(
+                msg,
+                hostname=conf["host"],
+                port=conf["port"],
+                username=conf["username"] or None,
+                password=conf["password"] or None,
+                start_tls=bool(conf["use_tls"]),
+                timeout=15,
+            )
+        except Exception as exc:  # noqa: BLE001
+            status, error = "failed", str(exc)[:400]
+            logger.warning("falha ao enviar e-mail '%s' para %s: %s", template, to, error)
 
     db.add(
         EmailLog(

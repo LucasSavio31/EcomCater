@@ -92,14 +92,19 @@ async def send_purchase(
     fbc: str | None = None,
 ) -> bool:
     addr = order.shipping_address_json or {}
+    name_parts = (addr.get("recipient_name") or "").split()
+    first_name = name_parts[0] if name_parts else ""
+    last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
     user_data = {
         "em": [_hash(order.email)] if order.email else None,
         "ph": [_hash_phone(addr.get("phone"))] if addr.get("phone") else None,
-        "fn": [_hash(addr.get("recipient_name", "").split(" ")[0])] if addr.get("recipient_name") else None,
-        "ct": [_hash(addr.get("city"))] if addr.get("city") else None,
+        "fn": [_hash(first_name)] if first_name else None,
+        "ln": [_hash(last_name)] if last_name else None,
+        "ct": [_hash((addr.get("city") or "").replace(" ", ""))] if addr.get("city") else None,
         "st": [_hash(addr.get("state"))] if addr.get("state") else None,
-        "zp": [_hash(addr.get("zip"))] if addr.get("zip") else None,
-        "country": [_hash("br")],
+        "zp": [_hash_phone(addr.get("zip"))] if addr.get("zip") else None,
+        "country": [_hash(addr.get("country") or "BR")],
+        "external_id": [_hash(order.cpf)] if order.cpf else None,
         "client_ip_address": client_ip,
         "client_user_agent": client_ua,
         "fbp": fbp,

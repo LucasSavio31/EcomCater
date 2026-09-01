@@ -37,6 +37,12 @@ async def upload_theme_image(
     return service.theme_out(row)
 
 
+@router.delete("/image/{kind}")
+async def delete_theme_image(kind: str, db: DbDep, _: EditorDep) -> dict:
+    row = await service.remove_theme_image(db, kind)
+    return service.theme_out(row)
+
+
 @router.post("/seal-image/{column}/{index}")
 async def upload_seal_image(
     column: str,

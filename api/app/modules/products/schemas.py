@@ -110,8 +110,8 @@ class ReviewIn(BaseModel):
     # nome vem do cliente logado; mantido opcional só por compatibilidade
     author_name: str | None = Field(default=None, max_length=160)
     rating: int = Field(ge=1, le=5)
-    title: str | None = None
-    body: str | None = None
+    title: str | None = Field(default=None, max_length=140)
+    body: str | None = Field(default=None, max_length=2000)
 
 
 class ReviewOut(BaseModel):

@@ -4,6 +4,8 @@ export interface ProductListItem {
   id: string;
   name: string;
   slug: string;
+  /** SKU-pai (item_group_id no Merchant Center) — usado como item_id em listas. */
+  sku_root: string | null;
   brand: string | null;
   price_cents: number;
   compare_at_price_cents: number | null;
@@ -190,6 +192,9 @@ export interface ProductDetail {
 export interface SearchResultItem {
   type: 'product' | 'category';
   id: string;
+  /** presente só em produtos */
+  sku_root?: string | null;
+  brand?: string | null;
   name: string;
   slug: string;
   url: string;

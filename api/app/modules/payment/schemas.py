@@ -26,9 +26,11 @@ class ChargeOut(BaseModel):
     status: str
     amount_cents: int
     pix_qr_code: str | None = None
+    pix_qr_data_uri: str | None = None
     pix_expires_at: str | None = None
     boleto_url: str | None = None
     boleto_barcode: str | None = None
+    boleto_barcode_data_uri: str | None = None
 
 
 class PaymentStatusOut(BaseModel):

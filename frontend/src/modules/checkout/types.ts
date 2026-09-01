@@ -28,6 +28,12 @@ export interface CheckoutPayload {
   customer_note?: string | null;
   shipping_service_id?: string | null;
   idempotency_key?: string | null;
+  /** Cookies `_fbp` / `_fbc` do Meta Pixel + landing page (Conversions API). */
+  fbp?: string;
+  fbc?: string;
+  /** client_id do GA4 (cookie `_ga`) — usado no evento `refund` server-side. */
+  ga_client_id?: string;
+  landing_url?: string;
 }
 
 export interface OrderItem {
@@ -103,9 +109,13 @@ export interface ChargeResult {
   status: string;
   amount_cents: number;
   pix_qr_code: string | null;
+  /** QR do PIX pronto (PNG data URI) — não precisa gerar no cliente. */
+  pix_qr_data_uri: string | null;
   pix_expires_at: string | null;
   boleto_url: string | null;
   boleto_barcode: string | null;
+  /** Código de barras do boleto pronto (SVG data URI). */
+  boleto_barcode_data_uri: string | null;
 }
 
 export interface PaymentStatus {

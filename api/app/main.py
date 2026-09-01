@@ -20,10 +20,29 @@ logger = logging.getLogger("api")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # em produção, não sobe com segredos padrão de dev
+    settings.assert_prod_secrets()
     # garante o diretório de mídia local
     if settings.storage_backend == "local":
         Path(settings.storage_local_dir).mkdir(parents=True, exist_ok=True)
-    yield
+    # agendador interno de backup (ver app/modules/system/scheduler.py)
+    from app.modules.system import scheduler as backup_scheduler
+
+    # rotina de sincronização de rastreio com o Melhor Envio
+    from app.modules.shipping import scheduler as me_tracking_scheduler
+
+    # amostragem de saúde dos serviços a cada janela de 15 min
+    from app.modules.system import health_scheduler
+
+    backup_scheduler.start()
+    me_tracking_scheduler.start()
+    health_scheduler.start()
+    try:
+        yield
+    finally:
+        await backup_scheduler.stop()
+        await me_tracking_scheduler.stop()
+        await health_scheduler.stop()
 
 
 def create_app() -> FastAPI:
@@ -33,9 +52,22 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Só em dev: libera localhost e qualquer IP de LAN privada (192.168/10/172.16-31)
+    # em qualquer porta — necessário para abrir a loja pelo IP da máquina no celular.
+    dev_lan_regex = (
+        None
+        if settings.is_prod
+        else (
+            r"^http://(localhost|127\.0\.0\.1|"
+            r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+            r"192\.168\.\d{1,3}\.\d{1,3}|"
+            r"172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$"
+        )
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
+        allow_origin_regex=dev_lan_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

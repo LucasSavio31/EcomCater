@@ -50,6 +50,24 @@ export function formatPercent(value: number | null | undefined): string {
   return `${value.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
 }
 
+/**
+ * Remove acentos e baixa a caixa — para comparar buscas/filtros digitados
+ * com ou sem acento ("acucar" casa com "Açúcar"). Todo filtro textual do
+ * painel deve passar os dois lados por aqui.
+ */
+export function foldAccents(text: string): string {
+  return text
+    .normalize('NFD')
+    .split('')
+    .filter((ch) => {
+      const code = ch.codePointAt(0) ?? 0;
+      return code < 0x0300 || code > 0x036f;
+    })
+    .join('')
+    .toLowerCase()
+    .trim();
+}
+
 /** Slug simples para pré-visualização (o backend tem a versão canônica). */
 export function slugify(text: string): string {
   const stripped = text

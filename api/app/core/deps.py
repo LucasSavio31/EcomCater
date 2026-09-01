@@ -5,7 +5,7 @@ import uuid
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -65,6 +65,21 @@ async def get_current_admin(
     authorization: Annotated[str | None, Header()] = None,
 ) -> AdminUser:
     payload = await _decode(authorization, "admin")
+    admin = await db.get(AdminUser, uuid.UUID(payload["sub"]))
+    if not admin or not admin.is_active:
+        raise AuthError("Admin não encontrado ou inativo.")
+    return admin
+
+
+async def get_current_admin_downloadable(
+    db: DbDep,
+    authorization: Annotated[str | None, Header()] = None,
+    token: Annotated[str | None, Query()] = None,
+) -> AdminUser:
+    """Igual a get_current_admin, mas aceita o access token também por `?token=`
+    — para links de download/impressão abertos direto no navegador (sem header)."""
+    auth = authorization or (f"Bearer {token}" if token else None)
+    payload = await _decode(auth, "admin")
     admin = await db.get(AdminUser, uuid.UUID(payload["sub"]))
     if not admin or not admin.is_active:
         raise AuthError("Admin não encontrado ou inativo.")

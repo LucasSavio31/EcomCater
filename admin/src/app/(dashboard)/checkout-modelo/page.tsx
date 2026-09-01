@@ -71,8 +71,11 @@ export default function CheckoutModeloPage() {
       checkout_allow_qty_change: theme.checkout_allow_qty_change,
       checkout_footer_note: theme.checkout_footer_note,
       checkout_animated_card: theme.checkout_animated_card,
+      checkout_payment_icons_enabled: theme.checkout_payment_icons_enabled,
+      checkout_steps_enabled: theme.checkout_steps_enabled,
       checkout_show_review: theme.checkout_show_review,
       checkout_review_position: theme.checkout_review_position,
+      checkout_order_notes_enabled: theme.checkout_order_notes_enabled,
       checkout_orderbump_enabled: theme.checkout_orderbump_enabled,
       checkout_orderbump_product_id: theme.checkout_orderbump_product_id ?? '',
       checkout_orderbump_product_ids: theme.checkout_orderbump_product_ids ?? [],
@@ -126,10 +129,28 @@ export default function CheckoutModeloPage() {
                 onChange={(v) => set('checkout_allow_qty_change', v)}
               />
               <Checkbox
+                label='Exibir caixa "Observações do pedido"'
+                hint="Campo livre e opcional para o cliente deixar um recado junto do pedido."
+                checked={theme.checkout_order_notes_enabled}
+                onChange={(v) => set('checkout_order_notes_enabled', v)}
+              />
+              <Checkbox
                 label="Cartão de crédito animado"
                 hint="Mostra um cartão que atualiza e vira ao focar o CVV."
                 checked={theme.checkout_animated_card}
                 onChange={(v) => set('checkout_animated_card', v)}
+              />
+              <Checkbox
+                label="Ícones das formas de pagamento"
+                hint="Mostra o ícone do PIX, do cartão e do boleto ao lado de cada opção."
+                checked={theme.checkout_payment_icons_enabled}
+                onChange={(v) => set('checkout_payment_icons_enabled', v)}
+              />
+              <Checkbox
+                label="Exibir a linha do tempo das etapas (1 2 3 4)"
+                hint="A barra de progresso no topo do checkout."
+                checked={theme.checkout_steps_enabled}
+                onChange={(v) => set('checkout_steps_enabled', v)}
               />
               <Checkbox
                 label="Exibir a revisão do pedido"

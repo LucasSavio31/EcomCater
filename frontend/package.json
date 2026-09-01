@@ -5,6 +5,8 @@
   "description": "Loja (Next.js App Router) — porta 3000.",
   "scripts": {
     "dev": "next dev -p 3000",
+    "dev:turbo": "next dev --turbopack -p 3000",
+    "dev:webpack": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",

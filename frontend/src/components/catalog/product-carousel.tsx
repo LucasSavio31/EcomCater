@@ -8,10 +8,18 @@ import { ProductCard } from './product-card';
 interface ProductCarouselProps {
   products: ProductListItem[];
   ariaLabel: string;
+  /** Lista de origem (GA4 `select_item`). */
+  listId?: string;
+  listName?: string;
 }
 
 /** Carrossel horizontal com scroll-snap + setas (desktop). Teclado: setas nativas do scroll. */
-export function ProductCarousel({ products, ariaLabel }: ProductCarouselProps) {
+export function ProductCarousel({
+  products,
+  ariaLabel,
+  listId,
+  listName,
+}: ProductCarouselProps) {
   const trackRef = useRef<HTMLUListElement>(null);
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(false);
@@ -58,12 +66,18 @@ export function ProductCarousel({ products, ariaLabel }: ProductCarouselProps) {
         ref={trackRef}
         className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-2 lg:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {products.map((product) => (
+        {products.map((product, i) => (
           <li
             key={product.id}
             className="w-[46%] shrink-0 snap-start sm:w-[38%] md:w-[30%] lg:w-[23%]"
           >
-            <ProductCard product={product} className="h-full" />
+            <ProductCard
+              product={product}
+              className="h-full"
+              listId={listId}
+              listName={listName ?? ariaLabel}
+              index={i}
+            />
           </li>
         ))}
       </ul>

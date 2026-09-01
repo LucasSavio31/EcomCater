@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from 'react';
 import { cn } from '../lib/cn';
 
-export type BadgeTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
+export type BadgeTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: BadgeTone;
@@ -13,6 +13,7 @@ const TONES: Record<BadgeTone, string> = {
   success: 'bg-success text-white',
   warning: 'bg-warning text-white',
   danger: 'bg-danger text-white',
+  info: 'bg-blue-600 text-white',
 };
 
 export function Badge({ tone = 'neutral', className, ...rest }: BadgeProps) {

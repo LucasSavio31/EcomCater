@@ -21,6 +21,7 @@ from app.modules.admin.models import AdminUser
 from app.modules.customers.models import CustomerAddress, User
 from app.modules.orders.models import Order
 from app.shared.cpf import is_valid_cpf, only_digits
+from app.shared.search import ilike_unaccent
 
 router = APIRouter()
 
@@ -28,7 +29,7 @@ DbDep = Annotated[AsyncSession, Depends(get_db)]
 AdminDep = Annotated[AdminUser, Depends(get_current_admin)]
 EditorDep = Annotated[AdminUser, Depends(require_role("admin", "staff"))]
 
-_ACTIVE_STATUSES = ("pending_payment", "paid", "processing")
+_ACTIVE_STATUSES = ("pending_payment", "paid", "processing", "tracking_available")
 _ADDR_FIELDS = (
     "label", "recipient_name", "zip", "street", "number", "complement",
     "district", "city", "state", "country", "is_default",
@@ -98,15 +99,28 @@ async def list_customers(
     db: DbDep,
     _: AdminDep,
     q: str | None = None,
+    min_orders: int = Query(0, ge=0),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
 ) -> dict:
     stmt = select(User)
     if q:
-        like = f"%{q.strip()}%"
+        term = q.strip()
         stmt = stmt.where(
-            or_(User.email.ilike(like), User.full_name.ilike(like), User.cpf.ilike(like))
+            or_(
+                ilike_unaccent(User.email, term),
+                ilike_unaccent(User.full_name, term),
+                ilike_unaccent(User.cpf, term),
+            )
         )
+    if min_orders > 0:
+        buyers = (
+            select(Order.user_id)
+            .where(Order.user_id.is_not(None), Order.status != "canceled")
+            .group_by(Order.user_id)
+            .having(func.count(Order.id) >= min_orders)
+        )
+        stmt = stmt.where(User.id.in_(buyers))
     total = int(await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
     users = list(
         await db.scalars(
@@ -132,6 +146,40 @@ async def list_customers(
         n, spent = stats.get(str(u.id), (0, 0))
         items.append({**_user_out(u), "orders_count": n, "total_spent_cents": spent})
     return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/stats")
+async def customer_stats(db: DbDep, _: AdminDep) -> dict:
+    """Métricas da base de clientes (histórico completo).
+
+    Rastreio: cada pedido feito por conta logada grava `Order.user_id`; daí
+    saem "quem comprou" (>=1 pedido não cancelado) e "recorrentes" (>=2).
+    """
+    registered = int(await db.scalar(select(func.count()).select_from(User)) or 0)
+    per_customer = (
+        select(func.count(Order.id).label("n"))
+        .where(Order.user_id.is_not(None), Order.status != "canceled")
+        .group_by(Order.user_id)
+        .subquery()
+    )
+    purchased = int(
+        await db.scalar(
+            select(func.count()).select_from(per_customer).where(per_customer.c.n >= 1)
+        )
+        or 0
+    )
+    recurring = int(
+        await db.scalar(
+            select(func.count()).select_from(per_customer).where(per_customer.c.n >= 2)
+        )
+        or 0
+    )
+    return {
+        "registered": registered,
+        "purchased": purchased,
+        "recurring": recurring,
+        "recurrence_rate_pct": round(recurring / purchased * 100, 1) if purchased else 0.0,
+    }
 
 
 @router.get("/{cid}")
@@ -306,16 +354,23 @@ async def _delete_customer(db: AsyncSession, cid: str) -> None:
 
 
 @router.delete("/{cid}", status_code=204)
-async def delete_customer(cid: str, db: DbDep, _: EditorDep) -> None:
+async def delete_customer(cid: str, db: DbDep, _: EditorDep, confirm: bool = Query(default=False)) -> None:
+    from app.core.guard import require_confirmation
+
+    require_confirmation(confirm, what="excluir um cliente")
     await _delete_customer(db, cid)
 
 
 class BulkDeleteIn(BaseModel):
     ids: list[str]
+    confirm: bool = False
 
 
 @router.post("/delete")
 async def delete_customers(body: BulkDeleteIn, db: DbDep, _: EditorDep) -> dict:
+    from app.core.guard import require_confirmation
+
+    require_confirmation(body.confirm, what="excluir clientes em lote")
     n = 0
     for cid in body.ids:
         try:

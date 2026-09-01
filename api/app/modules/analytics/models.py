@@ -38,6 +38,9 @@ class AnalyticsSettings(Base):
     # Google Analytics 4
     ga4_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     ga4_measurement_id: Mapped[str | None] = mapped_column(String(20))  # G-XXXXXXXXXX
+    # Measurement Protocol (server-side) — usado só para `refund` do backend.
+    # Segredo: nunca exposto na rota pública/admin (só `ga4_api_secret_set`).
+    ga4_api_secret: Mapped[str | None] = mapped_column(Text)
 
     # Google Ads
     google_ads_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)

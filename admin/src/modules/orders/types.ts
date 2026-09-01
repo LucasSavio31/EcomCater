@@ -2,6 +2,7 @@ export type OrderStatus =
   | 'pending_payment'
   | 'paid'
   | 'processing'
+  | 'tracking_available'
   | 'shipped'
   | 'delivered'
   | 'canceled'
@@ -21,6 +22,14 @@ export interface OrderListItem {
   items_summary: string;
   items_count: number;
   suppliers: string[];
+  /**
+   * Etiqueta Melhor Envio:
+   *  - 'ready'     = tem código de rastreio, liberada p/ imprimir
+   *  - 'waiting'   = PDF pronto, aguardando o rastreio do ME
+   *  - 'purchased' = enviada ao ME, gerando o PDF
+   *  - 'none'      = sem etiqueta
+   */
+  me_label?: 'ready' | 'waiting' | 'purchased' | 'none';
 }
 
 export interface OrderPayment {
@@ -73,6 +82,22 @@ export interface OrderAddress {
   phone?: string;
 }
 
+export interface ShippingServiceInfo {
+  id?: string | number;
+  service_id?: string | number;
+  service?: string;
+  carrier?: string;
+  price_cents?: number;
+  delivery_days?: number;
+  /** Melhor Envio (etiqueta) */
+  shipment_id?: string;
+  protocol?: string;
+  tracking_code?: string;
+  label_url?: string;
+  me_status?: string;
+  me_reminder?: string;
+}
+
 export interface OrderDetail {
   number: string;
   status: OrderStatus;
@@ -88,19 +113,22 @@ export interface OrderDetail {
   grand_total_cents: number;
   coupon_code: string | null;
   shipping_method: string | null;
-  shipping_service: string | null;
+  shipping_service: ShippingServiceInfo | null;
   shipping_address: OrderAddress | null;
   customer_note: string | null;
   placed_at: string;
   events: OrderEvent[];
   payment?: OrderPayment | null;
+  /** PNG (data URI) do QR com o número do pedido — só no GET individual. */
+  qr_data_uri?: string;
 }
 
 /** Transições válidas por status atual (espelha o backend). */
 export const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending_payment: ['paid', 'canceled'],
-  paid: ['processing', 'canceled', 'refunded'],
-  processing: ['shipped', 'canceled', 'refunded'],
+  paid: ['processing', 'tracking_available', 'canceled', 'refunded'],
+  processing: ['tracking_available', 'shipped', 'canceled', 'refunded'],
+  tracking_available: ['shipped', 'delivered', 'canceled', 'refunded'],
   shipped: ['delivered', 'refunded'],
   delivered: ['refunded'],
   canceled: [],

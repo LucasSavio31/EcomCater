@@ -16,14 +16,33 @@ from sqlalchemy.orm import selectinload
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError, ValidationError
 from app.core.events import emit
 from app.modules.orders.models import Order, OrderEvent, OrderItem
-from app.modules.products.models import Product, ProductVariant
+from app.modules.products.models import Product, ProductVariant, VariantOptionValue
+from app.shared.search import ilike_unaccent
 from app.shared.storage import storage
+
+
+def _variant_attrs_from_variant(v: ProductVariant) -> dict | None:
+    """Separa os valores da variação comprada em cor / número, olhando o tipo de
+    cada eixo de opção (is_color / is_size / nome)."""
+    cor = numero = None
+    for ov in getattr(v, "option_values", None) or []:
+        ot = getattr(ov, "option_type", None)
+        name = (getattr(ot, "name", "") or "").lower()
+        if ot is not None and (ot.is_color or "cor" in name):
+            cor = cor or ov.value
+        elif ot is not None and (ot.is_size or "num" in name or "tam" in name):
+            numero = numero or ov.value
+        elif numero is None:
+            numero = ov.value  # eixo genérico: cai em "número / tamanho"
+    attrs = {k: val for k, val in (("cor", cor), ("numero", numero)) if val}
+    return attrs or None
 
 # transições permitidas (status do pedido)
 _TRANSITIONS: dict[str, set[str]] = {
     "pending_payment": {"paid", "canceled"},
-    "paid": {"processing", "canceled", "refunded"},
-    "processing": {"shipped", "canceled", "refunded"},
+    "paid": {"processing", "tracking_available", "canceled", "refunded"},
+    "processing": {"tracking_available", "shipped", "canceled", "refunded"},
+    "tracking_available": {"shipped", "delivered", "canceled", "refunded"},
     "shipped": {"delivered", "refunded"},
     "delivered": {"refunded"},
     "canceled": set(),
@@ -41,13 +60,18 @@ def _uuid(v: str | uuid.UUID) -> uuid.UUID:
 
 
 async def generate_number(db: AsyncSession) -> str:
+    """Numeração monotônica por ano: sempre incrementa, nunca reutiliza (mesmo
+    após excluir/cancelar pedido)."""
     year = datetime.now(UTC).year
-    # serializa a numeração do ano corrente
-    await db.execute(text("SELECT pg_advisory_xact_lock(:k)").bindparams(k=int(f"77{year}")))
-    count = await db.scalar(
-        select(func.count(Order.id)).where(Order.number.like(f"{year}-%"))
+    seq = await db.scalar(
+        text(
+            "INSERT INTO order_number_counters (year, last_seq) VALUES (:y, 1) "
+            "ON CONFLICT (year) DO UPDATE "
+            "SET last_seq = order_number_counters.last_seq + 1 "
+            "RETURNING last_seq"
+        ).bindparams(y=year)
     )
-    return f"{year}-{int(count or 0) + 1:06d}"
+    return f"{year}-{int(seq):06d}"
 
 
 async def record_event(
@@ -85,6 +109,7 @@ async def create_from_cart(
     billing_address: dict | None,
     customer_note: str | None,
     idempotency_key: str | None = None,
+    marketing: dict | None = None,
 ) -> Order:
     from app.modules.cart.service import compute_totals
     from app.shared.cpf import is_valid_cpf, only_digits
@@ -110,7 +135,11 @@ async def create_from_cart(
             select(ProductVariant)
             .where(ProductVariant.id == item.variant_id)
             .with_for_update()
-            .options(selectinload(ProductVariant.option_values))
+            .options(
+                selectinload(ProductVariant.option_values).selectinload(
+                    VariantOptionValue.option_type
+                )
+            )
         )
         if not v or not v.is_active:
             raise ConflictError("Um item do carrinho ficou indisponível.")
@@ -146,6 +175,7 @@ async def create_from_cart(
         shipping_address_json=shipping_address,
         billing_address_json=billing_address,
         customer_note=customer_note,
+        marketing_json=marketing or None,
         placed_at=now,
     )
     db.add(order)
@@ -180,6 +210,7 @@ async def create_from_cart(
                 sku=v.sku,
                 name=product.name if product else v.sku,
                 variant_label=" / ".join(ov.value for ov in v.option_values) or None,
+                variant_attrs=_variant_attrs_from_variant(v),
                 supplier=product.supplier if product else None,
                 image_key=img_key,
                 unit_price_cents=item.unit_price_cents,
@@ -190,7 +221,8 @@ async def create_from_cart(
 
     await record_event(db, order, type="created", to_status="pending_payment", message="Pedido criado")
     await db.flush()
-    await emit("order.created", {"order_id": str(order.id), "number": order.number})
+    # o evento `order.created` é emitido pelo router DEPOIS do commit — os
+    # subscribers abrem a própria sessão e precisam enxergar o pedido gravado.
     return order
 
 
@@ -205,13 +237,25 @@ async def _load(db: AsyncSession, order_id: uuid.UUID) -> Order:
     return order
 
 
-async def get_by_number(db: AsyncSession, number: str, *, email: str | None = None) -> Order:
+async def get_by_number(
+    db: AsyncSession, number: str, *, email: str | None = None, require_email: bool = False
+) -> Order:
+    """Carrega um pedido pelo número.
+
+    `require_email=True` (contexto público/convidado): a chamada SÓ retorna se um
+    `email` correspondente for informado — impede enumeração de pedidos por
+    número. Sem `require_email` (uso interno/admin), retorna direto.
+    """
     order = await db.scalar(
         select(Order)
         .where(Order.number == number)
         .options(selectinload(Order.items), selectinload(Order.events))
     )
-    if not order or (email is not None and order.email.lower() != email.lower()):
+    if not order:
+        raise NotFoundError("Pedido não encontrado.")
+    if require_email and (not email or order.email.lower() != email.strip().lower()):
+        raise NotFoundError("Pedido não encontrado.")
+    if email is not None and not require_email and order.email.lower() != email.strip().lower():
         raise NotFoundError("Pedido não encontrado.")
     return order
 
@@ -219,6 +263,8 @@ async def get_by_number(db: AsyncSession, number: str, *, email: str | None = No
 def _payment_public(p) -> dict | None:
     if not p:
         return None
+    from app.modules.payment.codes import boleto_barcode_data_uri, pix_qr_data_uri
+
     return {
         "method": p.method,
         "status": p.status,
@@ -226,7 +272,12 @@ def _payment_public(p) -> dict | None:
         "installments": p.installments,
         "paid_at": p.paid_at.isoformat() if p.paid_at else None,
         "pix_qr_code": p.pix_qr_code,
+        "pix_qr_data_uri": pix_qr_data_uri(p.pix_qr_code) if p.pix_qr_code else None,
         "boleto_url": p.boleto_url,
+        "boleto_barcode": p.boleto_barcode,
+        "boleto_barcode_data_uri": (
+            boleto_barcode_data_uri(p.boleto_barcode) if p.boleto_barcode else None
+        ),
     }
 
 
@@ -301,7 +352,8 @@ async def order_pulse(
 
 
 _ORDER_STATUSES = (
-    "pending_payment", "paid", "processing", "shipped", "delivered", "canceled", "refunded",
+    "pending_payment", "paid", "processing", "tracking_available", "shipped",
+    "delivered", "canceled", "refunded",
 )
 
 
@@ -324,8 +376,11 @@ async def transition(
 
     if new_status == "paid":
         order.payment_status = "paid"
+        await _sync_payment_record(db, order, "paid")
     elif new_status == "processing":
         order.fulfillment_status = "unfulfilled"
+    elif new_status == "tracking_available":
+        order.fulfillment_status = "partial" if order.fulfillment_status in ("unfulfilled", "") else order.fulfillment_status
     elif new_status == "shipped":
         order.fulfillment_status = "fulfilled" if order.fulfillment_status == "fulfilled" else "partial"
     elif new_status == "delivered":
@@ -333,7 +388,9 @@ async def transition(
     elif new_status in ("canceled", "refunded"):
         if prev not in ("canceled", "refunded"):
             await _restore_stock(db, order)
-        order.payment_status = "refunded" if new_status == "refunded" else order.payment_status
+        if new_status == "refunded":
+            order.payment_status = "refunded"
+            await _sync_payment_record(db, order, "refunded")
 
     await record_event(
         db, order, type="status_changed", from_status=prev, to_status=new_status,
@@ -342,6 +399,25 @@ async def transition(
     await db.flush()
     await emit("order.status_changed", {"order_id": str(order.id), "status": new_status})
     return order
+
+
+async def _sync_payment_record(db: AsyncSession, order: Order, status: str) -> None:
+    """Reflete a mudança MANUAL de status do pedido no registro de pagamento
+    (o card "Pagamento" da tela do pedido). `paid` também carimba `paid_at`."""
+    from app.modules.payment.models import Payment
+
+    p = await db.scalar(
+        select(Payment)
+        .where(Payment.order_id == order.id)
+        .order_by(Payment.created_at.desc())
+    )
+    if not p or p.status == status:
+        return
+    if status == "paid" and p.status in ("refunded", "chargeback"):
+        return  # não "despaga" um estorno
+    p.status = status
+    if status == "paid" and not p.paid_at:
+        p.paid_at = datetime.now(UTC)
 
 
 async def _restore_stock(db: AsyncSession, order: Order) -> None:
@@ -484,8 +560,31 @@ async def attach_variation_options(db: AsyncSession, out: dict) -> dict:
         pid = item.get("product_id")
         if not pid:
             continue
-        item["cor_options"] = cor_by_pid.get(pid, [])
-        item["numero_options"] = num_by_pid.get(pid, [])
+        cor_opts = cor_by_pid.get(pid, [])
+        num_opts = num_by_pid.get(pid, [])
+        item["cor_options"] = cor_opts
+        item["numero_options"] = num_opts
+        # pedidos antigos não gravaram cor/número separados — deriva do rótulo
+        # da variação comprada ("Cor / 38") cruzando com as opções do produto
+        if not item.get("cor") or not item.get("numero"):
+            tokens = [t.strip() for t in (item.get("variant_label") or "").split("/") if t.strip()]
+            cl = {c.lower(): c for c in cor_opts}
+            nl = {n.lower(): n for n in num_opts}
+            for tok in tokens:
+                if not item.get("cor") and tok.lower() in cl:
+                    item["cor"] = cl[tok.lower()]
+                elif not item.get("numero") and tok.lower() in nl:
+                    item["numero"] = nl[tok.lower()]
+            # 2 tokens e só um eixo casou -> o outro token é o que falta
+            if len(tokens) == 2:
+                if item.get("cor") and not item.get("numero"):
+                    other = next((t for t in tokens if t != item["cor"]), None)
+                    if other:
+                        item["numero"] = other
+                elif item.get("numero") and not item.get("cor"):
+                    other = next((t for t in tokens if t != item["numero"]), None)
+                    if other:
+                        item["cor"] = other
         # na visão admin, prefere a imagem ATUAL do produto (o snapshot pode
         # apontar para um arquivo já removido)
         if pid in img_by_pid:
@@ -517,6 +616,15 @@ def list_item_out(order: Order) -> dict:
             summary += f" (x{items[0].quantity})"
     else:
         summary = f"{items[0].name} + {len(items) - 1} item(ns)"
+    svc = order.shipping_service_json or {}
+    if svc.get("tracking_code"):
+        me_label = "ready"
+    elif svc.get("label_url"):
+        me_label = "waiting"
+    elif svc.get("protocol") or svc.get("shipment_id"):
+        me_label = "purchased"
+    else:
+        me_label = "none"
     return {
         "id": str(order.id),
         "number": order.number,
@@ -531,6 +639,7 @@ def list_item_out(order: Order) -> dict:
         "items_summary": summary,
         "items_count": total_qty,
         "suppliers": sorted({i.supplier for i in items if i.supplier}),
+        "me_label": me_label,
     }
 
 
@@ -542,28 +651,40 @@ async def admin_list(
     q: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    bucket: str | None = None,
     page: int = 1,
     page_size: int = 25,
 ) -> dict:
-    from datetime import date
+    from datetime import timedelta
 
+    from app.shared.timez import local_today_start, parse_day_bound
+
+    _TO_SHIP = ("paid", "processing", "tracking_available")
     stmt = select(Order).options(selectinload(Order.items))
+    if bucket == "to_ship":
+        stmt = stmt.where(Order.status.in_(_TO_SHIP))
+    elif bucket == "late":
+        stmt = stmt.where(
+            Order.status.in_(_TO_SHIP),
+            Order.placed_at < datetime.now(UTC) - timedelta(days=2),
+        )
+    elif bucket == "today":
+        stmt = stmt.where(Order.placed_at >= local_today_start())
     if status:
         stmt = stmt.where(Order.status == status)
     if payment_status:
         stmt = stmt.where(Order.payment_status == payment_status)
     if q:
-        stmt = stmt.where((Order.number.ilike(f"%{q}%")) | (Order.email.ilike(f"%{q}%")))
-    if date_from:
-        try:
-            stmt = stmt.where(Order.created_at >= datetime.combine(date.fromisoformat(date_from), datetime.min.time(), tzinfo=UTC))
-        except ValueError:
-            pass
-    if date_to:
-        try:
-            stmt = stmt.where(Order.created_at <= datetime.combine(date.fromisoformat(date_to), datetime.max.time(), tzinfo=UTC))
-        except ValueError:
-            pass
+        stmt = stmt.where(ilike_unaccent(Order.number, q) | ilike_unaccent(Order.email, q))
+    # Filtra por placed_at, interpretando o dia escolhido no FUSO DA LOJA
+    # (mesma coluna e mesmos limites do dashboard → o card leva exatamente
+    # aos mesmos pedidos do período).
+    _df = parse_day_bound(date_from, end=False)
+    _dt = parse_day_bound(date_to, end=True)
+    if _df is not None:
+        stmt = stmt.where(Order.placed_at >= _df)
+    if _dt is not None:
+        stmt = stmt.where(Order.placed_at <= _dt)
     total = int(await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
     rows = await db.scalars(
         stmt.order_by(Order.placed_at.desc().nullslast(), Order.created_at.desc())

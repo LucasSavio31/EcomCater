@@ -5,6 +5,8 @@
   "description": "Painel administrativo (Next.js App Router) — porta 3001, sob /administracao.",
   "scripts": {
     "dev": "next dev -p 3001",
+    "dev:turbo": "next dev --turbopack -p 3001",
+    "dev:webpack": "next dev -p 3001",
     "build": "next build",
     "start": "next start -p 3001",
     "lint": "next lint",

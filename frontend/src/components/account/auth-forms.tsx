@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button, Card, Input } from '@ecom/ui';
 import { useAuth } from '@/modules/customer/auth-context';
 import { useCart } from '@/modules/cart/cart-context';
-import { track } from '@/modules/analytics';
+import { track, identify } from '@/modules/analytics';
 import { isValidCpf, maskCpf, onlyDigits as digits } from '@/lib/cpf';
 import { maskPhone } from '@/lib/phone';
 
@@ -49,7 +49,21 @@ export function AuthForms({ onDone }: { onDone?: () => void }) {
       setError(res.error ?? 'Não foi possível continuar.');
       return;
     }
-    if (mode === 'register') track('sign_up', {});
+    if (mode === 'register') {
+      const [firstName, ...rest] = form.full_name.trim().split(/\s+/);
+      identify({
+        email: form.email.trim(),
+        phone: digits(form.phone) || undefined,
+        firstName: firstName || undefined,
+        lastName: rest.join(' ') || undefined,
+        externalId: cpfDigits || undefined,
+        country: 'BR',
+      });
+      track('sign_up', { method: 'email' });
+    } else {
+      identify({ email: form.email.trim(), externalId: cpfDigits || undefined });
+      track('login', { method: 'email' });
+    }
     await refreshCart();
     onDone?.();
   }

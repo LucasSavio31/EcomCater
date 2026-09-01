@@ -7,6 +7,8 @@ import { cartApi } from '@/modules/cart/api';
 import type { ShippingOption } from '@/modules/cart/types';
 import { formatBRL } from '@/lib/format';
 
+const CEP_KEY = 'ecom:cep';
+
 function maskCep(v: string): string {
   const d = v.replace(/\D/g, '').slice(0, 8);
   return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
@@ -17,14 +19,24 @@ function deliveryText(days: number): string {
   return days === 1 ? 'em 1 dia útil' : `em até ${days} dias úteis`;
 }
 
-/** CEP + opções de frete. Compartilhado entre carrinho e checkout. */
+function readSessionCep(): string {
+  try {
+    return maskCep(window.sessionStorage.getItem(CEP_KEY) ?? '');
+  } catch {
+    return '';
+  }
+}
+
+/** CEP + opções de frete. O CEP não é "lembrado" do carrinho salvo — vem em
+ *  branco, ou herda o CEP digitado na página do produto (sessionStorage). */
 export function ShippingPicker() {
   const { cart, setZip, selectShipping } = useCart();
-  const [cep, setCep] = useState(maskCep(cart.shipping_zip ?? ''));
+  const [cep, setCep] = useState('');
   const [options, setOptions] = useState<ShippingOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const autoDone = useRef(false);
+  const lastQuoted = useRef('');
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchOptions = useCallback(async () => {
     setLoading(true);
@@ -40,22 +52,71 @@ export function ShippingPicker() {
     }
   }, []);
 
-  // Se o carrinho já tem CEP, busca as opções uma vez ao montar.
-  useEffect(() => {
-    if (autoDone.current) return;
-    autoDone.current = true;
-    if (cart.shipping_zip) void fetchOptions();
-  }, [cart.shipping_zip, fetchOptions]);
+  const calcular = useCallback(
+    async (raw: string) => {
+      const digits = raw.replace(/\D/g, '');
+      if (digits.length !== 8) {
+        setError(digits.length ? 'Digite um CEP válido (8 dígitos).' : null);
+        return;
+      }
+      if (digits === lastQuoted.current) return;
+      lastQuoted.current = digits;
+      setLoading(true);
+      try {
+        window.sessionStorage.setItem(CEP_KEY, digits);
+      } catch {
+        /* ignore */
+      }
+      await setZip(digits);
+      await fetchOptions();
+    },
+    [setZip, fetchOptions],
+  );
 
-  async function calcular() {
-    const digits = cep.replace(/\D/g, '');
-    if (digits.length !== 8) {
-      setError('Digite um CEP válido (8 dígitos).');
+  // Ao montar: se veio um CEP da página do produto, já calcula. Senão, e o
+  // carrinho salvo tinha um frete de uma sessão/CEP anterior, limpa — do
+  // contrário o total mostrava um frete "fantasma" sem CEP nenhum na tela.
+  const handledInherit = useRef(false);
+  useEffect(() => {
+    if (handledInherit.current) return;
+    const fromPdp = readSessionCep();
+    if (fromPdp) {
+      handledInherit.current = true;
+      setCep(fromPdp);
+      void calcular(fromPdp);
       return;
     }
-    setLoading(true);
-    await setZip(digits);
-    await fetchOptions();
+    if (cart.shipping_zip || cart.selected_shipping) {
+      handledInherit.current = true;
+      void setZip('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart.shipping_zip, cart.selected_shipping]);
+
+  useEffect(
+    () => () => {
+      if (debounce.current) clearTimeout(debounce.current);
+    },
+    [],
+  );
+
+  // SEDEX vem selecionado por padrão (sem sobrescrever escolha manual do cliente).
+  useEffect(() => {
+    if (options.length === 0) return;
+    const chosen = cart.selected_shipping?.id;
+    if (chosen && options.some((o) => o.id === chosen)) return;
+    const pref = options.find((o) => /sedex/i.test(o.service)) ?? options[0];
+    if (pref) void selectShipping(pref.id);
+  }, [options, cart.selected_shipping, selectShipping]);
+
+  function onCepChange(v: string): void {
+    const masked = maskCep(v);
+    setCep(masked);
+    if (debounce.current) clearTimeout(debounce.current);
+    // calcula sozinho assim que o CEP fica completo
+    if (masked.replace(/\D/g, '').length === 8) {
+      debounce.current = setTimeout(() => void calcular(masked), 350);
+    }
   }
 
   return (
@@ -64,14 +125,14 @@ export function ShippingPicker() {
         className="flex items-end gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          void calcular();
+          void calcular(cep);
         }}
       >
         <Input
           label="CEP de entrega"
           inputMode="numeric"
           value={cep}
-          onChange={(e) => setCep(maskCep(e.target.value))}
+          onChange={(e) => onCepChange(e.target.value)}
           placeholder="00000-000"
           className="flex-1"
         />
@@ -79,7 +140,15 @@ export function ShippingPicker() {
           type="submit"
           variant="ghost"
           loading={loading}
-          className="border-2 border-var-border bg-var text-var-fg hover:opacity-90"
+          className="shrink-0 border-2"
+          style={{
+            background: 'var(--color-cart-freight-bg)',
+            color: 'var(--color-cart-freight-fg)',
+            borderColor: 'var(--color-cart-freight-border)',
+            borderRadius: 'var(--radius-cart-freight, 0.75rem)',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-cart-freight-hover)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-cart-freight-bg)')}
         >
           Calcular
         </Button>

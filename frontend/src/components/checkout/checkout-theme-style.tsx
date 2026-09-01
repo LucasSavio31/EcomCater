@@ -24,8 +24,17 @@ export function CheckoutThemeStyle({ theme }: { theme: ThemeSettings }) {
     '--color-btn-fg': theme.checkout_step_button_text_color,
     '--color-btn-hover': theme.checkout_step_button_color,
   };
-  const css = `.checkout-scope{${Object.entries(vars)
-    .map(([k, v]) => `${k}:${sanitize(v)}`)
-    .join(';')}}`;
+  const css =
+    `.checkout-scope{${Object.entries(vars)
+      .map(([k, v]) => `${k}:${sanitize(v)}`)
+      .join(';')}}` +
+    // Borda um pouco mais escura em todos os campos do checkout (menos os que
+    // estão em erro, que já ficam vermelhos). Sutil — não é preto.
+    `.checkout-scope input:not([type=radio]):not([type=checkbox]):not([aria-invalid=true]),` +
+    `.checkout-scope select:not([aria-invalid=true]),` +
+    `.checkout-scope textarea:not([aria-invalid=true]){border-color:rgba(17,24,39,.28)}` +
+    `.checkout-scope input:not([type=radio]):not([type=checkbox]):not([aria-invalid=true]):focus-visible,` +
+    `.checkout-scope select:not([aria-invalid=true]):focus-visible,` +
+    `.checkout-scope textarea:not([aria-invalid=true]):focus-visible{border-color:rgba(17,24,39,.55)}`;
   return <style id="ecom-checkout-theme" dangerouslySetInnerHTML={{ __html: css }} />;
 }

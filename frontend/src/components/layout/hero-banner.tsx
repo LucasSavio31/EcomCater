@@ -5,6 +5,16 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { Banner } from '@/modules/banners/types';
 import { resolveMediaUrl } from '@/lib/media';
+import { trackPromotion, type TrackPromotion } from '@/modules/analytics';
+
+function promoOf(b: Banner, i: number): TrackPromotion {
+  return {
+    promotion_id: b.id,
+    promotion_name: b.title ?? undefined,
+    creative_name: b.title ?? `${b.slot}-${i + 1}`,
+    creative_slot: b.slot,
+  };
+}
 
 interface HeroBannerProps {
   banners: Banner[];
@@ -40,6 +50,19 @@ export function HeroBanner({ banners, mode, autoplaySeconds, viewport = 'desktop
     },
     [count],
   );
+
+  // view_promotion do slide REALMENTE exibido (só a instância do viewport ativo)
+  const viewedIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const b = slides[index];
+    if (!b) return;
+    const isActiveViewport =
+      viewport === 'mobile' ? window.innerWidth < 640 : window.innerWidth >= 640;
+    if (!isActiveViewport || viewedIds.current.has(b.id)) return;
+    viewedIds.current.add(b.id);
+    trackPromotion('view', promoOf(b, index));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, slides.length, viewport]);
 
   useEffect(() => {
     indexRef.current = index;
@@ -96,7 +119,12 @@ export function HeroBanner({ banners, mode, autoplaySeconds, viewport = 'desktop
             return (
               <div key={banner.id} className="w-full shrink-0" aria-hidden={i !== index}>
                 {banner.link_url ? (
-                  <Link href={banner.link_url} tabIndex={i === index ? 0 : -1} className="block">
+                  <Link
+                    href={banner.link_url}
+                    tabIndex={i === index ? 0 : -1}
+                    className="block"
+                    onClick={() => trackPromotion('select', promoOf(banner, i))}
+                  >
                     {media}
                   </Link>
                 ) : (

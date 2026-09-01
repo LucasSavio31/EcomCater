@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -163,36 +163,66 @@ async def delete_subscribers(
     return {"ok": True, "deleted": len(uids)}
 
 
+@admin_router.get("/stats")
+async def subscriber_stats(
+    db: DbDep, _: Annotated[AdminUser, Depends(get_current_admin)]
+) -> dict:
+    """Leads por origem. O rastreio já existe: cada captura grava `source`
+    (`checkout`, `popup`/`lead_popup`, `home_form`) e `coupon_code` quando
+    um cupom foi entregue ao lead."""
+
+    def _count(*conds):
+        stmt = select(func.count()).select_from(NewsletterSubscriber)
+        return stmt.where(*conds) if conds else stmt
+
+    total = int(await db.scalar(_count()) or 0)
+    subscribed = int(await db.scalar(_count(NewsletterSubscriber.unsubscribed_at.is_(None))) or 0)
+    from_checkout = int(await db.scalar(_count(NewsletterSubscriber.source == "checkout")) or 0)
+    from_popup = int(
+        await db.scalar(_count(NewsletterSubscriber.source.in_(("popup", "lead_popup")))) or 0
+    )
+    from_coupon = int(
+        await db.scalar(_count(NewsletterSubscriber.coupon_code.is_not(None))) or 0
+    )
+    return {
+        "total": total,
+        "subscribed": subscribed,
+        "from_checkout": from_checkout,
+        "from_popup": from_popup,
+        "from_coupon": from_coupon,
+    }
+
+
 class CampaignIn(BaseModel):
-    ids: list[str]
+    ids: list[str] = []
     subject: str
     body: str
     coupon_code: str | None = None
+    to_all: bool = False
 
 
 @admin_router.post("/campaign")
 async def send_campaign(body: CampaignIn, db: DbDep, _: AdminRoleDep) -> dict:
-    """Dispara um e-mail promocional (via SMTP) para os leads selecionados."""
+    """Dispara um e-mail promocional (via SMTP) para os leads selecionados,
+    ou para toda a base inscrita quando `to_all` é verdadeiro."""
     import uuid as _uuid
 
     from app.shared import mailer
 
-    uids = []
-    for i in body.ids:
-        try:
-            uids.append(_uuid.UUID(i))
-        except ValueError:
-            continue
-    if not uids:
-        return {"sent": 0, "failed": 0}
-    rows = list(
-        await db.scalars(
-            select(NewsletterSubscriber).where(
-                NewsletterSubscriber.id.in_(uids),
-                NewsletterSubscriber.unsubscribed_at.is_(None),
-            )
-        )
+    stmt = select(NewsletterSubscriber).where(
+        NewsletterSubscriber.unsubscribed_at.is_(None)
     )
+    if not body.to_all:
+        uids = []
+        for i in body.ids:
+            try:
+                uids.append(_uuid.UUID(i))
+            except ValueError:
+                continue
+        if not uids:
+            return {"sent": 0, "failed": 0}
+        stmt = stmt.where(NewsletterSubscriber.id.in_(uids))
+    rows = list(await db.scalars(stmt))
     sent = failed = 0
     for r in rows:
         name = r.name or ""

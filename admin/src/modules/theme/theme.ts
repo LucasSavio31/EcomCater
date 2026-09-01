@@ -42,13 +42,14 @@ export function themeToCssVars(theme: AdminTheme): string {
   const vars: Record<string, string> = {
     '--color-primary': theme.primary_color,
     '--color-secondary': theme.secondary_color,
-    '--color-accent': theme.accent_color,
     '--color-text': theme.text_color,
     '--color-bg': theme.bg_color,
     '--color-surface': theme.bg_color,
     '--font-family': theme.font_family,
-    // Botões do painel são SEMPRE pretos com texto branco — não seguem o tema
-    // da loja (só a loja usa a cor de botão configurada pelo lojista).
+    // Destaque e botões do painel são SEMPRE pretos com texto branco — não
+    // seguem a cor de destaque/botão que o lojista configura para a loja.
+    '--color-accent': '#111111',
+    '--color-accent-fg': '#FFFFFF',
     '--color-btn-bg': '#111111',
     '--color-btn-fg': '#FFFFFF',
     '--color-btn-hover': '#000000',

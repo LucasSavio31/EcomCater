@@ -44,6 +44,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await customerApi.me();
     setCustomer(res.ok ? res.data : null);
     setLoading(false);
+    // Cliente logado → alimenta o Advanced Matching (Meta) e as Enhanced
+    // Conversions (Google) em TODAS as páginas, não só no checkout.
+    if (res.ok) {
+      const [firstName, ...rest] = (res.data.full_name ?? '').trim().split(/\s+/);
+      identify({
+        email: res.data.email,
+        phone: res.data.phone,
+        firstName: firstName || undefined,
+        lastName: rest.join(' ') || undefined,
+        externalId: (res.data.cpf ?? '').replace(/\D/g, '') || undefined,
+        country: 'BR',
+      });
+    }
   }, []);
 
   useEffect(() => {

@@ -30,8 +30,8 @@ interface CartState {
   subtotalCents: number;
   refresh: () => Promise<void>;
   addItem: (variantId: string, quantity?: number) => Promise<{ ok: boolean; error?: string }>;
-  updateItem: (itemId: string, quantity: number) => Promise<void>;
-  removeItem: (itemId: string) => Promise<void>;
+  updateItem: (itemId: string, quantity: number) => Promise<{ ok: boolean }>;
+  removeItem: (itemId: string) => Promise<{ ok: boolean }>;
   setZip: (zip: string) => Promise<void>;
   applyCoupon: (code: string) => Promise<void>;
   removeCoupon: () => Promise<void>;
@@ -94,6 +94,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     async (itemId, quantity) => {
       const res = await cartApi.updateItem(itemId, quantity);
       if (res.ok) apply(res.data);
+      return { ok: res.ok };
     },
     [apply],
   );
@@ -102,6 +103,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     async (itemId) => {
       const res = await cartApi.removeItem(itemId);
       if (res.ok) apply(res.data);
+      return { ok: res.ok };
     },
     [apply],
   );

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from fastapi import Request
 
+from app.core.config import settings
 from app.core.errors import DomainError
 from app.core.redis import redis_client
 
@@ -20,6 +21,8 @@ def _parse(rule: str) -> tuple[int, int]:
 
 
 async def enforce(key: str, rule: str) -> None:
+    if settings.api_env == "test":
+        return  # a suíte de testes exercita os endpoints em rajada
     limit, window = _parse(rule)
     redis_key = f"rl:{key}:{window}"
     current = await redis_client.incr(redis_key)

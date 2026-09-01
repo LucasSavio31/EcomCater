@@ -66,10 +66,13 @@ async def update_settings(db: AsyncSession, data: dict) -> AnalyticsSettings:
             raw = str(data[key]).strip()
             setattr(row, key, _clean_id(key, raw) if raw else None)
 
-    # token da CAPI: "" limpa, ausente/None mantém
+    # segredos: "" limpa, ausente/None mantém
     token = data.get("meta_capi_access_token")
     if token is not None:
         row.meta_capi_access_token = token.strip() or None
+    ga4_secret = data.get("ga4_api_secret")
+    if ga4_secret is not None:
+        row.ga4_api_secret = ga4_secret.strip() or None
 
     # coerência: não dá pra ligar a CAPI sem token nem sem pixel
     if row.meta_capi_enabled and not (row.meta_capi_access_token and row.meta_pixel_id):
@@ -110,4 +113,5 @@ def to_admin(row: AnalyticsSettings) -> dict:
         "meta_capi_enabled": row.meta_capi_enabled,
         "meta_test_event_code": row.meta_test_event_code,
         "meta_capi_token_set": bool(row.meta_capi_access_token),
+        "ga4_api_secret_set": bool(row.ga4_api_secret),
     }

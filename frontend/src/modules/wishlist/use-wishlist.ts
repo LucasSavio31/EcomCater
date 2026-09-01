@@ -47,5 +47,17 @@ export function useWishlist() {
     [ids, persist],
   );
 
-  return { ids, has, toggle };
+  /** Remove vários ids de uma vez (ex.: favoritos que não existem mais). */
+  const prune = useCallback(
+    (remove: string[]) => {
+      if (remove.length === 0) return;
+      const next = new Set(ids);
+      let changed = false;
+      for (const id of remove) if (next.delete(id)) changed = true;
+      if (changed) persist(next);
+    },
+    [ids, persist],
+  );
+
+  return { ids, has, toggle, prune };
 }

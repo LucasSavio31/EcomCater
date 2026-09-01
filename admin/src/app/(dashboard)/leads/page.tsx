@@ -8,27 +8,40 @@ import { AsyncBoundary } from '@/components/async-boundary';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, formatNumber } from '@/lib/format';
 import { leadsApi, SOURCE_LABEL } from '@/modules/leads/api';
 import { promotionsApi } from '@/modules/promotions/api';
 
 export default function LeadsPage() {
   const toast = useToast();
   const { data, loading, error, reload } = useResource(() => leadsApi.list());
+  const stats = useResource(() => leadsApi.stats());
   const coupons = useResource(() => promotionsApi.list());
   const [source, setSource] = useState('');
+  const [quick, setQuick] = useState<'' | 'checkout' | 'popup' | 'coupon'>('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDel, setConfirmDel] = useState(false);
   const [campaignOpen, setCampaignOpen] = useState(false);
+  const [campaignAll, setCampaignAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [couponCode, setCouponCode] = useState('');
 
   const rows = useMemo(() => {
-    const all = data ?? [];
-    return source ? all.filter((l) => l.source === source) : all;
-  }, [data, source]);
+    let all = data ?? [];
+    if (source) all = all.filter((l) => l.source === source);
+    if (quick === 'checkout') all = all.filter((l) => l.source === 'checkout');
+    else if (quick === 'popup')
+      all = all.filter((l) => l.source === 'popup' || l.source === 'lead_popup');
+    else if (quick === 'coupon') all = all.filter((l) => !!l.coupon_code);
+    return all;
+  }, [data, source, quick]);
+
+  function applyQuick(key: 'checkout' | 'popup' | 'coupon') {
+    setSource('');
+    setQuick((cur) => (cur === key ? '' : key));
+  }
 
   const sources = useMemo(
     () => Array.from(new Set((data ?? []).map((l) => l.source))),
@@ -61,7 +74,15 @@ export default function LeadsPage() {
     toast.success(`${res.data.deleted} lead(s) excluído(s).`);
     setSelected(new Set());
     reload();
+    stats.reload();
   }
+
+  function openCampaign(all: boolean) {
+    setCampaignAll(all);
+    setCampaignOpen(true);
+  }
+
+  const campaignTargetCount = campaignAll ? (stats.data?.subscribed ?? 0) : selected.size;
 
   async function sendCampaign() {
     if (!subject.trim() || !body.trim()) {
@@ -70,7 +91,8 @@ export default function LeadsPage() {
     }
     setBusy(true);
     const res = await leadsApi.campaign({
-      ids: selectedList,
+      ids: campaignAll ? [] : selectedList,
+      to_all: campaignAll,
       subject: subject.trim(),
       body: body.trim(),
       coupon_code: couponCode || null,
@@ -105,15 +127,57 @@ export default function LeadsPage() {
         title="Leads"
         description="Cadastros do popup, do formulário da home e de quem comprou. Base para campanhas de e-mail (via SMTP)."
         actions={
-          <button
-            type="button"
-            onClick={exportCsv}
-            className="rounded-btn border border-surface-border px-3 py-1.5 text-sm hover:border-primary"
-          >
-            Exportar CSV
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => openCampaign(true)}>Criar campanha rápida</Button>
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="rounded-btn border border-surface-border px-3 py-1.5 text-sm hover:border-primary"
+            >
+              Exportar CSV
+            </button>
+          </div>
         }
       />
+
+      <AsyncBoundary loading={stats.loading} error={stats.error} onRetry={stats.reload}>
+        {stats.data && (
+          <div className="grid grid-cols-3 gap-3 sm:gap-4">
+            {(
+              [
+                {
+                  label: 'Leads pelo checkout',
+                  value: formatNumber(stats.data.from_checkout),
+                  key: 'checkout',
+                },
+                {
+                  label: 'Leads pelo popup',
+                  value: formatNumber(stats.data.from_popup),
+                  key: 'popup',
+                },
+                {
+                  label: 'Leads com cupom',
+                  value: formatNumber(stats.data.from_coupon),
+                  key: 'coupon',
+                },
+              ] as const
+            ).map((c) => (
+              <Card
+                key={c.label}
+                variant="elevated"
+                as="button"
+                onClick={() => applyQuick(c.key)}
+                className={`flex w-full flex-col gap-1 text-left transition hover:border-primary ${
+                  quick === c.key ? 'border-primary ring-1 ring-primary' : ''
+                }`}
+              >
+                <span className="text-xs text-text-muted sm:text-sm">{c.label}</span>
+                <span className="text-xl font-semibold sm:text-2xl">{c.value}</span>
+              </Card>
+            ))}
+          </div>
+        )}
+      </AsyncBoundary>
 
       <Card variant="outline" className="flex flex-wrap items-end gap-3">
         <Select
@@ -121,15 +185,27 @@ export default function LeadsPage() {
           value={source}
           placeholder="Todas"
           options={sources.map((s) => ({ value: s, label: SOURCE_LABEL[s] ?? s }))}
-          onChange={(e) => setSource(e.target.value)}
+          onChange={(e) => {
+            setQuick('');
+            setSource(e.target.value);
+          }}
         />
         <span className="text-sm text-text-muted">{rows.length} lead(s)</span>
+        {quick && (
+          <button
+            type="button"
+            className="text-sm text-text-muted underline"
+            onClick={() => setQuick('')}
+          >
+            limpar filtro dos cards
+          </button>
+        )}
       </Card>
 
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-card border border-surface-border bg-surface p-3">
           <span className="text-sm font-medium">{selected.size} selecionado(s)</span>
-          <Button size="sm" onClick={() => setCampaignOpen(true)}>
+          <Button size="sm" onClick={() => openCampaign(false)}>
             Enviar campanha
           </Button>
           <Button size="sm" variant="ghost" className="text-danger" onClick={() => setConfirmDel(true)}>
@@ -196,10 +272,16 @@ export default function LeadsPage() {
         </div>
       </AsyncBoundary>
 
-      <Modal open={campaignOpen} onClose={() => setCampaignOpen(false)} title="Enviar campanha por e-mail">
+      <Modal
+        open={campaignOpen}
+        onClose={() => setCampaignOpen(false)}
+        title={campaignAll ? 'Campanha rápida para toda a base' : 'Enviar campanha por e-mail'}
+      >
         <div className="flex flex-col gap-3">
           <p className="text-sm text-text-muted">
-            Envia para os {selected.size} lead(s) selecionado(s), pelo SMTP configurado.
+            {campaignAll
+              ? `Dispara para todos os ${campaignTargetCount} lead(s) inscrito(s), pelo SMTP configurado.`
+              : `Envia para os ${campaignTargetCount} lead(s) selecionado(s), pelo SMTP configurado.`}
           </p>
           <Input label="Assunto" value={subject} onChange={(e) => setSubject(e.target.value)} />
           <label className="flex flex-col gap-1 text-sm font-medium text-text">

@@ -1,7 +1,7 @@
 """DTOs do módulo `cart`."""
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AddItemIn(BaseModel):
@@ -14,7 +14,15 @@ class UpdateItemIn(BaseModel):
 
 
 class SetZipIn(BaseModel):
-    zip: str = Field(min_length=8, max_length=8)
+    # vazio = limpa o CEP/frete calculado do carrinho (nada digitado na PDP)
+    zip: str = Field(default="", max_length=8)
+
+    @field_validator("zip")
+    @classmethod
+    def _zip_blank_or_8_digits(cls, v: str) -> str:
+        if v == "" or (len(v) == 8 and v.isdigit()):
+            return v
+        raise ValueError("CEP deve ter 8 dígitos, ou vazio para limpar.")
 
 
 class ApplyCouponIn(BaseModel):

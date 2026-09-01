@@ -36,6 +36,26 @@ class Settings(BaseSettings):
     admin_url: str = "http://localhost:3001/administracao"
     # token para o cron externo disparar o envio de recuperação de carrinho
     recovery_cron_token: str = "dev-recovery-token"
+    # token para o cron externo disparar o backup agendado
+    system_cron_token: str = "dev-system-token"
+
+    # backup / sistema
+    backup_dir: str = "./.data/backups"
+    # diretório dos binários do Postgres (pg_dump/pg_restore). Vazio = usa o PATH.
+    pg_bin_dir: str = ""
+    # fuso da loja — usado pelo agendador de backup (a "hora" é local, não UTC)
+    store_timezone: str = "America/Sao_Paulo"
+    # agendador interno de backup (roda no processo da API; além do cron externo)
+    backup_scheduler_enabled: bool = True
+    backup_scheduler_interval_seconds: int = 600
+
+    # sincronização automática de rastreio com o Melhor Envio (roda no processo da API)
+    me_poll_enabled: bool = True
+    me_poll_interval_seconds: int = 900
+
+    # amostra de saúde dos serviços gravada a cada janela de 15 min, mesmo com
+    # ninguém olhando o painel (roda no processo da API)
+    health_scheduler_enabled: bool = True
 
     # seed admin
     admin_email: str = "admin@loja.local"
@@ -99,6 +119,24 @@ class Settings(BaseSettings):
     @property
     def is_prod(self) -> bool:
         return self.api_env == "prod"
+
+    def assert_prod_secrets(self) -> None:
+        """Em produção, recusa subir com segredos/tokens ainda no valor de dev."""
+        if not self.is_prod:
+            return
+        weak = {
+            "API_SECRET_KEY": self.api_secret_key == "dev-secret-troque-em-producao",
+            "RECOVERY_CRON_TOKEN": self.recovery_cron_token == "dev-recovery-token",
+            "SYSTEM_CRON_TOKEN": self.system_cron_token == "dev-system-token",
+            "ADMIN_PASSWORD": self.admin_password in ("admin12345", "admin"),
+        }
+        bad = [k for k, is_weak in weak.items() if is_weak]
+        if bad:
+            raise RuntimeError(
+                "API_ENV=prod com segredos padrão de desenvolvimento: "
+                + ", ".join(bad)
+                + ". Defina valores fortes no .env antes de subir."
+            )
 
 
 @lru_cache

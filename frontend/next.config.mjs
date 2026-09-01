@@ -6,6 +6,11 @@ const apiProtocol = protocol.replace(':', '');
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Some o selo flutuante do Next (logo "N") no canto da página em dev.
+  // Ele já não existe em produção; isto só o tira também do ambiente local.
+  devIndicators: false,
+  // Permite abrir o dev server pelo IP da máquina na LAN (teste no celular).
+  allowedDevOrigins: ['192.168.100.23'],
   // `@ecom/ui` é consumido como TS/TSX cru via workspace — o Next transpila.
   transpilePackages: ['@ecom/ui'],
   images: {

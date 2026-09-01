@@ -82,8 +82,11 @@ export interface ThemeSettings {
   checkout_allow_qty_change: boolean;
   checkout_footer_note: string | null;
   checkout_animated_card: boolean;
+  checkout_payment_icons_enabled: boolean;
+  checkout_steps_enabled: boolean;
   checkout_show_review: boolean;
   checkout_review_position: 'side' | 'top';
+  checkout_order_notes_enabled: boolean;
   checkout_orderbump_enabled: boolean;
   checkout_orderbump_product_id: string | null;
   checkout_orderbump_product_ids: string[];
@@ -110,6 +113,7 @@ export interface ThemeSettings {
   newsletter_button_text_color: string;
   discount_badge_enabled: boolean;
   lead_popup_enabled: boolean;
+  lead_popup_pdp_enabled: boolean;
   lead_capture_enabled: boolean;
   lead_popup_title: string;
   lead_popup_subtitle: string;
@@ -118,13 +122,52 @@ export interface ThemeSettings {
   lead_popup_text_color: string;
   lead_popup_button_color: string;
   lead_popup_button_text_color: string;
+  lead_popup_logo_url?: string | null;
+  lead_popup_show_logo: boolean;
   button_radius_px: number;
+  variation_radius_px: number;
+  pdp_reassurance_enabled: boolean;
+  pdp_reassurance_items: string[];
+  freight_button_bg_color: string;
+  freight_button_text_color: string;
+  freight_button_hover_color: string;
+  freight_button_border_color: string;
+  freight_button_radius_px: number;
+  promo_badge_bg_color: string;
+  promo_badge_text_color: string;
+  promo_badge_border_color: string;
+  promo_badge_radius_px: number;
+  promo_badge_card_enabled: boolean;
+  promo_badge_pdp_enabled: boolean;
+  cart_checkout_btn_bg_color: string;
+  cart_checkout_btn_text_color: string;
+  cart_checkout_btn_hover_color: string;
+  cart_checkout_btn_border_color: string;
+  cart_checkout_btn_radius_px: number;
+  cart_freight_btn_bg_color: string;
+  cart_freight_btn_text_color: string;
+  cart_freight_btn_hover_color: string;
+  cart_freight_btn_border_color: string;
+  cart_freight_btn_radius_px: number;
+  cart_qty_bg_color: string;
+  cart_qty_text_color: string;
+  cart_qty_radius_px: number;
+  cart_coupon_btn_bg_color: string;
+  cart_coupon_btn_text_color: string;
+  cart_coupon_btn_hover_color: string;
+  cart_coupon_btn_border_color: string;
+  cart_coupon_btn_radius_px: number;
+  cart_badge_bg_color: string;
+  cart_badge_text_color: string;
   pdp_qty_selector_enabled: boolean;
   size_chart_bg_color: string;
   size_chart_header_bg_color: string;
   size_chart_header_text_color: string;
   size_chart_text_color: string;
   wishlist_enabled: boolean;
+  pdp_wishlist_bg_color: string;
+  pdp_wishlist_border_color: string;
+  pdp_wishlist_icon_color: string;
   card_hover_zoom_enabled: boolean;
   card_buy_button_enabled: boolean;
   card_buy_button_label: string;
@@ -174,7 +217,7 @@ const DEFAULT_SEALS: FooterSeals = {
 export const NEUTRAL_THEME: ThemeSettings = {
   primary_color: '#111111',
   secondary_color: '#4B5563',
-  accent_color: '#DC2626',
+  accent_color: '#FFC400',
   text_color: '#111827',
   bg_color: '#FFFFFF',
   button_bg_color: '#111111',
@@ -235,20 +278,23 @@ export const NEUTRAL_THEME: ThemeSettings = {
   checkout_allow_qty_change: true,
   checkout_footer_note: null,
   checkout_animated_card: true,
+  checkout_payment_icons_enabled: true,
+  checkout_steps_enabled: true,
   checkout_show_review: true,
   checkout_review_position: 'side',
+  checkout_order_notes_enabled: false,
   checkout_orderbump_enabled: false,
   checkout_orderbump_product_id: null,
   checkout_orderbump_product_ids: [],
   checkout_bg_color: '#F7F7F7',
   checkout_header_bg_color: '#FFFFFF',
   checkout_header_text_color: '#111827',
-  checkout_button_color: '#111111',
+  checkout_button_color: '#FFC400',
   checkout_button_text_color: '#FFFFFF',
   checkout_accent_color: '#111111',
   checkout_footer_bg_color: '#111827',
   checkout_footer_text_color: '#E5E7EB',
-  checkout_step_button_color: '#111111',
+  checkout_step_button_color: '#FFC400',
   checkout_step_button_text_color: '#FFFFFF',
   checkout_step_active_bg_color: '#111111',
   checkout_step_active_text_color: '#FFFFFF',
@@ -261,6 +307,7 @@ export const NEUTRAL_THEME: ThemeSettings = {
   newsletter_button_text_color: '#FFFFFF',
   discount_badge_enabled: true,
   lead_popup_enabled: false,
+  lead_popup_pdp_enabled: false,
   lead_capture_enabled: true,
   lead_popup_title: 'Cadastre-se para 10% OFF na primeira compra',
   lead_popup_subtitle: 'Receba promoções e conteúdos exclusivos.',
@@ -269,13 +316,56 @@ export const NEUTRAL_THEME: ThemeSettings = {
   lead_popup_text_color: '#111827',
   lead_popup_button_color: '#F5B301',
   lead_popup_button_text_color: '#111111',
+  lead_popup_logo_url: null,
+  lead_popup_show_logo: true,
   button_radius_px: 12,
+  variation_radius_px: 12,
+  pdp_reassurance_enabled: true,
+  pdp_reassurance_items: [
+    '🔄 Troca fácil em até 30 dias',
+    '🔒 Site 100% seguro — pagamento criptografado',
+    '📦 Enviamos para todo o Brasil pelos Correios',
+  ],
+  freight_button_bg_color: '#111111',
+  freight_button_text_color: '#FFFFFF',
+  freight_button_hover_color: '#333333',
+  freight_button_border_color: '#111111',
+  freight_button_radius_px: 12,
+  promo_badge_bg_color: '#DC2626',
+  promo_badge_text_color: '#FFFFFF',
+  promo_badge_border_color: '#DC2626',
+  promo_badge_radius_px: 6,
+  promo_badge_card_enabled: true,
+  promo_badge_pdp_enabled: true,
+  cart_checkout_btn_bg_color: '#111111',
+  cart_checkout_btn_text_color: '#FFFFFF',
+  cart_checkout_btn_hover_color: '#333333',
+  cart_checkout_btn_border_color: '#111111',
+  cart_checkout_btn_radius_px: 12,
+  cart_freight_btn_bg_color: '#111111',
+  cart_freight_btn_text_color: '#FFFFFF',
+  cart_freight_btn_hover_color: '#333333',
+  cart_freight_btn_border_color: '#111111',
+  cart_freight_btn_radius_px: 12,
+  cart_qty_bg_color: '#FFFFFF',
+  cart_qty_text_color: '#111111',
+  cart_qty_radius_px: 12,
+  cart_coupon_btn_bg_color: '#FFFFFF',
+  cart_coupon_btn_text_color: '#111111',
+  cart_coupon_btn_hover_color: '#F3F3F3',
+  cart_coupon_btn_border_color: '#111111',
+  cart_coupon_btn_radius_px: 12,
+  cart_badge_bg_color: '#111111',
+  cart_badge_text_color: '#FFFFFF',
   pdp_qty_selector_enabled: true,
   size_chart_bg_color: '#FFFFFF',
   size_chart_header_bg_color: '#FFC400',
   size_chart_header_text_color: '#111111',
   size_chart_text_color: '#374151',
   wishlist_enabled: true,
+  pdp_wishlist_bg_color: '#FFFFFF',
+  pdp_wishlist_border_color: '#DC2626',
+  pdp_wishlist_icon_color: '#DC2626',
   card_hover_zoom_enabled: true,
   card_buy_button_enabled: false,
   card_buy_button_label: 'COMPRAR',

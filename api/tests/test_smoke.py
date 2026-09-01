@@ -27,7 +27,7 @@ async def test_modules_registered(client, db):
     # cria um admin e loga para acessar /api/admin/modules
     db.add(
         AdminUser(
-            email="root@test.local",
+            email="root@test.example",
             name="Root",
             password_hash=hash_password("supersecret1"),
             role="super_admin",
@@ -38,7 +38,7 @@ async def test_modules_registered(client, db):
 
     login = await client.post(
         "/api/admin/auth/login",
-        json={"email": "root@test.local", "password": "supersecret1"},
+        json={"email": "root@test.example", "password": "supersecret1"},
     )
     assert login.status_code == 200, login.text
     token = login.json()["access_token"]
@@ -57,7 +57,7 @@ async def test_customer_register_and_me(client):
         "/api/customers/auth/register",
         json={
             "full_name": "Fulano de Tal",
-            "email": "fulano@test.local",
+            "email": "fulano@test.example",
             "password": "clientsecret1",
         },
     )
@@ -68,14 +68,14 @@ async def test_customer_register_and_me(client):
         "/api/customers/me", headers={"Authorization": f"Bearer {token}"}
     )
     assert me.status_code == 200
-    assert me.json()["email"] == "fulano@test.local"
+    assert me.json()["email"] == "fulano@test.example"
 
 
 @pytest.mark.asyncio
 async def test_customer_scope_cannot_hit_admin(client):
     reg = await client.post(
         "/api/customers/auth/register",
-        json={"full_name": "Beltrano", "email": "beltrano@test.local", "password": "clientsecret1"},
+        json={"full_name": "Beltrano", "email": "beltrano@test.example", "password": "clientsecret1"},
     )
     token = reg.json()["access_token"]
     r = await client.get(

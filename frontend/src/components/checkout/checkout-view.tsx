@@ -15,12 +15,21 @@ import { apiFetch } from '@/lib/api-client';
 import { setCustomerSession } from '@/lib/customer-auth-storage';
 import { formatBRL } from '@/lib/format';
 import { isValidCpf } from '@/lib/cpf';
+import { uuid } from '@/lib/uuid';
+import { maskHouseNumber } from '@/lib/address';
 import { lookupCep } from '@/lib/viacep';
-import { track, identify, cartToTrackItems } from '@/modules/analytics';
+import {
+  track,
+  identify,
+  currentFbCookies,
+  currentGaClientId,
+  cartToTrackItems,
+} from '@/modules/analytics';
 import { CheckoutStepsTimeline, type CheckoutStepId } from './checkout-steps';
 import { StepSection } from './step-section';
 import { OrderSummary } from './order-summary';
 import { AnimatedCard } from './animated-card';
+import { PaymentIcon } from './payment-icons';
 import { resolveMediaUrl } from '@/lib/media';
 
 type Method = 'pix' | 'credit_card' | 'boleto';
@@ -68,6 +77,9 @@ const maskPhone = (v: string) => {
   if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 };
+// "0000 0000 0000 0000" — grupos de 4 (até 19 dígitos p/ cobrir cartões maiores).
+const maskCardNumber = (v: string) =>
+  onlyDigits(v).slice(0, 19).replace(/(\d{4})(?=\d)/g, '$1 ');
 
 const STEP_ORDER: CheckoutStepId[] = ['identify', 'profile', 'shipping', 'payment'];
 
@@ -84,8 +96,14 @@ export interface CheckoutSettings {
   stepActiveBg: string;
   stepActiveText: string;
   animatedCard: boolean;
+  /** Ícones ao lado de PIX / Cartão / Boleto. */
+  paymentIcons: boolean;
+  /** Linha do tempo das etapas (1 2 3 4) no topo. */
+  stepsTimeline: boolean;
   showReview: boolean;
   reviewPosition: 'side' | 'top';
+  /** Caixa "Observações do pedido (opcional)". */
+  orderNotes: boolean;
 }
 
 export interface OrderBumpProduct {
@@ -107,8 +125,11 @@ const DEFAULT_SETTINGS: CheckoutSettings = {
   stepActiveBg: '#111111',
   stepActiveText: '#FFFFFF',
   animatedCard: true,
+  paymentIcons: true,
+  stepsTimeline: true,
   showReview: true,
   reviewPosition: 'side',
+  orderNotes: false,
 };
 
 export function CheckoutView({
@@ -138,12 +159,29 @@ export function CheckoutView({
   const [phone, setPhone] = useState('');
   const [addr, setAddr] = useState<AddressForm>(EMPTY_ADDRESS);
   const [note, setNote] = useState('');
+  // CEP herdado da página do produto / carrinho (sessionStorage) — dispara a
+  // cotação automática via o efeito de `addr.zip` abaixo.
+  useEffect(() => {
+    if (onlyDigits(addr.zip).length === 8) return;
+    let stored = '';
+    try {
+      stored = window.sessionStorage.getItem('ecom:cep') || '';
+    } catch {
+      /* ignore */
+    }
+    if (onlyDigits(stored).length === 8) {
+      setAddr((p) => ({ ...p, zip: maskCep(stored) }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [agree, setAgree] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
 
   // ---- frete
   const [shipOptions, setShipOptions] = useState<ShippingOption[]>([]);
   const [shipLoading, setShipLoading] = useState(false);
   const [shipError, setShipError] = useState<string | null>(null);
+  const [shipPickMsg, setShipPickMsg] = useState<string | null>(null);
   const lastQuotedZip = useRef('');
 
   // ---- pagamento
@@ -160,7 +198,7 @@ export function CheckoutView({
   const [placed, setPlaced] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const idemRef = useRef<string>('');
-  if (!idemRef.current && typeof crypto !== 'undefined') idemRef.current = crypto.randomUUID();
+  if (!idemRef.current) idemRef.current = uuid();
 
   // prefill do cliente logado
   useEffect(() => {
@@ -175,6 +213,35 @@ export function CheckoutView({
     setStep((s) => (s === 'identify' ? 'profile' : s));
   }, [customer]);
 
+  // cliente logado: puxa o endereço padrão salvo (CEP + entrega completos) —
+  // só entra se o formulário ainda estiver vazio (não sobrepõe um CEP que já
+  // veio da página do produto nem o que o cliente já tenha digitado).
+  useEffect(() => {
+    if (!customer) return;
+    let cancelled = false;
+    void customerApi.listAddresses().then((res) => {
+      if (cancelled || !res.ok || res.data.length === 0) return;
+      const def = res.data.find((a) => a.is_default) ?? res.data[0];
+      if (!def) return;
+      setAddr((p) => {
+        if (onlyDigits(p.zip).length === 8) return p;
+        return {
+          recipient_name: p.recipient_name || def.recipient_name || '',
+          zip: maskCep(def.zip),
+          street: def.street,
+          number: def.number,
+          complement: def.complement ?? '',
+          district: def.district,
+          city: def.city,
+          state: def.state,
+        };
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [customer]);
+
   useEffect(() => {
     void checkoutApi.paymentMethods().then((res) => {
       if (!res.ok) return;
@@ -183,31 +250,44 @@ export function CheckoutView({
     });
   }, []);
 
-  // begin_checkout
+  // begin_checkout — 1x quando a 1ª etapa do checkout é exibida com itens
   const beginTracked = useRef(false);
   useEffect(() => {
     if (beginTracked.current || loading || cart.items.length === 0) return;
     beginTracked.current = true;
     track('begin_checkout', {
-      value: cart.totals.items_total_cents / 100,
       coupon: cart.coupon_code ?? undefined,
       items: cartToTrackItems(cart.items),
     });
   }, [loading, cart]);
 
-  // add_shipping_info
+  // add_shipping_info — quando uma modalidade de frete válida é selecionada
   const shipTracked = useRef<string | null>(null);
   useEffect(() => {
     const sel = cart.selected_shipping;
     if (!sel || shipTracked.current === sel.id) return;
     shipTracked.current = sel.id;
     track('add_shipping_info', {
-      value: cart.totals.items_total_cents / 100,
       shipping: cart.totals.shipping_cents / 100,
+      coupon: cart.coupon_code ?? undefined,
       method: `${sel.carrier} ${sel.service}`,
       items: cartToTrackItems(cart.items),
     });
   }, [cart]);
+
+  // add_payment_info — quando o usuário seleciona/confirma uma forma de pagamento
+  const payTracked = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || cart.items.length === 0 || step !== 'payment') return;
+    if (payTracked.current === method) return;
+    payTracked.current = method;
+    track('add_payment_info', {
+      coupon: cart.coupon_code ?? undefined,
+      shipping: cart.totals.shipping_cents / 100,
+      method,
+      items: cartToTrackItems(cart.items),
+    });
+  }, [method, step, loading, cart]);
 
   const setAddrField = (k: keyof AddressForm, v: string) => setAddr((p) => ({ ...p, [k]: v }));
 
@@ -235,9 +315,10 @@ export function CheckoutView({
       if (res.ok) {
         setShipOptions(res.data);
         if (res.data.length === 0) setShipError('Nenhuma opção de frete para este CEP.');
-        // frete grátis (opção única e sem custo): seleciona sozinho
+        // opção única: já deixa selecionada (frete grátis ou não)
         const only = res.data.length === 1 ? res.data[0] : undefined;
-        if (only && only.price_cents === 0) {
+        if (only && cart.selected_shipping?.id !== only.id) {
+          setShipPickMsg(null);
           void selectShipping(only.id);
         }
       } else {
@@ -245,7 +326,7 @@ export function CheckoutView({
         setShipError(res.error.message);
       }
     },
-    [setZip, selectShipping],
+    [setZip, selectShipping, cart.selected_shipping?.id],
   );
 
   // dispara a cotação sempre que o CEP fica completo
@@ -253,6 +334,16 @@ export function CheckoutView({
     const digits = onlyDigits(addr.zip);
     if (digits.length === 8) void quoteShipping(digits);
   }, [addr.zip, quoteShipping]);
+
+  // opção única de frete -> já vem selecionada como padrão no checkout
+  useEffect(() => {
+    if (shipOptions.length !== 1) return;
+    const only = shipOptions[0];
+    if (only && cart.selected_shipping?.id !== only.id) {
+      setShipPickMsg(null);
+      void selectShipping(only.id);
+    }
+  }, [shipOptions, cart.selected_shipping?.id, selectShipping]);
 
   // ---- validações por etapa
   const cpfOk = isValidCpf(cpf);
@@ -288,6 +379,75 @@ export function CheckoutView({
     (!settings.requireTerms || agree) &&
     cart.items.length > 0;
 
+  // ---- campos que faltam por etapa: ao tentar avançar, destaca em vermelho
+  //      SÓ os campos pendentes (o botão continua com a cor normal).
+  const [missing, setMissing] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setMissing(new Set());
+  }, [step]);
+
+  // validade ATUAL de cada campo — recalculada a cada render, então a borda
+  // vermelha some no instante em que o campo é preenchido certo.
+  const fieldFilled: Record<string, boolean> = {
+    email: EMAIL_RE.test(email),
+    cpf: cpfOk,
+    firstName: firstName.trim().length >= 2,
+    lastName: lastName.trim() !== '',
+    phone: onlyDigits(phone).length >= 10,
+    zip: onlyDigits(addr.zip).length === 8,
+    street: addr.street.trim() !== '',
+    number: addr.number.trim() !== '',
+    district: addr.district.trim() !== '',
+    city: addr.city.trim() !== '',
+    state: addr.state.trim().length === 2,
+    shipping: !!cart.selected_shipping,
+    card_number: onlyDigits(card.number).length >= 13,
+    card_holder: card.holder_name.trim() !== '',
+    card_exp: /^\d{2}\/\d{2}$/.test(card.exp),
+    card_cvv: card.cvv.length >= 3,
+    terms: agree,
+  };
+  const miss = (k: string): string | undefined =>
+    missing.has(k) && !fieldFilled[k] ? 'Campo obrigatório' : undefined;
+  const showMissingHint = [...missing].some((k) => !fieldFilled[k]);
+
+  function missingIdentify(): string[] {
+    const m: string[] = [];
+    if (!EMAIL_RE.test(email)) m.push('email');
+    if (!settings.emailFirst && !cpfOk) m.push('cpf');
+    return m;
+  }
+  function missingProfile(): string[] {
+    const m: string[] = [];
+    if (firstName.trim().length < 2) m.push('firstName');
+    if (!lastName.trim()) m.push('lastName');
+    if (onlyDigits(phone).length < 10) m.push('phone');
+    if (settings.emailFirst && !cpfOk) m.push('cpf');
+    return m;
+  }
+  function missingShipping(): string[] {
+    const m: string[] = [];
+    if (onlyDigits(addr.zip).length !== 8) m.push('zip');
+    if (!addr.street.trim()) m.push('street');
+    if (!addr.number.trim()) m.push('number');
+    if (!addr.district.trim()) m.push('district');
+    if (!addr.city.trim()) m.push('city');
+    if (addr.state.trim().length !== 2) m.push('state');
+    if (!cart.selected_shipping) m.push('shipping');
+    return m;
+  }
+  function missingPayment(): string[] {
+    const m: string[] = [];
+    if (method === 'credit_card') {
+      if (onlyDigits(card.number).length < 13) m.push('card_number');
+      if (!card.holder_name.trim()) m.push('card_holder');
+      if (!/^\d{2}\/\d{2}$/.test(card.exp)) m.push('card_exp');
+      if (card.cvv.length < 3) m.push('card_cvv');
+    }
+    if (settings.requireTerms && !agree) m.push('terms');
+    return m;
+  }
+
   const maxInstallments = methods?.max_installments ?? 1;
   const installmentOptions = useMemo(
     () => Array.from({ length: Math.max(1, maxInstallments) }, (_, i) => i + 1),
@@ -313,7 +473,11 @@ export function CheckoutView({
   }
 
   async function advanceIdentify() {
-    if (!identifyValid) return;
+    if (!identifyValid) {
+      setMissing(new Set(missingIdentify()));
+      return;
+    }
+    setMissing(new Set());
     identify({ email: email.trim(), externalId: onlyDigits(cpf) || undefined });
     if (!settings.emailFirst) tryInstantLogin();
     // ao informar o e-mail: vira lead na hora + entra na recuperação de carrinho
@@ -331,7 +495,11 @@ export function CheckoutView({
     goto('profile');
   }
   function advanceProfile() {
-    if (!profileValid) return;
+    if (!profileValid) {
+      setMissing(new Set(missingProfile()));
+      return;
+    }
+    setMissing(new Set());
     if (settings.emailFirst) tryInstantLogin();
     // atualiza o lead com nome/telefone agora que foram preenchidos
     if (EMAIL_RE.test(email)) {
@@ -355,7 +523,16 @@ export function CheckoutView({
     goto('shipping');
   }
   function advanceShipping() {
-    if (!shippingStepValid) return;
+    if (!shippingStepValid) {
+      const m = missingShipping();
+      setMissing(new Set(m));
+      if (m.includes('shipping')) {
+        setShipPickMsg('Selecione a forma de entrega para continuar.');
+      }
+      return;
+    }
+    setMissing(new Set());
+    setShipPickMsg(null);
     identify({
       street: `${addr.street}, ${addr.number}`,
       city: addr.city,
@@ -380,7 +557,19 @@ export function CheckoutView({
   }
 
   async function submit() {
-    if (!canPlaceOrder) return;
+    if (!canPlaceOrder) {
+      if (!submitting) {
+        const m = missingPayment();
+        setMissing(new Set(m));
+        setError(
+          m.length === 0
+            ? 'Revise seus dados nas etapas anteriores para concluir.'
+            : null,
+        );
+      }
+      return;
+    }
+    setMissing(new Set());
     setSubmitting(true);
     setError(null);
 
@@ -393,13 +582,7 @@ export function CheckoutView({
       if (r.ok) bumpAdded = true;
     }
     if (bumpAdded) await refresh();
-
-    track('add_payment_info', {
-      value: cart.totals.grand_total_cents / 100,
-      coupon: cart.coupon_code ?? undefined,
-      method,
-      items: cartToTrackItems(cart.items),
-    });
+    // add_payment_info já foi disparado na SELEÇÃO da forma de pagamento (efeito acima)
 
     const payload: CheckoutPayload = {
       email: email.trim(),
@@ -419,6 +602,13 @@ export function CheckoutView({
       customer_note: note.trim() || null,
       shipping_service_id: cart.selected_shipping?.id ?? null,
       idempotency_key: idemRef.current || null,
+      // atribuição p/ Meta CAPI (cookies do pixel) + GA4 refund (client_id) + landing page
+      ...currentFbCookies(),
+      ga_client_id: currentGaClientId(),
+      landing_url:
+        (typeof window !== 'undefined' &&
+          (sessionStorage.getItem('ecom:landing') || window.location.href)) ||
+        undefined,
     };
 
     const orderRes = await checkoutApi.placeOrder(payload);
@@ -498,57 +688,67 @@ export function CheckoutView({
 
   const reviewOnSide = settings.showReview && settings.reviewPosition === 'side';
 
-  // Tela dedicada de e-mail (WC "custom screen"): só e-mail + Continuar.
+  // Tela dedicada de e-mail (WC "custom screen"): só o e-mail, sem resumo do pedido.
   if (settings.emailFirst && !customer && step === 'identify' && furthest === 'identify') {
+    const emailInvalid = emailTouched && (!email || !EMAIL_RE.test(email));
     return (
-      <div className="mx-auto flex max-w-xl flex-col items-center gap-6 py-10 text-center">
-        <p className="text-lg text-text sm:text-xl">
-          Para finalizar a compra, informe seu e-mail.{' '}
-          <span className="whitespace-nowrap">Rápido, fácil e seguro.</span>
-        </p>
-        <form
-          className="flex w-full flex-col gap-2 sm:flex-row sm:items-start"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void advanceIdentify();
-          }}
-        >
-          <div className="flex-1">
-            <Input
-              type="email"
-              placeholder="seu@email.com"
-              aria-label="E-mail"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              error={email && !EMAIL_RE.test(email) ? 'E-mail inválido' : undefined}
+      <div className="mx-auto max-w-xl">
+        <div className="flex flex-col gap-6">
+          {settings.stepsTimeline && (
+            <CheckoutStepsTimeline
+              current="identify"
+              furthest="identify"
+              activeStyle={{ bg: settings.stepActiveBg, fg: settings.stepActiveText }}
             />
-            {!email && <p className="mt-1 text-left text-sm text-danger">Campo obrigatório.</p>}
-          </div>
-          <Button
-            type="submit"
-            size="lg"
-            disabled={!identifyValid}
-            className="uppercase tracking-wide sm:w-40"
-            style={{ background: settings.buttonColor, color: settings.buttonTextColor }}
+          )}
+          <p className="text-lg text-text sm:text-xl">
+            Para finalizar a compra, informe seu e-mail.{' '}
+            <span className="whitespace-nowrap">Rápido, fácil e seguro.</span>
+          </p>
+          <form
+            className="flex w-full flex-col gap-4 sm:flex-row sm:items-start sm:gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setEmailTouched(true);
+              if (identifyValid) void advanceIdentify();
+            }}
           >
-            Continuar
-          </Button>
-        </form>
+            <div className="flex-1">
+              <Input
+                type="email"
+                placeholder="seu@email.com"
+                aria-label="E-mail"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onBlur={() => setEmailTouched(true)}
+                error={emailInvalid ? (email ? 'E-mail inválido' : 'Informe seu e-mail') : undefined}
+              />
+            </div>
+            <Button
+              type="submit"
+              size="lg"
+              className="uppercase tracking-wide sm:w-40"
+              style={{ background: settings.buttonColor, color: settings.buttonTextColor }}
+            >
+              Continuar
+            </Button>
+          </form>
 
-        <div className="text-left text-sm text-text-muted">
-          <p className="mb-2 font-semibold text-accent">Usamos seu e-mail de forma 100% segura para:</p>
-          <ul className="flex flex-col gap-1.5">
-            {[
-              'Identificar seu perfil',
-              'Notificar sobre o andamento do seu pedido',
-              'Gerenciar seu histórico de compras',
-              'Acelerar o preenchimento de suas informações',
-            ].map((t) => (
-              <li key={t} className="flex items-center gap-2">
-                <span className="text-accent">✓</span> {t}
-              </li>
-            ))}
-          </ul>
+          <div className="text-left text-sm text-text-muted">
+            <p className="mb-2 font-semibold text-accent">Usamos seu e-mail de forma 100% segura para:</p>
+            <ul className="flex flex-col gap-1.5">
+              {[
+                'Identificar seu perfil',
+                'Notificar sobre o andamento do seu pedido',
+                'Gerenciar seu histórico de compras',
+                'Acelerar o preenchimento de suas informações',
+              ].map((t) => (
+                <li key={t} className="flex items-center gap-2">
+                  <span className="text-accent">✓</span> {t}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
     );
@@ -563,12 +763,14 @@ export function CheckoutView({
       }
     >
       <div className="flex min-w-0 flex-col gap-4">
-        <CheckoutStepsTimeline
-          current={step}
-          furthest={furthest}
-          onJump={goto}
-          activeStyle={{ bg: settings.stepActiveBg, fg: settings.stepActiveText }}
-        />
+        {settings.stepsTimeline && (
+          <CheckoutStepsTimeline
+            current={step}
+            furthest={furthest}
+            onJump={goto}
+            activeStyle={{ bg: settings.stepActiveBg, fg: settings.stepActiveText }}
+          />
+        )}
 
         {settings.showReview && settings.reviewPosition === 'top' && (
           <OrderSummary
@@ -603,7 +805,9 @@ export function CheckoutView({
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            error={email && !EMAIL_RE.test(email) ? 'E-mail inválido' : undefined}
+            error={
+              email && !EMAIL_RE.test(email) ? 'E-mail inválido' : miss('email')
+            }
           />
           {!settings.emailFirst && (
             <Input
@@ -617,13 +821,21 @@ export function CheckoutView({
                   ? 'CPF inválido'
                   : cpf && onlyDigits(cpf).length > 0 && onlyDigits(cpf).length < 11
                     ? 'CPF incompleto'
-                    : undefined
+                    : miss('cpf')
               }
             />
           )}
-          <Button onClick={() => void advanceIdentify()} disabled={!identifyValid} className="self-start">
+          <Button
+            block
+            size="lg"
+            onClick={() => void advanceIdentify()}
+            className="font-bold"
+          >
             Avançar
           </Button>
+          {showMissingHint && (
+            <p className="text-sm text-danger">Preencha os campos destacados.</p>
+          )}
         </StepSection>
 
         {/* 2 — Dados pessoais */}
@@ -641,8 +853,20 @@ export function CheckoutView({
           }
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Input label="Nome" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-            <Input label="Sobrenome" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            <Input
+              label="Nome"
+              required
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              error={miss('firstName')}
+            />
+            <Input
+              label="Sobrenome"
+              required
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              error={miss('lastName')}
+            />
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {settings.emailFirst && (
@@ -658,7 +882,7 @@ export function CheckoutView({
                     ? 'CPF inválido'
                     : cpf && onlyDigits(cpf).length > 0 && onlyDigits(cpf).length < 11
                       ? 'CPF incompleto'
-                      : undefined
+                      : miss('cpf')
                 }
               />
             )}
@@ -669,15 +893,22 @@ export function CheckoutView({
               placeholder="(11) 99999-9999"
               value={maskPhone(phone)}
               onChange={(e) => setPhone(maskPhone(e.target.value))}
-              error={phone && onlyDigits(phone).length < 10 ? 'Telefone incompleto' : undefined}
+              error={
+                phone && onlyDigits(phone).length < 10
+                  ? 'Telefone incompleto'
+                  : miss('phone')
+              }
             />
           </div>
           <button type="button" onClick={() => goto('identify')} className="w-fit text-xs text-primary underline">
             {settings.emailFirst ? 'Trocar e-mail' : 'Trocar e-mail / CPF'}
           </button>
-          <Button onClick={advanceProfile} disabled={!profileValid} className="self-start">
+          <Button block size="lg" onClick={advanceProfile} className="font-bold">
             Avançar
           </Button>
+          {showMissingHint && (
+            <p className="text-sm text-danger">Preencha os campos destacados.</p>
+          )}
         </StepSection>
         )}
 
@@ -707,14 +938,42 @@ export function CheckoutView({
               onChange={(e) => setAddrField('zip', maskCep(e.target.value))}
               placeholder="00000-000"
               hint="O frete é calculado automaticamente."
+              error={miss('zip')}
             />
-            <Input label="Número" required value={addr.number} onChange={(e) => setAddrField('number', e.target.value)} />
+            <Input
+              label="Número"
+              required
+              inputMode="numeric"
+              placeholder="Nº ou S/N"
+              hint="Sem número? Digite S/N."
+              value={addr.number}
+              onChange={(e) => setAddrField('number', maskHouseNumber(e.target.value))}
+              error={miss('number')}
+            />
           </div>
-          <Input label="Rua / logradouro" required value={addr.street} onChange={(e) => setAddrField('street', e.target.value)} />
+          <Input
+            label="Rua / logradouro"
+            required
+            value={addr.street}
+            onChange={(e) => setAddrField('street', e.target.value)}
+            error={miss('street')}
+          />
           <Input label="Complemento (opcional)" value={addr.complement} onChange={(e) => setAddrField('complement', e.target.value)} />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Input label="Bairro" required value={addr.district} onChange={(e) => setAddrField('district', e.target.value)} />
-            <Input label="Cidade" required value={addr.city} onChange={(e) => setAddrField('city', e.target.value)} />
+            <Input
+              label="Bairro"
+              required
+              value={addr.district}
+              onChange={(e) => setAddrField('district', e.target.value)}
+              error={miss('district')}
+            />
+            <Input
+              label="Cidade"
+              required
+              value={addr.city}
+              onChange={(e) => setAddrField('city', e.target.value)}
+              error={miss('city')}
+            />
           </div>
           <Input
             label="Estado (UF)"
@@ -723,11 +982,24 @@ export function CheckoutView({
             value={addr.state}
             onChange={(e) => setAddrField('state', e.target.value.toUpperCase().slice(0, 2))}
             className="sm:w-32"
+            error={miss('state')}
           />
 
           {/* Opções de frete */}
-          <div className="flex flex-col gap-2 border-t border-surface-border pt-3">
-            <p className="text-sm font-medium">Forma de entrega</p>
+          <div
+            className={`flex flex-col gap-2 rounded-card border-t pt-3 ${
+              missing.has('shipping') && !fieldFilled.shipping
+                ? 'border-danger border bg-danger/5 p-3'
+                : 'border-surface-border'
+            }`}
+          >
+            <p
+              className={`text-sm font-medium ${
+                missing.has('shipping') && !fieldFilled.shipping ? 'text-danger' : ''
+              }`}
+            >
+              Selecione a forma de entrega...
+            </p>
             {shipLoading && (
               <p className="flex items-center gap-2 text-sm text-text-muted">
                 <Spinner /> Calculando o frete…
@@ -737,21 +1009,25 @@ export function CheckoutView({
             {!shipLoading && shipOptions.length === 0 && !shipError && (
               <p className="text-xs text-text-muted">Digite o CEP para ver SEDEX, PAC e demais opções.</p>
             )}
-            <ul className="flex flex-col gap-2" role="radiogroup" aria-label="Opções de frete">
+            <ul className="flex flex-col gap-2">
               {shipOptions.map((opt) => {
                 const selected = cart.selected_shipping?.id === opt.id;
                 return (
-                  <li key={opt.id}>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() => void selectShipping(opt.id)}
-                      className={`flex w-full items-center justify-between gap-3 rounded-card border px-3 py-2 text-left text-sm transition ${
-                        selected ? 'border-primary bg-primary/5' : 'border-surface-border hover:border-primary'
-                      }`}
-                    >
-                      <span>
+                  <li
+                    key={opt.id}
+                    className={`rounded-card border ${selected ? 'border-primary bg-primary/5' : 'border-surface-border'}`}
+                  >
+                    <label className="flex cursor-pointer items-center gap-3 px-3 py-3 text-sm">
+                      <input
+                        type="radio"
+                        name="shipping_option"
+                        checked={selected}
+                        onChange={() => {
+                          setShipPickMsg(null);
+                          void selectShipping(opt.id);
+                        }}
+                      />
+                      <span className="flex-1">
                         <span className="font-medium">
                           {opt.carrier} · {opt.service}
                         </span>
@@ -764,16 +1040,20 @@ export function CheckoutView({
                       <span className="shrink-0 font-semibold">
                         {opt.price_cents > 0 ? formatBRL(opt.price_cents) : 'Grátis'}
                       </span>
-                    </button>
+                    </label>
                   </li>
                 );
               })}
             </ul>
+            {shipPickMsg && <p className="text-xs font-medium text-danger">{shipPickMsg}</p>}
           </div>
 
-          <Button onClick={advanceShipping} disabled={!shippingStepValid} className="self-start">
+          <Button block size="lg" onClick={advanceShipping} className="font-bold">
             Avançar
           </Button>
+          {showMissingHint && (
+            <p className="text-sm text-danger">Preencha os campos destacados.</p>
+          )}
         </StepSection>
         )}
 
@@ -807,6 +1087,11 @@ export function CheckoutView({
                           checked={active}
                           onChange={() => setMethod(m.id)}
                         />
+                        {settings.paymentIcons && (
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center text-text">
+                            <PaymentIcon method={m.id} />
+                          </span>
+                        )}
                         <span>
                           <span className="text-sm font-medium">{m.label}</span>
                           <span className="block text-xs text-text-muted">{m.hint}</span>
@@ -827,15 +1112,19 @@ export function CheckoutView({
                           <Input
                             label="Número do cartão"
                             inputMode="numeric"
+                            autoComplete="cc-number"
+                            placeholder="0000 0000 0000 0000"
                             value={card.number}
                             onChange={(e) =>
-                              setCard((c) => ({ ...c, number: e.target.value.replace(/[^\d ]/g, '').slice(0, 19) }))
+                              setCard((c) => ({ ...c, number: maskCardNumber(e.target.value) }))
                             }
+                            error={miss('card_number')}
                           />
                           <Input
                             label="Nome impresso no cartão"
                             value={card.holder_name}
                             onChange={(e) => setCard((c) => ({ ...c, holder_name: e.target.value }))}
+                            error={miss('card_holder')}
                           />
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <Input
@@ -846,6 +1135,7 @@ export function CheckoutView({
                                 const d = onlyDigits(e.target.value).slice(0, 4);
                                 setCard((c) => ({ ...c, exp: d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d }));
                               }}
+                              error={miss('card_exp')}
                             />
                             <Input
                               label="CVV"
@@ -854,6 +1144,7 @@ export function CheckoutView({
                               onFocus={() => setCvvFocused(true)}
                               onBlur={() => setCvvFocused(false)}
                               onChange={(e) => setCard((c) => ({ ...c, cvv: onlyDigits(e.target.value).slice(0, 4) }))}
+                              error={miss('card_cvv')}
                             />
                           </div>
                           {maxInstallments > 1 && (
@@ -862,7 +1153,7 @@ export function CheckoutView({
                               <select
                                 value={installments}
                                 onChange={(e) => setInstallments(Number(e.target.value))}
-                                className="min-h-touch rounded-card border border-surface-border bg-surface px-3 text-sm"
+                                className="min-h-touch w-full rounded-card border border-surface-border bg-surface px-3 text-sm"
                               >
                                 {installmentOptions.map((n) => (
                                   <option key={n} value={n}>
@@ -937,19 +1228,27 @@ export function CheckoutView({
             </div>
           )}
 
-          <label htmlFor="note" className="mt-2 text-sm font-medium">
-            Observações do pedido (opcional)
-          </label>
-          <textarea
-            id="note"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={2}
-            className="rounded-card border border-surface-border bg-surface p-3 text-sm"
-          />
+          {settings.orderNotes && (
+            <>
+              <label htmlFor="note" className="mt-2 text-sm font-medium">
+                Observações do pedido (opcional)
+              </label>
+              <textarea
+                id="note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={2}
+                className="rounded-card border border-surface-border bg-surface p-3 text-sm"
+              />
+            </>
+          )}
 
           {settings.requireTerms && (
-            <label className="flex items-start gap-2 text-sm">
+            <label
+              className={`flex items-start gap-2 text-sm ${
+                missing.has('terms') && !fieldFilled.terms ? 'font-medium text-danger' : ''
+              }`}
+            >
               <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5" />
               <span>
                 Li e concordo com a{' '}
@@ -971,7 +1270,6 @@ export function CheckoutView({
             size="lg"
             block
             loading={submitting}
-            disabled={!canPlaceOrder}
             onClick={() => void submit()}
             style={{ background: settings.buttonColor, color: settings.buttonTextColor }}
           >
@@ -981,6 +1279,9 @@ export function CheckoutView({
                 ? 'Gerar boleto'
                 : `Pagar ${formatBRL(cart.totals.grand_total_cents)}`}
           </Button>
+          {showMissingHint && (
+            <p className="text-sm text-danger">Preencha os campos destacados.</p>
+          )}
         </StepSection>
         )}
       </div>

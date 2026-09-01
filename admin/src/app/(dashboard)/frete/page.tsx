@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { AsyncBoundary } from '@/components/async-boundary';
@@ -11,6 +11,13 @@ import { formatBRL } from '@/lib/format';
 import { configApi, type ShippingConfig, type ShippingQuoteRate } from '@/modules/config/api';
 import { WebhookUrlBox } from '@/components/webhook-url';
 import { CurrencyField } from '@/components/currency-field';
+import { onlyDigits } from '@/lib/phone';
+
+/** Máscara de CEP BR — 00000-000, limitada a 8 dígitos. */
+function maskCep(v: string): string {
+  const d = onlyDigits(v).slice(0, 8);
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+}
 
 export default function FretePage() {
   const toast = useToast();
@@ -20,7 +27,25 @@ export default function FretePage() {
   const [testZip, setTestZip] = useState('');
   const [testResult, setTestResult] = useState<ShippingQuoteRate[] | null>(null);
   const [testing, setTesting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const cfg = draft ?? data;
+
+  // volta do OAuth do Melhor Envio (?me=connected|error)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const me = params.get('me');
+    if (!me) return;
+    if (me === 'connected') {
+      toast.success('Melhor Envio conectado!');
+      reload();
+    } else {
+      toast.error('Não foi possível conectar ao Melhor Envio. Confira Client ID/Secret e a Redirect URI.');
+    }
+    params.delete('me');
+    const q = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (q ? `?${q}` : ''));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const set = <K extends keyof ShippingConfig>(k: K, v: ShippingConfig[K]): void => {
     if (!cfg) return;
@@ -28,13 +53,29 @@ export default function FretePage() {
   };
   const setPkg = (k: string, v: string): void => {
     if (!cfg) return;
-    setDraft({ ...cfg, default_package: { ...cfg.default_package, [k]: Number(v) || 0 } });
+    setDraft({ ...cfg, default_package: { ...(cfg.default_package ?? {}), [k]: Number(v) || 0 } });
+  };
+  const toggleService = (svc: string, on: boolean): void => {
+    const cur = new Set(cfg?.allowed_services ?? []);
+    if (on) cur.add(svc);
+    else cur.delete(svc);
+    set('allowed_services', [...cur]);
   };
 
   async function save(): Promise<void> {
     if (!cfg) return;
     setSaving(true);
-    const result = await configApi.putShipping(cfg);
+    // Segredos: só enviar quando o lojista digitou algo — vazio = manter o que já está salvo.
+    const { melhor_envio_token, webhook_token, melhor_envio_client_secret, ...rest } = cfg;
+    const body = {
+      ...rest,
+      ...(melhor_envio_token?.trim() ? { melhor_envio_token: melhor_envio_token.trim() } : {}),
+      ...(webhook_token?.trim() ? { webhook_token: webhook_token.trim() } : {}),
+      ...(melhor_envio_client_secret?.trim()
+        ? { melhor_envio_client_secret: melhor_envio_client_secret.trim() }
+        : {}),
+    };
+    const result = await configApi.putShipping(body);
     setSaving(false);
     if (!result.ok) {
       toast.error(result.error.message);
@@ -45,17 +86,60 @@ export default function FretePage() {
     setDraft(null);
   }
 
+  async function connectMelhorEnvio(): Promise<void> {
+    if (!cfg) return;
+    if (!cfg.melhor_envio_client_id?.trim() || !(cfg.melhor_envio_client_secret?.trim() || cfg.has_client_secret)) {
+      toast.error('Preencha o Client ID e o Client Secret do app Melhor Envio.');
+      return;
+    }
+    setConnecting(true);
+    // salva client id/secret antes de redirecionar
+    const saved = await configApi.putShipping({
+      melhor_envio_client_id: cfg.melhor_envio_client_id.trim(),
+      ...(cfg.melhor_envio_client_secret?.trim()
+        ? { melhor_envio_client_secret: cfg.melhor_envio_client_secret.trim() }
+        : {}),
+    });
+    if (!saved.ok) {
+      setConnecting(false);
+      toast.error(saved.error.message);
+      return;
+    }
+    const res = await configApi.melhorEnvioAuthorizeUrl();
+    if (!res.ok) {
+      setConnecting(false);
+      toast.error(res.error.message);
+      return;
+    }
+    window.location.href = res.data.url;
+  }
+
+  async function disconnectMelhorEnvio(): Promise<void> {
+    const res = await configApi.melhorEnvioDisconnect();
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return;
+    }
+    toast.success('Desconectado do Melhor Envio.');
+    setDraft(null);
+    reload();
+  }
+
   async function runTest(): Promise<void> {
-    if (!testZip.trim()) return;
+    const digits = onlyDigits(testZip);
+    if (digits.length !== 8) {
+      toast.error('Informe um CEP de destino com 8 dígitos.');
+      return;
+    }
     setTesting(true);
     setTestResult(null);
-    const result = await configApi.testQuote(testZip.replace(/\D/g, ''));
+    const result = await configApi.testQuote(digits);
     setTesting(false);
     if (!result.ok) {
       toast.error(result.error.message);
       return;
     }
-    setTestResult(result.data.rates);
+    setTestResult(result.data.rates ?? []);
   }
 
   return (
@@ -77,17 +161,23 @@ export default function FretePage() {
               />
               <Input
                 label="CEP de origem"
-                value={cfg.origin_zip}
-                onChange={(e) => set('origin_zip', e.target.value)}
+                inputMode="numeric"
+                placeholder="00000-000"
+                value={maskCep(cfg.origin_zip ?? '')}
+                onChange={(e) => set('origin_zip', onlyDigits(e.target.value).slice(0, 8))}
               />
               <Input
-                label="Token Melhor Envio"
-                value={cfg.melhor_envio_token}
-                onChange={(e) => set('melhor_envio_token', e.target.value)}
+                label="CPF do remetente"
+                inputMode="numeric"
+                placeholder="000.000.000-00"
+                hint="Responsável pelo envio no Melhor Envio (obrigatório p/ gerar etiqueta)."
+                value={cfg.sender_cpf ?? ''}
+                onChange={(e) => set('sender_cpf', onlyDigits(e.target.value).slice(0, 11))}
               />
               <Input
                 label="Token do webhook"
-                value={cfg.webhook_token}
+                value={cfg.webhook_token ?? ''}
+                placeholder="deixe em branco p/ manter"
                 onChange={(e) => set('webhook_token', e.target.value)}
               />
             </div>
@@ -96,6 +186,162 @@ export default function FretePage() {
               checked={cfg.melhor_envio_sandbox}
               onChange={(v) => set('melhor_envio_sandbox', v)}
             />
+
+            <fieldset className="flex flex-col gap-2 rounded-card border border-surface-border p-3">
+              <legend className="px-1 text-sm font-medium">Serviços oferecidos ao cliente</legend>
+              <p className="text-xs text-text-muted">
+                Só os marcados aparecem no carrinho e no checkout. O Melhor Envio pode devolver
+                outros (Jadlog, etc.) — são descartados automaticamente.
+              </p>
+              <div className="flex flex-wrap gap-6">
+                {(['pac', 'sedex'] as const).map((s) => (
+                  <Checkbox
+                    key={s}
+                    label={s.toUpperCase()}
+                    checked={(cfg.allowed_services ?? []).includes(s)}
+                    onChange={(v) => toggleService(s, v)}
+                  />
+                ))}
+              </div>
+              {(cfg.allowed_services ?? []).length === 0 && (
+                <p className="text-xs text-danger">
+                  Nenhum serviço marcado — o cliente não verá opção de frete.
+                </p>
+              )}
+            </fieldset>
+
+            <fieldset className="flex flex-col gap-2 rounded-card border border-surface-border p-3">
+              <legend className="px-1 text-sm font-medium">Impressão de etiquetas</legend>
+              <p className="text-xs text-text-muted">
+                O botão <b>Baixar etiqueta (PDF)</b> (na tela do pedido) e o <b>Baixar etiquetas
+                (PDF)</b> (em massa) geram o PDF aqui mesmo, sem abrir o site do Melhor Envio. As
+                opções abaixo definem como o PDF é montado.
+              </p>
+              <Select
+                label="Formato"
+                value={cfg.label_format ?? 'termica_10x15'}
+                options={[
+                  { value: 'termica_10x15', label: 'Etiqueta térmica 10×15 (1 por página)' },
+                  { value: 'a4_4up', label: 'A4 — 4 etiquetas por página' },
+                ]}
+                onChange={(e) =>
+                  set('label_format', e.target.value as 'termica_10x15' | 'a4_4up')
+                }
+              />
+              <Checkbox
+                label="Incluir a Declaração de Conteúdo (DACE simples) após cada etiqueta"
+                checked={!!cfg.print_declaration}
+                onChange={(v) => set('print_declaration', v)}
+              />
+            </fieldset>
+
+            <fieldset className="flex flex-col gap-2 rounded-card border border-surface-border p-3">
+              <legend className="px-1 text-sm font-medium">
+                Sincronização automática de rastreio
+              </legend>
+              <p className="text-xs text-text-muted">
+                De quanto em quanto tempo a loja consulta a API do Melhor Envio para preencher o
+                código de rastreio e avançar o status do pedido (Rastreio disponível → Enviado →
+                Entregue). Mínimo 120&nbsp;s. Deixe <b>0</b> para usar o padrão do servidor
+                (900&nbsp;s = 15&nbsp;min). Vale sem reiniciar a API.
+              </p>
+              <Input
+                label="Intervalo da rotina (segundos)"
+                type="number"
+                min={0}
+                step={30}
+                value={String(cfg.me_poll_interval_seconds ?? 0)}
+                onChange={(e) =>
+                  set('me_poll_interval_seconds', Math.max(0, Number(onlyDigits(e.target.value)) || 0))
+                }
+              />
+            </fieldset>
+
+            <fieldset className="flex flex-col gap-3 rounded-card border border-surface-border p-3">
+              <legend className="px-1 text-sm font-medium">Conexão Melhor Envio</legend>
+
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                {cfg.has_token ? (
+                  <>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 font-medium text-success">
+                      ● Conectado
+                    </span>
+                    {cfg.token_from_env && (
+                      <span className="text-text-muted">via arquivo <code>.env</code> do servidor</span>
+                    )}
+                    {cfg.token_expires_at && (
+                      <span className="text-text-muted">
+                        expira em {new Date(cfg.token_expires_at).toLocaleDateString('pt-BR')}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-bg-subtle px-2 py-0.5 font-medium text-text-muted">
+                    ○ Não conectado
+                  </span>
+                )}
+              </div>
+
+              <Input
+                label="Token do Melhor Envio (JWT)"
+                hint="Cole o token pessoal do painel do Melhor Envio (Configurações → Tokens). Salvo junto com “Salvar frete”."
+                value={cfg.melhor_envio_token ?? ''}
+                placeholder={cfg.has_token ? '•••••••• configurado (deixe em branco p/ manter)' : 'eyJ0eXAiOi...'}
+                onChange={(e) => set('melhor_envio_token', e.target.value)}
+              />
+              {cfg.has_token && !cfg.token_from_env && (
+                <Button
+                  variant="outline"
+                  className="self-start"
+                  onClick={() => void disconnectMelhorEnvio()}
+                >
+                  Remover token
+                </Button>
+              )}
+              {cfg.token_from_env && (
+                <p className="text-xs text-text-muted">
+                  O token está no <code>.env</code> do servidor — remova por lá, não pelo painel.
+                </p>
+              )}
+
+              <details className="rounded-card bg-bg-subtle p-2 text-xs text-text-muted">
+                <summary className="cursor-pointer font-medium">
+                  Conectar via app (OAuth) — renova o token automaticamente
+                </summary>
+                <div className="flex flex-col gap-3 pt-3">
+                  <p>
+                    Alternativa ao token manual: crie um <b>Aplicativo</b> no painel do Melhor Envio,
+                    cadastre a Redirect URI abaixo, cole o Client ID e o Secret e clique em Conectar.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      label="Client ID"
+                      value={cfg.melhor_envio_client_id ?? ''}
+                      onChange={(e) => set('melhor_envio_client_id', e.target.value)}
+                    />
+                    <Input
+                      label="Client Secret"
+                      value={cfg.melhor_envio_client_secret ?? ''}
+                      placeholder={cfg.has_client_secret ? '•••••••• salvo (deixe em branco p/ manter)' : ''}
+                      onChange={(e) => set('melhor_envio_client_secret', e.target.value)}
+                    />
+                  </div>
+                  {cfg.oauth_redirect_uri && (
+                    <WebhookUrlBox
+                      url={cfg.oauth_redirect_uri}
+                      note="Redirect URI: cadastre exatamente esta URL no seu app no painel do Melhor Envio."
+                    />
+                  )}
+                  <Button
+                    loading={connecting}
+                    className="self-start"
+                    onClick={() => void connectMelhorEnvio()}
+                  >
+                    {cfg.has_token ? 'Reconectar via OAuth' : 'Conectar Melhor Envio'}
+                  </Button>
+                </div>
+              </details>
+            </fieldset>
             <Checkbox
               label="Frete grátis para todos os pedidos"
               hint="O checkout não calcula frete — a entrega fica R$ 0,00 e o cliente segue direto para o pagamento."
@@ -115,25 +361,25 @@ export default function FretePage() {
               <Input
                 label="Peso (g)"
                 inputMode="numeric"
-                value={String(cfg.default_package.weight_grams ?? '')}
+                value={String(cfg.default_package?.weight_grams ?? '')}
                 onChange={(e) => setPkg('weight_grams', e.target.value)}
               />
               <Input
                 label="Comp. (mm)"
                 inputMode="numeric"
-                value={String(cfg.default_package.length_mm ?? '')}
+                value={String(cfg.default_package?.length_mm ?? '')}
                 onChange={(e) => setPkg('length_mm', e.target.value)}
               />
               <Input
                 label="Larg. (mm)"
                 inputMode="numeric"
-                value={String(cfg.default_package.width_mm ?? '')}
+                value={String(cfg.default_package?.width_mm ?? '')}
                 onChange={(e) => setPkg('width_mm', e.target.value)}
               />
               <Input
                 label="Alt. (mm)"
                 inputMode="numeric"
-                value={String(cfg.default_package.height_mm ?? '')}
+                value={String(cfg.default_package?.height_mm ?? '')}
                 onChange={(e) => setPkg('height_mm', e.target.value)}
               />
             </fieldset>
@@ -152,8 +398,10 @@ export default function FretePage() {
               <div className="flex flex-wrap items-end gap-2">
                 <Input
                   label="CEP de destino"
+                  inputMode="numeric"
+                  placeholder="00000-000"
                   value={testZip}
-                  onChange={(e) => setTestZip(e.target.value)}
+                  onChange={(e) => setTestZip(maskCep(e.target.value))}
                 />
                 <Button variant="outline" loading={testing} onClick={() => void runTest()}>
                   Cotar

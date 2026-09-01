@@ -13,14 +13,29 @@ export interface Lead {
   created_at: string | null;
 }
 
+export interface LeadStats {
+  total: number;
+  subscribed: number;
+  from_checkout: number;
+  from_popup: number;
+  from_coupon: number;
+}
+
 export const leadsApi = {
   list: () => adminFetch<Lead[]>('/api/admin/newsletter'),
+  stats: () => adminFetch<LeadStats>('/api/admin/newsletter/stats'),
   remove: (ids: string[]) =>
     adminFetch<{ ok: boolean; deleted: number }>('/api/admin/newsletter/delete', {
       method: 'POST',
       body: { ids },
     }),
-  campaign: (payload: { ids: string[]; subject: string; body: string; coupon_code: string | null }) =>
+  campaign: (payload: {
+    ids: string[];
+    subject: string;
+    body: string;
+    coupon_code: string | null;
+    to_all?: boolean;
+  }) =>
     adminFetch<{ sent: number; failed: number }>('/api/admin/newsletter/campaign', {
       method: 'POST',
       body: payload,

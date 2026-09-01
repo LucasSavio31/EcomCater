@@ -7,6 +7,8 @@ import { HeroBanner } from '@/components/layout/hero-banner';
 import { ProductGrid } from '@/components/catalog/product-grid';
 import { SizeShortcuts, type SizeShortcut } from '@/components/catalog/size-shortcuts';
 import { NewsletterForm } from '@/components/layout/newsletter-form';
+import { TrackOnMount } from '@/components/analytics/track-on-mount';
+import { itemFromListItem } from '@/modules/analytics';
 import { buildMetadata } from '@/lib/seo';
 
 export const dynamic = 'force-dynamic';
@@ -122,12 +124,28 @@ export default async function HomePage() {
 
       {featured.length > 0 && (
         <section aria-labelledby="vitrine-title" className="flex flex-col gap-4">
+          <TrackOnMount
+            event="view_item_list"
+            dedupeKey="home_featured"
+            itemListId="home_featured"
+            itemListName="Mais buscados"
+            items={featured
+              .slice(0, 20)
+              .map((p, i) =>
+                itemFromListItem(p, {
+                  index: i,
+                  list: { id: 'home_featured', name: 'Mais buscados' },
+                }),
+              )}
+          />
           <h2 id="vitrine-title" className="text-lg font-semibold sm:text-xl">
             Mais buscados
           </h2>
           <ProductGrid
             products={featured}
             priorityCount={4}
+            listId="home_featured"
+            listName="Mais buscados"
             buyButtonLabel={
               theme.card_buy_button_enabled ? theme.card_buy_button_label : undefined
             }

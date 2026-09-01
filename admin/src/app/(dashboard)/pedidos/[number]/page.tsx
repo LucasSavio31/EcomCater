@@ -14,6 +14,8 @@ import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { formatBRL, formatDateTime } from '@/lib/format';
 import { lookupCep } from '@/lib/viacep';
+import { ADMIN_API_BASE_URL } from '@/lib/admin-api-client';
+import { getSession } from '@/lib/auth-storage';
 import { ordersApi, type OrderEditPayload } from '@/modules/orders/api';
 import { type OrderDetail, type OrderStatus } from '@/modules/orders/types';
 
@@ -21,6 +23,7 @@ const ALL_STATUSES: OrderStatus[] = [
   'pending_payment',
   'paid',
   'processing',
+  'tracking_available',
   'shipped',
   'delivered',
   'canceled',
@@ -121,12 +124,26 @@ function buildDraft(d: OrderDetail): OrderEditPayload {
     email: d.email,
     cpf: d.cpf ?? '',
     shipping_address: { ...(d.shipping_address ?? {}) },
-    shipping_service: { tracking_code: '' },
+    shipping_service: { tracking_code: d.shipping_service?.tracking_code ?? '' },
     items: d.items
       .filter((it) => it.id)
       .map((it) => ({ id: it.id as string, cor: it.cor, numero: it.numero, name: it.name })),
   };
 }
+
+/** Link de rastreamento no site dos Correios. */
+function correiosTrackingUrl(code: string): string {
+  return `https://rastreamento.correios.com.br/app/index.php?objeto=${encodeURIComponent(code.trim())}`;
+}
+
+const EVENT_LABEL: Record<string, string> = {
+  created: 'Pedido criado',
+  note: 'Nota interna',
+  tracking_added: 'Rastreio adicionado',
+  tracking_update: 'Atualização de rastreio',
+  edited: 'Pedido editado',
+  payment_confirmed: 'Pagamento confirmado',
+};
 
 function Timeline({ events }: { events: OrderDetail['events'] }) {
   if (events.length === 0) return <p className="text-sm text-text-muted">Sem eventos.</p>;
@@ -143,11 +160,9 @@ function Timeline({ events }: { events: OrderDetail['events'] }) {
           </div>
           <div className="flex flex-col gap-0.5 pb-4">
             <span className="text-sm font-medium">
-              {ev.type === 'note'
-                ? 'Nota interna'
-                : ev.to_status
-                  ? `Status: ${orderStatusLabel(ev.to_status)}`
-                  : ev.type}
+              {ev.to_status
+                ? `Status: ${orderStatusLabel(ev.to_status)}`
+                : (EVENT_LABEL[ev.type] ?? ev.type)}
             </span>
             {ev.message && <span className="text-sm text-text-muted">{ev.message}</span>}
             <span className="text-xs text-text-muted">
@@ -270,6 +285,48 @@ export default function PedidoDetalhePage() {
     router.push('/pedidos');
   }
 
+  const [labelBusy, setLabelBusy] = useState(false);
+  const [printBusy, setPrintBusy] = useState(false);
+  async function downloadLabel(): Promise<void> {
+    setPrintBusy(true);
+    const t = getSession()?.accessToken ?? '';
+    try {
+      const r = await fetch(
+        `${ADMIN_API_BASE_URL}/api/admin/orders/${number}/melhor-envio/label`,
+        { headers: { Authorization: `Bearer ${t}` } },
+      );
+      if (!r.ok) {
+        let msg = 'Não foi possível gerar o PDF da etiqueta.';
+        try {
+          const j = await r.json();
+          msg = j?.error?.message ?? j?.detail ?? msg;
+        } catch {
+          /* corpo não-JSON */
+        }
+        toast.error(typeof msg === 'string' ? msg : 'Falha ao gerar a etiqueta.');
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      toast.error('Falha de rede ao baixar a etiqueta.');
+    } finally {
+      setPrintBusy(false);
+    }
+  }
+  async function generateLabel(): Promise<void> {
+    setLabelBusy(true);
+    const res = await ordersApi.sendToMelhorEnvio([number], true);
+    setLabelBusy(false);
+    if (!res.ok) return toast.error(res.error.message);
+    const r = res.data.results[0];
+    if (r?.ok) toast.success(r.message);
+    else toast.error(r?.message ?? 'Falha ao gerar a etiqueta.');
+    reload();
+  }
+
   const setAddr = (k: string, v: string) =>
     setEdit((e) => ({ ...e, shipping_address: { ...e.shipping_address, [k]: v } }));
 
@@ -320,18 +377,11 @@ export default function PedidoDetalhePage() {
       {data && (
         <div className="flex flex-wrap gap-2">
           <Link
-            href={`/pedidos/imprimir?ids=${number}`}
+            href={`/pedidos/fatura?id=${number}`}
             target="_blank"
             className="inline-flex items-center gap-1.5 rounded-card border border-surface-border px-3 py-1.5 text-sm text-text hover:border-primary"
           >
-            <IconPrinter width={16} height={16} /> PDF do pedido
-          </Link>
-          <Link
-            href={`/pedidos/etiquetas?ids=${number}`}
-            target="_blank"
-            className="inline-flex items-center gap-1.5 rounded-card border border-surface-border px-3 py-1.5 text-sm text-text hover:border-primary"
-          >
-            <IconTag width={16} height={16} /> Etiqueta
+            <IconPrinter width={16} height={16} /> Fatura
           </Link>
           <Button size="sm" variant="ghost" className="text-danger" onClick={() => setConfirmDel(true)}>
             Excluir pedido
@@ -512,12 +562,12 @@ export default function PedidoDetalhePage() {
                 )}
               </Card>
 
-              <Card variant="outline" className="flex flex-col gap-2">
+              <Card variant="outline" className="flex flex-col gap-3">
                 <h2 className="text-lg font-semibold">Entrega</h2>
                 <p className="text-sm">
                   <span className="text-text-muted">Método: </span>
-                  {data.shipping_method ?? '—'}
-                  {data.shipping_service ? ` (${data.shipping_service})` : ''}
+                  {data.shipping_service?.carrier || data.shipping_method || '—'}
+                  {data.shipping_service?.service ? ` · ${data.shipping_service.service}` : ''}
                 </p>
                 {data.customer_note && (
                   <p className="rounded-card bg-bg-subtle p-2 text-sm">
@@ -525,6 +575,69 @@ export default function PedidoDetalhePage() {
                     {data.customer_note}
                   </p>
                 )}
+
+                <div className="flex flex-col gap-2 border-t border-surface-border pt-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">Etiqueta Melhor Envio</span>
+                    {data.shipping_service?.tracking_code ? (
+                      <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+                        ● liberada — pronta p/ imprimir
+                      </span>
+                    ) : data.shipping_service?.label_url ? (
+                      <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+                        aguardando o rastreio do Melhor Envio
+                      </span>
+                    ) : data.shipping_service?.protocol ? (
+                      <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+                        comprada (gerando…)
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-bg-subtle px-2 py-0.5 text-xs text-text-muted">
+                        não gerada
+                      </span>
+                    )}
+                  </div>
+
+                  {data.shipping_service?.protocol && (
+                    <p className="text-xs text-text-muted">
+                      Protocolo: <span className="font-mono">{data.shipping_service.protocol}</span>
+                    </p>
+                  )}
+                  {data.shipping_service?.tracking_code && (
+                    <p className="text-xs text-text-muted">
+                      Rastreio:{' '}
+                      <a
+                        href={correiosTrackingUrl(data.shipping_service.tracking_code)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-primary underline"
+                      >
+                        {data.shipping_service.tracking_code}
+                      </a>
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" loading={labelBusy} onClick={() => void generateLabel()}>
+                      {data.shipping_service?.label_url
+                        ? 'Regerar etiqueta'
+                        : 'Comprar e gerar etiqueta'}
+                    </Button>
+                    {data.shipping_service?.label_url && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        loading={printBusy}
+                        onClick={() => void downloadLabel()}
+                      >
+                        <IconTag width={16} height={16} /> Baixar etiqueta (PDF)
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-text-muted">
+                    Compra usa o saldo da conta Melhor Envio. O nº do pedido vai no “Lembrete do envio”.
+                  </p>
+                </div>
               </Card>
 
               <Card variant="outline" className="flex flex-col gap-3">
@@ -583,8 +696,15 @@ export default function PedidoDetalhePage() {
                       </a>
                     )}
                   </dl>
+                ) : data.payment_status === 'paid' ? (
+                  <p className="text-sm text-text-muted">
+                    Marcado como <strong className="text-success">pago</strong> manualmente — sem
+                    transação de gateway registrada.
+                  </p>
                 ) : (
-                  <p className="text-sm text-text-muted">Sem pagamento registrado.</p>
+                  <p className="text-sm text-text-muted">
+                    Nenhum pagamento registrado ainda (PIX/boleto aguardando confirmação).
+                  </p>
                 )}
               </Card>
 
@@ -596,7 +716,12 @@ export default function PedidoDetalhePage() {
                   <span className="text-text-muted">CPF: </span>
                   {formatCpf(data.cpf)}
                 </p>
-                <Badge tone="neutral">Fulfillment: {data.fulfillment_status}</Badge>
+                <Badge tone="neutral">
+                  Envio:{' '}
+                  {{ unfulfilled: 'não enviado', partial: 'envio parcial', fulfilled: 'enviado' }[
+                    data.fulfillment_status
+                  ] ?? data.fulfillment_status}
+                </Badge>
               </Card>
 
               <Card variant="outline" className="flex flex-col gap-3">

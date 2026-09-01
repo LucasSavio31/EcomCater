@@ -35,6 +35,7 @@ class AdminUserOut(BaseModel):
     must_change_password: bool
     is_active: bool
     last_login_at: datetime | None = None
+    totp_enabled: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -67,9 +68,37 @@ class ModuleUpdateIn(BaseModel):
     config: dict | None = None
 
 
+class RevenuePoint(BaseModel):
+    label: str
+    cents: int
+
+
+class AbcPoint(BaseModel):
+    name: str
+    revenue_cents: int
+    cum_pct: float
+    cls: str  # "A" | "B" | "C"
+
+
+class TopProduct(BaseModel):
+    name: str
+    sku: str
+    units: int
+    revenue_cents: int
+
+
 class DashboardOut(BaseModel):
-    orders_today: int
-    orders_pending: int
-    revenue_month_cents: int
-    low_stock_count: int
-    recent_orders: list[dict]
+    window_days: int              # tamanho do período considerado (padrão 30)
+    orders_period: int            # pedidos criados no período
+    orders_pending: int          # aguardando pagamento (foto atual)
+    orders_late: int             # atrasados (foto atual)
+    orders_to_ship: int          # pendentes de envio (foto atual)
+    orders_canceled: int         # cancelados no período
+    orders_refunded: int         # estornados no período
+    revenue_period_cents: int    # faturamento (pago) no período
+    total_orders_all_time: int   # histórico — nunca zera
+    series_metric: str           # "revenue" | "canceled" | "refunded"
+    series_current: list[RevenuePoint]
+    series_previous: list[RevenuePoint]
+    abc_curve: list[AbcPoint]
+    top_products: list[TopProduct]

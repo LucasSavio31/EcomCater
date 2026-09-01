@@ -12,7 +12,7 @@
   --color-primary-fg: #ffffff;
   --color-secondary: #4b5563;
   --color-secondary-fg: #ffffff;
-  --color-accent: #dc2626;
+  --color-accent: #111111;
   --color-accent-fg: #ffffff;
 
   /* Botões do painel: sempre preto + texto branco (independe do tema da loja). */
@@ -45,6 +45,15 @@ body {
   color: var(--color-text);
   font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Mobile: evita o zoom automático do iOS ao focar um campo (fonte < 16px). */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 /* Barra de rolagem fina, arredondada e translúcida (trilho transparente). */

@@ -9,7 +9,7 @@ import { AsyncBoundary } from '@/components/async-boundary';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
-import { formatBRL, formatDateTime } from '@/lib/format';
+import { formatBRL, formatDateTime, formatNumber } from '@/lib/format';
 import { maskPhone } from '@/lib/phone';
 import { customersApi, type CustomerListItem } from '@/modules/customers/api';
 
@@ -31,8 +31,16 @@ export default function ClientesPage() {
   const [confirmDel, setConfirmDel] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const fetcher = useCallback(() => customersApi.list(q, page), [q, page]);
-  const { data, loading, error, reload } = useResource(fetcher, [q, page]);
+  const [minOrders, setMinOrders] = useState(0);
+
+  const fetcher = useCallback(() => customersApi.list(q, page, minOrders), [q, page, minOrders]);
+  const { data, loading, error, reload } = useResource(fetcher, [q, page, minOrders]);
+  const stats = useResource(() => customersApi.stats());
+
+  function applyMinOrders(n: number) {
+    setPage(1);
+    setMinOrders((cur) => (cur === n ? 0 : n));
+  }
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
   const rows = data?.items ?? [];
@@ -85,7 +93,13 @@ export default function ClientesPage() {
         />
       ),
     },
-    { key: 'name', header: 'Nome', cell: (c) => c.full_name || '—' },
+    {
+      key: 'name',
+      header: 'Nome',
+      cell: (c) => (
+        <span className="font-medium text-accent hover:underline">{c.full_name || '—'}</span>
+      ),
+    },
     { key: 'email', header: 'E-mail', cell: (c) => c.email },
     { key: 'phone', header: 'Telefone', cell: (c) => (c.phone ? maskPhone(c.phone) : '—') },
     { key: 'cpf', header: 'CPF', cell: (c) => fmtCpf(c.cpf) },
@@ -104,6 +118,64 @@ export default function ClientesPage() {
         title="Clientes"
         description="Cadastro dos clientes da loja. Editar dados aqui atualiza também os pedidos ativos."
       />
+
+      <AsyncBoundary loading={stats.loading} error={stats.error} onRetry={stats.reload}>
+        {stats.data && (
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+            {[
+              {
+                label: 'Clientes cadastrados',
+                value: formatNumber(stats.data.registered),
+                filter: 0,
+              },
+              {
+                label: 'Clientes que compraram',
+                value: formatNumber(stats.data.purchased),
+                hint: '1 ou mais pedidos',
+                filter: 1,
+              },
+              {
+                label: 'Clientes recorrentes',
+                value: formatNumber(stats.data.recurring),
+                hint: '2 ou mais pedidos',
+                filter: 2,
+              },
+              {
+                label: 'Taxa de recorrência',
+                value: `${stats.data.recurrence_rate_pct}%`,
+                hint: 'recorrentes ÷ que compraram',
+                filter: null as number | null,
+              },
+            ].map((c) => {
+              const active = c.filter !== null && minOrders === c.filter;
+              const clickable = c.filter !== null;
+              return (
+                <Card
+                  key={c.label}
+                  variant="elevated"
+                  as={clickable ? 'button' : 'div'}
+                  onClick={clickable ? () => applyMinOrders(c.filter as number) : undefined}
+                  className={`flex w-full flex-col gap-1 text-left transition ${
+                    clickable ? 'cursor-pointer hover:border-primary' : ''
+                  } ${active ? 'border-primary ring-1 ring-primary' : ''}`}
+                >
+                  <span className="text-xs text-text-muted sm:text-sm">{c.label}</span>
+                  <span className="text-xl font-semibold sm:text-2xl">{c.value}</span>
+                  {c.hint && <span className="text-[11px] text-text-muted">{c.hint}</span>}
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </AsyncBoundary>
+      {minOrders > 0 && (
+        <p className="-mt-2 text-sm text-text-muted">
+          Filtrando: {minOrders === 1 ? 'clientes que compraram' : 'clientes recorrentes'} ·{' '}
+          <button type="button" className="underline" onClick={() => applyMinOrders(0)}>
+            limpar
+          </button>
+        </p>
+      )}
 
       <Card variant="outline">
         <form
@@ -143,6 +215,11 @@ export default function ClientesPage() {
           rowKey={(c) => c.id}
           emptyMessage="Nenhum cliente encontrado."
           onRowClick={(c) => router.push(`/clientes/${c.id}`)}
+          rowActions={(c) => (
+            <Button size="sm" variant="outline" onClick={() => router.push(`/clientes/${c.id}`)}>
+              Ver / editar dados
+            </Button>
+          )}
         />
       </AsyncBoundary>
 

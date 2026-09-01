@@ -25,6 +25,7 @@ export default function TabelasMedidasPage() {
   const { data, loading, error, reload } = useResource(() => sizeChartsApi.list());
   const [form, setForm] = useState<SizeChartInput>(EMPTY);
   const [editing, setEditing] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [del, setDel] = useState<string | null>(null);
 
@@ -34,10 +35,17 @@ export default function TabelasMedidasPage() {
   function edit(c: SizeChart) {
     setEditing(c.id);
     setForm({ name: c.name, note: c.note ?? '', columns: [...c.columns], rows: c.rows.map((r) => [...r]) });
+    setFormOpen(true);
+  }
+  function openNew() {
+    setEditing(null);
+    setForm(EMPTY);
+    setFormOpen(true);
   }
   function resetForm() {
     setEditing(null);
     setForm(EMPTY);
+    setFormOpen(false);
   }
 
   // mantém as linhas com o mesmo nº de colunas
@@ -88,8 +96,16 @@ export default function TabelasMedidasPage() {
       <PageHeader
         title="Tabelas de medidas"
         description="Cadastre as tabelas de medidas. No produto, vincule uma tabela — ela aparece num popup na página do produto."
+        actions={
+          !formOpen ? (
+            <Button size="sm" onClick={openNew}>
+              + Nova tabela
+            </Button>
+          ) : undefined
+        }
       />
 
+      {formOpen && (
       <Card variant="outline" className="flex flex-col gap-4">
         <h2 className="text-lg font-semibold">{editing ? 'Editar tabela' : 'Nova tabela'}</h2>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -176,13 +192,12 @@ export default function TabelasMedidasPage() {
           <Button loading={busy} onClick={() => void save()}>
             {editing ? 'Salvar' : 'Adicionar'}
           </Button>
-          {editing && (
-            <Button variant="outline" onClick={resetForm}>
-              Cancelar
-            </Button>
-          )}
+          <Button variant="outline" onClick={resetForm}>
+            Cancelar
+          </Button>
         </div>
       </Card>
+      )}
 
       <AsyncBoundary loading={loading} error={error} onRetry={reload}>
         <div className="flex flex-col gap-2">

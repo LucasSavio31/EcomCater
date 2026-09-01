@@ -5,6 +5,7 @@ Guarde sempre a *key* (caminho relativo) no banco; a URL pública é derivada.
 from __future__ import annotations
 
 import os
+import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -24,6 +25,9 @@ class Storage(ABC):
     @abstractmethod
     def read(self, key: str) -> bytes: ...
 
+    @abstractmethod
+    def exists(self, key: str) -> bool: ...
+
 
 class LocalStorage(Storage):
     def __init__(self, root: str, base_url: str) -> None:
@@ -40,7 +44,21 @@ class LocalStorage(Storage):
     def save(self, key: str, data: bytes, content_type: str = "image/webp") -> str:
         path = self._path(key)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        # escrita atômica: grava num temporário no mesmo diretório e renomeia,
+        # para nunca deixar um arquivo pela metade se o processo cair no meio.
+        fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".part")
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(data)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        except BaseException:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
         return key
 
     def delete(self, key: str) -> None:
@@ -54,6 +72,12 @@ class LocalStorage(Storage):
 
     def read(self, key: str) -> bytes:
         return self._path(key).read_bytes()
+
+    def exists(self, key: str) -> bool:
+        try:
+            return self._path(key).is_file()
+        except ValueError:
+            return False
 
 
 def get_storage() -> Storage:

@@ -34,6 +34,14 @@ class AdminUser(UUIDPKMixin, TimestampMixin, Base):
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # 2FA (TOTP / Google Authenticator)
+    totp_secret: Mapped[str | None] = mapped_column(String(64))
+    totp_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    recovery_codes_json: Mapped[list] = mapped_column(
+        JSONB, default=list, server_default="[]", nullable=False
+    )
 
     __table_args__ = (
         CheckConstraint("role in ('super_admin','admin','staff')", name="role_valid"),
