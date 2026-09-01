@@ -8,7 +8,9 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.12"
-fastapi = "^0.115.0"
+# 0.141+: rotas 204 com `-> None` (a 0.115 quebrava no boot). Alinha com o
+# ambiente de dev, onde a app roda com fastapi 0.141 / starlette 1.6.
+fastapi = "^0.141.0"
 uvicorn = {extras = ["standard"], version = "^0.32.0"}
 pydantic = {extras = ["email"], version = "^2.9.0"}
 pydantic-settings = "^2.5.0"

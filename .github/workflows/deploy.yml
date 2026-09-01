@@ -1,6 +1,8 @@
 name: Deploy VPS
 
-# Toda alteração no main é publicada no servidor automaticamente.
+# Publicação automática. Dois caminhos, redundantes:
+#  1) o timer systemd `cater-deploy.timer` no servidor faz git pull a cada 2 min;
+#  2) este workflow (deploy imediato) — só roda se os secrets VPS_* existirem.
 on:
   push:
     branches: [main]
@@ -13,6 +15,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # sem os secrets configurados o job é ignorado (não falha)
+    if: ${{ vars.VPS_ENABLED == 'true' }}
     steps:
       - name: SSH deploy
         uses: appleboy/ssh-action@v1.2.0
