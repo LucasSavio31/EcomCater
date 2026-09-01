@@ -13,7 +13,7 @@ name: cater
 services:
   db:
     image: postgres:16-alpine
-    container_name: cater-db
+    container_name: cater-bd
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -64,7 +64,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
-    container_name: cater-frontend
+    container_name: cater-front
     env_file: .env
     depends_on: [api]
     networks: [internal]

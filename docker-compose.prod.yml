@@ -1,6 +1,8 @@
 # ============================================================
-#  Override de PROD. Portas expostas apenas em 127.0.0.1 (loopback);
-#  o LiteSpeed no host faz o reverse proxy via vhosts. Cloudflare na borda (TLS).
+#  Override de PROD.
+#  Sem domínio ainda: as apps são publicadas DIRETO no IP do servidor
+#  (front :3000, admin :3001, API :8000). Quando entrar o domínio + LiteSpeed,
+#  troque as portas por "127.0.0.1:PORTA:PORTA" e ligue o reverse proxy.
 #  Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 # ============================================================
 services:
@@ -14,21 +16,21 @@ services:
       - -c
       - "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
 
   frontend:
     build:
       target: prod
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
 
   admin:
     build:
       target: prod
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3001:3001"
+      - "3001:3001"
 
   db:
     restart: unless-stopped
