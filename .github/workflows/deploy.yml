@@ -29,8 +29,14 @@ jobs:
           script: |
             set -e
             cd /opt/cater
+            BEFORE=$(git rev-parse HEAD)
             git fetch --all --prune
             git reset --hard origin/main
+            CHANGED=$(git diff --name-only "$BEFORE" HEAD || true)
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
+            # nginx.conf e bind-mount: 'up -d' nao recria o proxy so pq o arquivo mudou
+            if echo "$CHANGED" | grep -q '^infra/proxy/'; then
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate proxy
+            fi
             docker image prune -f
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
