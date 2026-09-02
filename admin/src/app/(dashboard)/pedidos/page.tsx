@@ -25,7 +25,7 @@ import type { OrderListItem, OrderStatus } from '@/modules/orders/types';
 
 const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: 'pending_payment', label: 'Aguardando pagamento' },
-  { value: 'paid', label: 'Gerar Envio' },
+  { value: 'paid', label: 'Pago (gerar envio)' },
   { value: 'processing', label: 'Em separação' },
   { value: 'tracking_available', label: 'Rastreio disponível' },
   { value: 'shipped', label: 'Enviado' },

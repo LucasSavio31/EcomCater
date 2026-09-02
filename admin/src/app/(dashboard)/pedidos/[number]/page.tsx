@@ -734,13 +734,12 @@ export default function PedidoDetalhePage() {
                     <Select
                       label="Novo status"
                       value={nextStatus}
-                      options={transitions.map((s) => ({
-                        value: s,
-                        label:
-                          s === data.status
-                            ? `${orderStatusLabel(s)} (atual)`
-                            : orderStatusLabel(s),
-                      }))}
+                      options={transitions.map((s) => {
+                        // no menu de mudança, "paid" aparece como "Pago" (o selo
+                        // continua "Gerar Envio"); os demais usam o rótulo do selo.
+                        const base = s === 'paid' ? 'Pago (gerar envio)' : orderStatusLabel(s);
+                        return { value: s, label: s === data.status ? `${base} (atual)` : base };
+                      })}
                       onChange={(e) => setNextStatus(e.target.value as OrderStatus | '')}
                     />
                     <Textarea
