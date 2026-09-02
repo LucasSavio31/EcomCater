@@ -20,9 +20,16 @@ logger = logging.getLogger("mailer")
 
 _env = Environment(autoescape=select_autoescape(["html", "xml"]))
 
+# linha de status atual — vai em TODO e-mail de pedido
+_STATUS_LINE = (
+    "{% if status_label %}<p style='margin:12px 0;padding:10px 14px;background:#f4f4f5;"
+    "border-radius:8px'>Status do pedido: <b>{{ status_label }}</b></p>{% endif %}"
+)
+
 # bloco reutilizável: itens + totais + pagamento + envio + endereço.
-# usado nos e-mails de pedido (cliente e lojista).
+# auto-protegido: se o contexto não trouxer os dados, não renderiza nada.
 _ORDER_DETAILS = (
+    "{% if items is defined and items %}"
     "<table role='presentation' style='width:100%;border-collapse:collapse;margin:12px 0'>"
     "{% for it in items %}"
     "<tr>"
@@ -52,76 +59,104 @@ _ORDER_DETAILS = (
     "{% if address %}<p style='margin:10px 0 2px'><b>Entrega em:</b><br>"
     "{{ address.recipient }}<br>{{ address.line }}"
     "{% if address.district %} — {{ address.district }}{% endif %}<br>"
-    "{{ address.city }}/{{ address.state }} — CEP {{ address.zip }}</p>{% endif %}"
+    "{{ address.city }}/{{ address.state }} — CEP {{ address.zip }}</p>"
+    "{% endif %}"
+)
+
+
+def _order_email(intro: str, cta: str = "") -> str:
+    """intro + status atual + resumo do pedido/envio + call-to-action opcional."""
+    return intro + _STATUS_LINE + _ORDER_DETAILS + cta
+
+
+_TRACK_CTA = (
+    "{% if tracking_url %}<p style='margin:12px 0'>"
+    "<a href='{{ tracking_url }}' class='btn'>Acompanhar entrega</a></p>{% endif %}"
 )
 
 TEMPLATES: dict[str, tuple[str, str]] = {
     "order_created": (
         "Pedido {{ number }} recebido",
-        "<h2>Recebemos seu pedido {{ number }}</h2>"
-        "<p>Olá! Seu pedido foi registrado e está <b>aguardando pagamento</b>.</p>"
-        + _ORDER_DETAILS,
+        _order_email(
+            "<h2>Recebemos seu pedido {{ number }}</h2>"
+            "<p>Olá! Seu pedido foi registrado e está <b>aguardando pagamento</b>.</p>"
+        ),
     ),
     "payment_confirmed": (
         "Pagamento confirmado — pedido {{ number }}",
-        "<h2>Pagamento aprovado!</h2>"
-        "<p>O pagamento do pedido <b>{{ number }}</b> foi confirmado e já estamos "
-        "preparando o envio.</p>",
+        _order_email(
+            "<h2>Pagamento aprovado! ✅</h2>"
+            "<p>O pagamento do pedido <b>{{ number }}</b> foi confirmado e já estamos "
+            "preparando o envio.</p>"
+        ),
     ),
     "payment_failed": (
         "Pagamento não concluído — pedido {{ number }}",
-        "<h2>Não conseguimos confirmar seu pagamento</h2>"
-        "<p>O pagamento do pedido <b>{{ number }}</b> não foi concluído. "
-        "Você pode tentar novamente.</p>",
+        _order_email(
+            "<h2>Não conseguimos confirmar seu pagamento</h2>"
+            "<p>O pagamento do pedido <b>{{ number }}</b> não foi concluído. "
+            "Você pode tentar novamente.</p>"
+        ),
     ),
     "order_processing": (
         "Pedido {{ number }} em separação",
-        "<h2>Estamos preparando seu pedido 📦</h2>"
-        "<p>O pedido <b>{{ number }}</b> entrou em separação e logo será enviado.</p>",
+        _order_email(
+            "<h2>Estamos preparando seu pedido 📦</h2>"
+            "<p>O pedido <b>{{ number }}</b> entrou em separação e logo será enviado.</p>"
+        ),
     ),
     "order_tracking_available": (
         "Pedido {{ number }}: código de rastreio disponível",
-        "<h2>Seu rastreio já está disponível 🔎</h2>"
-        "<p>A etiqueta do pedido <b>{{ number }}</b> foi emitida e o código de "
-        "rastreio já está disponível."
-        "{% if tracking %} Código: <b>{{ tracking }}</b>{% endif %}</p>"
-        "{% if tracking_url %}<p><a href='{{ tracking_url }}'>Acompanhar entrega</a></p>{% endif %}"
-        "<p>Assim que o objeto for postado nos Correios você recebe um novo aviso.</p>",
+        _order_email(
+            "<h2>Seu rastreio já está disponível 🔎</h2>"
+            "<p>A etiqueta do pedido <b>{{ number }}</b> foi emitida e o código de "
+            "rastreio já está disponível."
+            "{% if tracking %} Código: <b>{{ tracking }}</b>{% endif %}</p>"
+            "<p>Assim que o objeto for postado nos Correios você recebe um novo aviso.</p>",
+            _TRACK_CTA,
+        ),
     ),
     "order_shipped": (
         "Seu pedido {{ number }} foi enviado",
-        "<h2>Pedido a caminho 🚚</h2>"
-        "<p>O pedido <b>{{ number }}</b> foi postado."
-        "{% if tracking %} Código de rastreio: <b>{{ tracking }}</b>{% endif %}</p>"
-        "{% if tracking_url %}<p><a href='{{ tracking_url }}'>Acompanhar entrega</a></p>{% endif %}",
+        _order_email(
+            "<h2>Pedido a caminho 🚚</h2>"
+            "<p>O pedido <b>{{ number }}</b> foi postado."
+            "{% if tracking %} Código de rastreio: <b>{{ tracking }}</b>{% endif %}</p>",
+            _TRACK_CTA,
+        ),
     ),
     "order_in_transit": (
         "Pedido {{ number }} em trânsito",
-        "<h2>Seu pedido está em trânsito 🛣️</h2>"
-        "<p>O pedido <b>{{ number }}</b> está a caminho do endereço de entrega."
-        "{% if tracking %} Rastreio: <b>{{ tracking }}</b>{% endif %}</p>"
-        "{% if tracking_url %}<p><a href='{{ tracking_url }}'>Acompanhar entrega</a></p>{% endif %}",
+        _order_email(
+            "<h2>Seu pedido está em trânsito 🛣️</h2>"
+            "<p>O pedido <b>{{ number }}</b> está a caminho do endereço de entrega."
+            "{% if tracking %} Rastreio: <b>{{ tracking }}</b>{% endif %}</p>",
+            _TRACK_CTA,
+        ),
     ),
     "order_delivered": (
         "Pedido {{ number }} entregue — conte como foi",
-        "<h2>Entregue! 🎉</h2>"
-        "<p>O pedido <b>{{ number }}</b> foi entregue. Esperamos que goste!</p>"
-        "<p>Sua opinião ajuda muito outros clientes:</p>"
-        "<p><a href='{{ review_url }}' "
-        "style='display:inline-block;padding:12px 20px;background:#111;color:#fff;"
-        "text-decoration:none;border-radius:8px'>Avaliar minha compra</a></p>",
+        _order_email(
+            "<h2>Entregue! 🎉</h2>"
+            "<p>O pedido <b>{{ number }}</b> foi entregue. Esperamos que goste!</p>",
+            "<p style='margin:12px 0'><a href='{{ review_url }}' class='btn'>Avaliar minha compra</a></p>",
+        ),
     ),
     "order_canceled": (
         "Pedido {{ number }} cancelado",
-        "<h2>Pedido cancelado</h2>"
-        "<p>O pedido <b>{{ number }}</b> foi cancelado. "
-        "Em caso de dúvida, entre em contato com a loja.</p>",
+        _order_email(
+            "<h2>Pedido cancelado</h2>"
+            "<p>O pedido <b>{{ number }}</b> foi cancelado. "
+            "Em caso de dúvida, entre em contato com a loja.</p>"
+        ),
     ),
     "order_refunded": (
         "Reembolso do pedido {{ number }}",
-        "<h2>Reembolso processado</h2>"
-        "<p>O reembolso do pedido <b>{{ number }}</b> foi processado. "
-        "O prazo de estorno depende do meio de pagamento.</p>",
+        _order_email(
+            "<h2>Reembolso processado</h2>"
+            "<p>O reembolso do pedido <b>{{ number }}</b> foi processado. "
+            "O prazo de estorno depende do meio de pagamento.</p>"
+        ),
     ),
     "cart_recovery": (
         "{{ subject }}",
@@ -159,11 +194,12 @@ TEMPLATES: dict[str, tuple[str, str]] = {
     ),
     "admin_order_created": (
         "[Loja] Novo pedido {{ number }} — R$ {{ '%.2f'|format(total_cents/100) }}",
-        "<h2>Novo pedido: {{ number }}</h2>"
-        "<p>Cliente: <b>{{ customer_name }}</b> ({{ email }})"
-        "{% if customer_phone %} — {{ customer_phone }}{% endif %}</p>"
-        + _ORDER_DETAILS
-        + "<p style='margin-top:14px'><a href='{{ admin_url }}' class='btn'>Abrir no painel</a></p>",
+        _order_email(
+            "<h2>Novo pedido: {{ number }}</h2>"
+            "<p>Cliente: <b>{{ customer_name }}</b> ({{ email }})"
+            "{% if customer_phone %} — {{ customer_phone }}{% endif %}</p>",
+            "<p style='margin-top:14px'><a href='{{ admin_url }}' class='btn'>Abrir no painel</a></p>",
+        ),
     ),
 }
 

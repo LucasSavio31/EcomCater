@@ -149,6 +149,7 @@ async def _on_created(payload: dict) -> None:
             select(Payment).where(Payment.order_id == order.id).order_by(Payment.created_at.desc())
         )
         ctx = _order_ctx(order, pay)
+        ctx["status_label"] = _STATUS_LABELS.get(order.status, "Aguardando pagamento")
 
         # Cliente — confirmação do pedido com detalhes de pagamento e envio
         await mailer.send(
@@ -207,15 +208,23 @@ async def _on_created(payload: dict) -> None:
         await db.commit()
 
 
+async def _latest_payment(db, order: Order) -> Payment | None:
+    return await db.scalar(
+        select(Payment).where(Payment.order_id == order.id).order_by(Payment.created_at.desc())
+    )
+
+
 @on("order.paid")
 async def _on_paid(payload: dict) -> None:
     async with SessionLocal() as db:
         order = await _order(db, payload["order_id"])
         if not order:
             return
+        ctx = _order_ctx(order, await _latest_payment(db, order))
+        ctx["status_label"] = _STATUS_LABELS.get("paid", "Pago")
         await mailer.send(
             db, to=order.email, template="payment_confirmed",
-            order_id=str(order.id), context={"number": order.number},
+            order_id=str(order.id), context=ctx,
         )
         await db.commit()
 
@@ -232,6 +241,19 @@ _STATUS_TEMPLATE = {
     "refunded": "order_refunded",
 }
 
+# rótulo humano do status, mostrado em TODO e-mail de pedido
+_STATUS_LABELS = {
+    "pending_payment": "Aguardando pagamento",
+    "paid": "Pago",
+    "processing": "Em separação",
+    "tracking_available": "Rastreio disponível",
+    "shipped": "Enviado",
+    "in_transit": "Em trânsito",
+    "delivered": "Entregue",
+    "canceled": "Cancelado",
+    "refunded": "Reembolsado",
+}
+
 
 @on("order.status_changed")
 async def _on_status(payload: dict) -> None:
@@ -243,17 +265,15 @@ async def _on_status(payload: dict) -> None:
         order = await _order(db, payload["order_id"])
         if not order:
             return
+        ctx = _order_ctx(order, await _latest_payment(db, order))
+        ctx.update(
+            tracking=_tracking(order),
+            tracking_url=_tracking_url(order),
+            store_name=await _store_name(db),
+            review_url=f"{settings.site_url.rstrip('/')}/minha-conta/pedidos",
+            status_label=_STATUS_LABELS.get(status, status),
+        )
         await mailer.send(
-            db,
-            to=order.email,
-            template=template,
-            order_id=str(order.id),
-            context={
-                "number": order.number,
-                "tracking": _tracking(order),
-                "tracking_url": _tracking_url(order),
-                "store_name": await _store_name(db),
-                "review_url": f"{settings.site_url.rstrip('/')}/minha-conta/pedidos",
-            },
+            db, to=order.email, template=template, order_id=str(order.id), context=ctx
         )
         await db.commit()

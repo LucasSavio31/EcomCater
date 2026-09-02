@@ -117,3 +117,37 @@ async def test_order_email_body_has_payment_and_shipping(db):
     assert "SEDEX" in html
     assert "Praça da Sé, 100" in html
     assert "DEZ" in html  # cupom no desconto
+
+
+@pytest.mark.asyncio
+async def test_status_change_email_has_summary_and_status(client, product):
+    """E-mail de mudança de status (ex.: pago) leva o status atual + o resumo."""
+    from app.shared.mailer import TEMPLATES, _env
+
+    for tpl_name, label in (("payment_confirmed", "Pago"), ("order_shipped", "Enviado")):
+        _subj, body_tpl = TEMPLATES[tpl_name]
+        html = _env.from_string(body_tpl).render(
+            number="2026-000001",
+            status_label=label,
+            items=[{"name": "P", "qty": 1, "variant": None, "line_cents": 5000}],
+            items_total_cents=5000,
+            discount_cents=0,
+            coupon_code=None,
+            shipping_cents=1000,
+            total_cents=6000,
+            payment_method="Cartão de crédito",
+            installments=3,
+            pix_qr=None,
+            boleto_url=None,
+            shipping_method="PAC",
+            shipping_eta=7,
+            tracking_code="AA123BR",
+            tracking="AA123BR",
+            tracking_url="https://track",
+            address=None,
+            store_name="Loja",
+            review_url="https://r",
+        )
+        assert f"<b>{label}</b>" in html  # linha de status
+        assert "R$ 60.00" in html  # total no resumo
+        assert "PAC" in html
