@@ -88,12 +88,23 @@ async def engine():
     eng = create_async_engine(TEST_DB_URL, poolclass=None)
 
     # os subscribers do event bus (e-mail de pedido, leads, saúde) abrem a
-    # própria sessão via `app.core.database.SessionLocal` — reaponta pro banco
-    # de teste enquanto a fixture viver, senão eles falam com o banco real.
+    # própria sessão via `SessionLocal` — como cada módulo fez
+    # `from app.core.database import SessionLocal`, reaponta a cópia de TODOS
+    # os módulos `app.*` pro banco de teste enquanto a fixture viver.
+    import sys
+
     import app.core.database as _db_mod
 
     _orig_session_local = _db_mod.SessionLocal
-    _db_mod.SessionLocal = async_sessionmaker(eng, class_=AsyncSession, expire_on_commit=False)
+    _test_maker = async_sessionmaker(eng, class_=AsyncSession, expire_on_commit=False)
+    _patched_mods = [
+        m
+        for name, m in list(sys.modules.items())
+        if name.startswith("app.") and getattr(m, "SessionLocal", None) is _orig_session_local
+    ]
+    for m in _patched_mods:
+        m.SessionLocal = _test_maker
+    _db_mod.SessionLocal = _test_maker
 
     if not _schema_ready:
         async with eng.begin() as conn:
@@ -104,6 +115,8 @@ async def engine():
             await conn.run_sync(Base.metadata.create_all)
         _schema_ready = True
     yield eng
+    for m in _patched_mods:
+        m.SessionLocal = _orig_session_local
     _db_mod.SessionLocal = _orig_session_local
     # isola os testes: zera todas as tabelas ao fim de cada um
     try:
