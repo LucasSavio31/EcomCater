@@ -462,14 +462,26 @@ _NO_BALANCE_HINTS = (
 
 
 def _me_is_no_balance(r: httpx.Response) -> bool:
-    """A compra falhou por falta de saldo na carteira do Melhor Envio?"""
+    """A compra falhou por falta de saldo na carteira do Melhor Envio?
+
+    O ME varia bastante a frase, ex.: "Seu saldo de R$ 0.00 é insuficiente
+    para o pagamento com a carteira no valor de R$ 47.79". Em vez de listar
+    todas, também aceitamos "saldo" + "insuficiente" (pt) ou "insufficient"
+    + "balance/funds/wallet" (en) aparecendo juntos, em qualquer ordem.
+    """
     blob = (r.text or "").lower()
     try:
         data = r.json()
         blob += " " + (data if isinstance(data, str) else json.dumps(data)).lower()
     except Exception:  # noqa: BLE001
         pass
-    return any(h in blob for h in _NO_BALANCE_HINTS)
+    if any(h in blob for h in _NO_BALANCE_HINTS):
+        return True
+    if "saldo" in blob and ("insuficiente" in blob or "insuficiência" in blob):
+        return True
+    if "insufficient" in blob and any(w in blob for w in ("balance", "funds", "wallet")):
+        return True
+    return False
 
 
 # O ME recusa o checkout quando o `shipment_id` guardado no pedido não está mais
