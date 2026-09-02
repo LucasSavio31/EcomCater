@@ -11,7 +11,7 @@ import { TrackOnMount } from '@/components/analytics/track-on-mount';
 import { itemFromListItem } from '@/modules/analytics';
 import { buildMetadata } from '@/lib/seo';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 120; // ISR — invalidação por tag no /api/revalidate
 
 export function generateMetadata(): Metadata {
   return buildMetadata({

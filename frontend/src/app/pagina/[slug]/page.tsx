@@ -4,7 +4,7 @@ import { getPage } from '@/modules/content/api';
 import { Breadcrumbs } from '@/components/catalog/breadcrumbs';
 import { buildMetadata } from '@/lib/seo';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300; // ISR — invalidação por tag no /api/revalidate
 
 interface PageProps {
   params: Promise<{ slug: string }>;

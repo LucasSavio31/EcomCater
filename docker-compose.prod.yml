@@ -36,8 +36,10 @@ services:
     build:
       target: prod
     restart: unless-stopped
-    # o SSR chama a API pela URL pública (https, cert autoassinado) — confia no cert
     environment:
+      # SSR/RSC falam com a API pela rede interna do Docker — sem sair pra
+      # internet, sem TLS, sem passar pelo proxy. O navegador segue na URL pública.
+      API_URL_INTERNAL: http://api:8000
       NODE_EXTRA_CA_CERTS: /certs/cert.pem
     volumes:
       - ./certs:/certs:ro

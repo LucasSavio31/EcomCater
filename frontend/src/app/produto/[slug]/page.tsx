@@ -20,7 +20,7 @@ import {
   SITE_URL,
 } from '@/lib/seo';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 120; // ISR — invalidação por tag no /api/revalidate
 
 interface PageProps {
   params: Promise<{ slug: string }>;

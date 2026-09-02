@@ -11,6 +11,15 @@
 export const API_BASE_URL: string =
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
+/**
+ * Base usada nas chamadas feitas NO SERVIDOR (SSR/RSC). Se `API_URL_INTERNAL`
+ * estiver setada (ex.: `http://api:8000` dentro do Docker), o SSR fala direto
+ * com o container da API — sem sair para a internet, sem passar pelo proxy/TLS.
+ * Cai para a URL pública quando não definida.
+ */
+const SERVER_API_BASE: string =
+  (typeof process !== 'undefined' && process.env.API_URL_INTERNAL?.trim()) || API_BASE_URL;
+
 const LOCALISH_HOST =
   /^(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})$/;
 
@@ -25,7 +34,7 @@ const LOCALISH_HOST =
  * mantendo a porta. Em produção (host público) nunca mexe.
  */
 function effectiveBase(): string {
-  if (typeof window === 'undefined') return API_BASE_URL;
+  if (typeof window === 'undefined') return SERVER_API_BASE;
   try {
     const cfg = new URL(API_BASE_URL);
     const here = window.location.hostname;

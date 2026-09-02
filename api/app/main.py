@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.bootstrap import discover_modules
+from app.core.cache_headers import PublicCacheHeaders
 from app.core.config import settings
 from app.core.errors import register_error_handlers
 from app.core.module_registry import register_all
@@ -72,6 +73,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Cache-Control em GET público (catálogo/tema/menus/mídia) — janela curta
+    # p/ proxy/navegador/CDN; invalidação real é por tag no Next.
+    app.add_middleware(PublicCacheHeaders)
 
     register_error_handlers(app)
 

@@ -11,7 +11,7 @@ import { buildMetadata, breadcrumbJsonLd, jsonLdScript } from '@/lib/seo';
 import { TrackOnMount } from '@/components/analytics/track-on-mount';
 import { itemFromListItem } from '@/modules/analytics';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 120; // ISR — invalidação por tag no /api/revalidate
 
 type RawSearchParams = Record<string, string | string[] | undefined>;
 
