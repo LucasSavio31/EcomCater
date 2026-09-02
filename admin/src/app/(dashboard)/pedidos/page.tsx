@@ -224,6 +224,13 @@ function PedidosPageInner() {
           <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
             aguardando
           </span>
+        ) : o.me_label === 'no_balance' ? (
+          <span
+            title="Sem saldo no Melhor Envio — pague no painel do ME para liberar a etiqueta"
+            className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning"
+          >
+            aguardando…
+          </span>
         ) : o.me_label === 'purchased' ? (
           <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
             gerando…
@@ -290,9 +297,21 @@ function PedidosPageInner() {
       toast.error(res.error.message);
       return;
     }
-    const ok = res.data.results.filter((r) => r.ok).length;
+    const noBalance = res.data.results.filter(
+      (r) => r.ok && r.me_status === 'awaiting_me_payment',
+    );
+    const generated = res.data.results.filter(
+      (r) => r.ok && r.me_status !== 'awaiting_me_payment',
+    ).length;
     const fail = res.data.results.filter((r) => !r.ok);
-    if (ok) toast.success(`${ok} etiqueta(s) gerada(s) no Melhor Envio.`);
+    if (generated) toast.success(`${generated} etiqueta(s) gerada(s) no Melhor Envio.`);
+    if (noBalance.length) {
+      toast.push(
+        `Saldo insuficiente no Melhor Envio. ${noBalance.length} envio(s) foram para o ` +
+          `carrinho do ME — pague no painel do Melhor Envio e a etiqueta/rastreio entram automaticamente.`,
+        'info',
+      );
+    }
     if (fail.length) toast.error(fail[0]?.message ?? 'Alguns pedidos falharam.');
     setSelected(new Set());
     reload();

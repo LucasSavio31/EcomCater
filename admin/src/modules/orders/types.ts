@@ -29,7 +29,7 @@ export interface OrderListItem {
    *  - 'purchased' = enviada ao ME, gerando o PDF
    *  - 'none'      = sem etiqueta
    */
-  me_label?: 'ready' | 'waiting' | 'purchased' | 'none';
+  me_label?: 'ready' | 'waiting' | 'purchased' | 'no_balance' | 'none';
 }
 
 export interface OrderPayment {

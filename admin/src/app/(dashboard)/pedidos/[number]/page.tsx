@@ -587,6 +587,13 @@ export default function PedidoDetalhePage() {
                       <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
                         aguardando o rastreio do Melhor Envio
                       </span>
+                    ) : data.shipping_service?.me_status === 'awaiting_me_payment' ? (
+                      <span
+                        title="Sem saldo no Melhor Envio — o envio está no carrinho do ME. Pague no painel do Melhor Envio para liberar a etiqueta."
+                        className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning"
+                      >
+                        aguardando pagamento no Melhor Envio
+                      </span>
                     ) : data.shipping_service?.protocol ? (
                       <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
                         comprada (gerando…)

@@ -621,6 +621,8 @@ def list_item_out(order: Order) -> dict:
         me_label = "ready"
     elif svc.get("label_url"):
         me_label = "waiting"
+    elif svc.get("me_status") == "awaiting_me_payment":
+        me_label = "no_balance"
     elif svc.get("protocol") or svc.get("shipment_id"):
         me_label = "purchased"
     else:
