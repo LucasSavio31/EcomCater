@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # ninguém olhando o painel (roda no processo da API)
     health_scheduler_enabled: bool = True
 
+    # resumo diário por e-mail para o admin (pedidos, faturamento, saúde)
+    daily_digest_enabled: bool = True
+    daily_digest_hour: int = 20  # hora local da loja
+
     # seed admin
     admin_email: str = "admin@loja.local"
     admin_password: str = "admin12345"

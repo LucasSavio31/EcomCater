@@ -202,7 +202,48 @@ TEMPLATES: dict[str, tuple[str, str]] = {
             "<p style='margin-top:14px'><a href='{{ admin_url }}' class='btn'>Abrir no painel</a></p>",
         ),
     ),
+    "backup_result": (
+        "[Loja] Backup {{ 'OK' if ok else 'FALHOU' }} — {{ when }}",
+        "<h2>{{ '✅ Backup concluído' if ok else '❌ Backup falhou' }}</h2>"
+        "<p>Disparo: <b>{{ trigger }}</b> — {{ when }}</p>"
+        "{% if ok %}<p>Arquivo: <b>{{ filename }}</b> ({{ size_mb }} MB)"
+        "{% if with_media %} — inclui mídia{% endif %}</p>"
+        "{% if destinations %}<p>Cópias: {{ destinations }}</p>{% endif %}"
+        "{% else %}<p style='color:#b00020'>Erro: {{ error }}</p>"
+        "<p>Verifique o menu Sistema → Backup no painel.</p>{% endif %}",
+    ),
+    "health_alert": (
+        "[Loja] {{ '⚠️' if bad else '✅' }} {{ service_label }} — {{ status_pt }}",
+        "<h2>{{ '⚠️ Serviço com problema' if bad else '✅ Serviço normalizado' }}</h2>"
+        "<p><b>{{ service_label }}</b>: {{ status_pt }}</p>"
+        "<p>{{ detail }}</p>"
+        "<p style='font-size:12px;color:#9aa0a6'>Verificado em {{ when }}. "
+        "Painel: Sistema → Infraestrutura.</p>",
+    ),
+    "daily_digest": (
+        "[Loja] Resumo do dia — {{ date }}",
+        "<h2>Resumo do dia — {{ date }}</h2>"
+        "<table role='presentation' style='width:100%;border-collapse:collapse;margin:12px 0'>"
+        "<tr><td style='padding:6px 0;border-bottom:1px solid #eee'>Pedidos criados</td>"
+        "<td style='padding:6px 0;border-bottom:1px solid #eee;text-align:right'><b>{{ orders }}</b></td></tr>"
+        "<tr><td style='padding:6px 0;border-bottom:1px solid #eee'>Pedidos pagos</td>"
+        "<td style='padding:6px 0;border-bottom:1px solid #eee;text-align:right'><b>{{ paid }}</b></td></tr>"
+        "<tr><td style='padding:6px 0;border-bottom:1px solid #eee'>Aguardando pagamento</td>"
+        "<td style='padding:6px 0;border-bottom:1px solid #eee;text-align:right'><b>{{ pending }}</b></td></tr>"
+        "<tr><td style='padding:8px 0'>Faturado (pago) no dia</td>"
+        "<td style='padding:8px 0;text-align:right;font-weight:bold;font-size:15px'>R$ {{ '%.2f'|format(revenue_cents/100) }}</td></tr>"
+        "</table>"
+        "<h3 style='margin:14px 0 6px;font-size:14px'>Status do sistema</h3>"
+        "<ul style='margin:0;padding-left:18px'>"
+        "{% for s in services %}<li>{{ s.label }}: <b>{{ s.status_pt }}</b>"
+        "{% if s.detail %} <span style='color:#888'>({{ s.detail }})</span>{% endif %}</li>{% endfor %}"
+        "</ul>"
+        "<p style='margin-top:10px'>Último backup: {{ last_backup or 'nenhum registrado' }}</p>",
+    ),
 }
+
+# rótulos pt-BR para status de saúde
+STATUS_PT = {"ok": "operacional", "degraded": "instável", "down": "fora do ar"}
 
 
 async def admin_notify_email(db: AsyncSession) -> str:
@@ -354,8 +395,12 @@ async def send(
 
     html = _wrap_html(inner, subject, et, conf["from_name"] or "Loja")
 
+    # nome do remetente = NOME DA LOJA (StoreSettings). Muda sozinho quando a
+    # loja é renomeada; cai para o from_name do SMTP e depois "Loja".
+    from_name = et.get("store_name") or conf["from_name"] or "Loja"
+
     msg = EmailMessage()
-    msg["From"] = f"{conf['from_name']} <{conf['from_email']}>"
+    msg["From"] = f"{from_name} <{conf['from_email']}>"
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content("Este e-mail requer um cliente compatível com HTML.")

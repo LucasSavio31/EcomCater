@@ -22,6 +22,7 @@ _task: asyncio.Task | None = None
 
 async def _tick_once() -> None:
     from app.core.locks import acquire
+    from app.modules.system.digest import maybe_send_daily_digest
     from app.modules.system.service_backup import run_scheduled
 
     # só um worker por tick (uvicorn --workers N sobe N agendadores)
@@ -32,6 +33,14 @@ async def _tick_once() -> None:
         result = await run_scheduled(db)
     if result.get("ran"):
         logger.info("backup agendado executado: %s", result)
+
+    # resumo diário (idempotente por data — só dispara 1x/dia)
+    try:
+        async with SessionLocal() as db:
+            if await maybe_send_daily_digest(db):
+                logger.info("resumo diário enviado")
+    except Exception:  # noqa: BLE001
+        logger.warning("falha ao enviar o resumo diário", exc_info=True)
 
 
 async def _loop() -> None:

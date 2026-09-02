@@ -101,6 +101,27 @@ def _check_storage() -> tuple[str, int, str]:
     return "down", 0, f"não gravável após 4 tentativas: {last_exc}"
 
 
+async def _check_backup(db: AsyncSession) -> tuple[str, int, str]:
+    """Saúde do backup agendado: último resultado + se está atrasado."""
+    from app.modules.system.models import BackupSettings
+
+    row = await db.get(BackupSettings, 1)
+    if not row or not row.auto_enabled:
+        return "degraded", 0, "backup automático desligado"
+    if row.last_status == "error":
+        return "down", 0, "último backup falhou — ver Sistema → Backup"
+    if not row.last_run_at:
+        return "degraded", 0, "nenhum backup executado ainda"
+    last = row.last_run_at
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=UTC)
+    age_h = (datetime.now(UTC) - last).total_seconds() / 3600
+    limit = {"semanal": 24 * 8, "mensal": 24 * 32}.get(row.frequency, 26)  # diário: 26h
+    if age_h > limit:
+        return "degraded", 0, f"último backup há {age_h:.0f}h (esperado a cada {limit}h)"
+    return "ok", 0, f"último há {age_h:.0f}h ({row.frequency})"
+
+
 async def _check_smtp(db: AsyncSession) -> tuple[str, int, str]:
     from app.modules.admin.models import SmtpSettings
 
@@ -233,6 +254,33 @@ def _check_containers() -> list[tuple[str, str, tuple[str, int, str]]]:
     return out
 
 
+async def _alert_health_transition(
+    db: AsyncSession, key: str, label: str, status: str, detail: str
+) -> None:
+    """Manda e-mail ao admin quando um serviço entra em problema ou normaliza."""
+    try:
+        from app.shared import mailer
+
+        await mailer.send(
+            db,
+            to=await mailer.admin_notify_email(db),
+            template="health_alert",
+            context={
+                "bad": status != "ok",
+                "service_label": label,
+                "status_pt": mailer.STATUS_PT.get(status, status),
+                "detail": detail,
+                "when": datetime.now(UTC).strftime("%d/%m/%Y %H:%M UTC"),
+            },
+        )
+    except Exception:  # noqa: BLE001
+        import logging
+
+        logging.getLogger("system.health").warning(
+            "falha ao enviar alerta de saúde de %s", key, exc_info=True
+        )
+
+
 async def run_checks(db: AsyncSession, *, persist: bool = True) -> list[dict]:
     now = datetime.now(UTC)
     checks: list[tuple[str, str, tuple[str, int, str]]] = []
@@ -243,6 +291,7 @@ async def run_checks(db: AsyncSession, *, persist: bool = True) -> list[dict]:
     checks.append(("cache", "Cache / Redis", _check_cache()))
     checks.append(("storage", "Armazenamento de mídia", _check_storage()))
     checks.append(("smtp", "E-mail (SMTP)", await _check_smtp(db)))
+    checks.append(("backup", "Backup agendado", await _check_backup(db)))
     checks.append(("melhor_envio", "API Melhor Envio", await _check_melhor_envio(db)))
     checks.append(("appmax", "API Appmax (pagamento)", await _check_appmax(db)))
     checks.extend(_check_containers())
@@ -301,6 +350,12 @@ async def run_checks(db: AsyncSession, *, persist: bool = True) -> list[dict]:
                     checked_at=bucket,
                 )
             )
+            # alerta por e-mail na TRANSIÇÃO (ok -> problema, ou problema -> ok).
+            # `last2[key][0]` é o status persistido mais recente.
+            prev_status = (last2.get(key) or [None])[0]
+            if prev_status and prev_status != status and (prev_status == "ok" or status == "ok"):
+                await _alert_health_transition(db, key, next(
+                    (lb for k, lb, _ in checks if k == key), key), status, detail)
         await db.commit()  # histórico é permanente — nunca podamos
 
     # histórico recente para as barrinhas

@@ -12,6 +12,7 @@ O agendamento segue o padrão do projeto: um cron externo chama
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -27,6 +28,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.modules.system.models import BackupRecord, BackupSettings
+
+logger = logging.getLogger("system.backup")
 
 _TRIGGERS_PRUNED = {"manual", "auto"}
 
@@ -348,6 +351,33 @@ async def create_backup(db: AsyncSession, *, triggered_by: str = "manual",
     await db.flush()
     if rec.status == "ok" and triggered_by in _TRIGGERS_PRUNED:
         await _prune(db, cfg.keep)
+
+    # avisa o admin de TODO backup (auto/manual), bem-sucedido ou com erro
+    if triggered_by in ("auto", "manual"):
+        try:
+            from app.shared import mailer
+
+            await mailer.send(
+                db,
+                to=await mailer.admin_notify_email(db),
+                template="backup_result",
+                context={
+                    "ok": rec.status == "ok",
+                    "trigger": "automático" if triggered_by == "auto" else "manual",
+                    "when": rec.created_at.strftime("%d/%m/%Y %H:%M UTC"),
+                    "filename": rec.filename,
+                    "size_mb": round(rec.size_bytes / 1048576, 2),
+                    "with_media": rec.includes_media,
+                    "destinations": ", ".join(
+                        d.get("kind", "?") for d in (rec.destinations_json or [])
+                    )
+                    or None,
+                    "error": rec.error_message,
+                },
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("não foi possível avisar o admin sobre o backup", exc_info=True)
+
     await db.commit()
     return rec
 
