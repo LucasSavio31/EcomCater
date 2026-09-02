@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.errors import DomainError, NotFoundError
+from app.core.errors import DomainError
 from app.core.events import emit
 from app.core.redis import redis_client
 from app.modules.shipping.config import ShippingConfig
@@ -479,9 +479,7 @@ def _me_is_no_balance(r: httpx.Response) -> bool:
         return True
     if "saldo" in blob and ("insuficiente" in blob or "insuficiência" in blob):
         return True
-    if "insufficient" in blob and any(w in blob for w in ("balance", "funds", "wallet")):
-        return True
-    return False
+    return "insufficient" in blob and any(w in blob for w in ("balance", "funds", "wallet"))
 
 
 # O ME recusa o checkout quando o `shipment_id` guardado no pedido não está mais

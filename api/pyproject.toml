@@ -51,6 +51,16 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
+# E501 (linha longa): estilo, deixamos o formatter cuidar disso.
+# SIM105/SIM108: contextlib.suppress e ternário nem sempre ficam mais claros.
+ignore = ["E501", "SIM105", "SIM108"]
+
+[tool.ruff.lint.flake8-bugbear]
+# chamadas de fábrica do FastAPI em defaults de parâmetro são idiomáticas (não é bug B008)
+extend-immutable-calls = [
+    "fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Header",
+    "fastapi.Cookie", "fastapi.File", "fastapi.Form", "fastapi.Body", "fastapi.Security",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

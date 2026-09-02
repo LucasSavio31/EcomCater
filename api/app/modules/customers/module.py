@@ -4,7 +4,6 @@ from app.modules.customers import events as _events  # noqa: F401 - registra sub
 from app.modules.customers.router_admin import router as admin_router
 from app.modules.customers.router_public import router as public_router
 
-
 spec = register(
     ModuleSpec(
         slug="customers",

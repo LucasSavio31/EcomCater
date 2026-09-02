@@ -28,13 +28,12 @@ async def lifespan(_: FastAPI):
     if settings.storage_backend == "local":
         Path(settings.storage_local_dir).mkdir(parents=True, exist_ok=True)
     # agendador interno de backup (ver app/modules/system/scheduler.py)
-    from app.modules.system import scheduler as backup_scheduler
-
     # rotina de sincronização de rastreio com o Melhor Envio
     from app.modules.shipping import scheduler as me_tracking_scheduler
 
     # amostragem de saúde dos serviços a cada janela de 15 min
     from app.modules.system import health_scheduler
+    from app.modules.system import scheduler as backup_scheduler
 
     backup_scheduler.start()
     me_tracking_scheduler.start()

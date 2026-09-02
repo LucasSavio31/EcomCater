@@ -67,7 +67,6 @@ async def test_price_snapshot_and_change_flag(client, variant, admin_token, auth
     await client.post("/api/cart/items", json={"variant_id": variant, "quantity": 1})
     # muda o preço do produto
     h = auth_headers(admin_token)
-    detail = None
     # descobre o product_id via listagem admin
     plist = (await client.get("/api/admin/products", headers=h)).json()["items"]
     pid = plist[0]["id"]

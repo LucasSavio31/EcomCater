@@ -283,7 +283,7 @@ async def run_checks(db: AsyncSession, *, persist: bool = True) -> list[dict]:
                 HealthSample.service_key
             )
         )
-        last_at = {k: v for k, v in last_rows.all()}
+        last_at = dict(last_rows.all())
         for key, _label, (status, ms, detail) in checks:
             prev = last_at.get(key)
             if prev is not None:

@@ -10,8 +10,8 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageOps
 
-from app.core.errors import ValidationError
 from app.core.config import settings
+from app.core.errors import ValidationError
 from app.shared.storage import storage
 
 # limites de segurança do upload

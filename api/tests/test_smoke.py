@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.config import settings
 from app.core.security import hash_password
 from app.modules.admin.models import AdminUser
 

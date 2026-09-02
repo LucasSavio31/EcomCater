@@ -43,7 +43,6 @@ async def register(
 ) -> tuple[User, dict]:
     if await db.scalar(select(User).where(User.email == email)):
         raise ConflictError("Já existe uma conta com esse e-mail.")
-    from app.core.errors import ValidationError
     from app.shared.cpf import is_valid_cpf, only_digits
 
     cpf_digits = only_digits(cpf) if cpf else ""
@@ -119,18 +118,18 @@ async def sync_default_address(db: AsyncSession, user: User, addr: dict) -> None
     if not zip_digits or not street:
         return  # sem dados de endereço utilizáveis
 
-    fields = dict(
-        label="Endereço da última compra",
-        recipient_name=(addr.get("recipient_name") or user.full_name or "").strip()[:160],
-        zip=zip_digits,
-        street=street[:200],
-        number=(str(addr.get("number") or "").strip() or "s/n")[:20],
-        complement=((addr.get("complement") or "").strip() or None),
-        district=(addr.get("district") or "").strip()[:120],
-        city=(addr.get("city") or "").strip()[:120],
-        state=(addr.get("state") or "").strip().upper()[:2],
-        country=(addr.get("country") or "BR").strip().upper()[:2],
-    )
+    fields = {
+        "label": "Endereço da última compra",
+        "recipient_name": (addr.get("recipient_name") or user.full_name or "").strip()[:160],
+        "zip": zip_digits,
+        "street": street[:200],
+        "number": (str(addr.get("number") or "").strip() or "s/n")[:20],
+        "complement": ((addr.get("complement") or "").strip() or None),
+        "district": (addr.get("district") or "").strip()[:120],
+        "city": (addr.get("city") or "").strip()[:120],
+        "state": (addr.get("state") or "").strip().upper()[:2],
+        "country": (addr.get("country") or "BR").strip().upper()[:2],
+    }
 
     existing = list(
         await db.scalars(select(CustomerAddress).where(CustomerAddress.user_id == user.id))

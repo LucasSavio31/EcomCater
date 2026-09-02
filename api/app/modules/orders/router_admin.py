@@ -1,10 +1,10 @@
 """Rotas administrativas do módulo `orders`."""
 from __future__ import annotations
 
-import io
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Query, status as http_status
+from fastapi import APIRouter, Body, Depends, Query
+from fastapi import status as http_status
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

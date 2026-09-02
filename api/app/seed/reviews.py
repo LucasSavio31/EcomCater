@@ -38,7 +38,7 @@ async def run(db: AsyncSession) -> None:
         if has:
             continue
         n = random.randint(2, 5)
-        for i in range(n):
+        for _ in range(n):
             r, title, bodytext = random.choice(_POS)
             db.add(
                 ProductReview(

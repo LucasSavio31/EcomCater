@@ -13,7 +13,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.errors import ConflictError, ForbiddenError, NotFoundError, ValidationError
+from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.core.events import emit
 from app.modules.orders.models import Order, OrderEvent, OrderItem
 from app.modules.products.models import Product, ProductVariant, VariantOptionValue
@@ -523,7 +523,7 @@ async def attach_variation_options(db: AsyncSession, out: dict) -> dict:
     """Enriquece cada item do pedido com as opções de Cor / Número cadastradas
     no produto correspondente (dropdowns da edição) e completa a miniatura
     quando o item não tem imagem snapshot."""
-    from app.modules.products.models import Product, ProductImage, VariantOptionType
+    from app.modules.products.models import ProductImage, VariantOptionType
 
     pids = {i["product_id"] for i in out.get("items", []) if i.get("product_id")}
     if not pids:
@@ -736,7 +736,7 @@ async def edit_order(db: AsyncSession, number: str, data: dict) -> Order:
         svc.update({k: v for k, v in data["shipping_service"].items() if v is not None})
         order.shipping_service_json = svc
         if data["shipping_service"].get("tracking_code"):
-            order.shipping_method = order.shipping_method  # noqa: keep
+            order.shipping_method = order.shipping_method
 
     for it_edit in data.get("items", []) or []:
         it = next((x for x in order.items if str(x.id) == str(it_edit.get("id"))), None)

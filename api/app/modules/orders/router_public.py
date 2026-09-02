@@ -10,9 +10,9 @@ from app.core.database import get_db
 from app.core.deps import get_current_customer_optional
 from app.core.ratelimit import rate_limit
 from app.modules.cart import service as cart_service
+from app.modules.customers.models import User
 from app.modules.orders import service
 from app.modules.orders.schemas import CheckoutIn, OrderOut
-from app.modules.customers.models import User
 
 router = APIRouter()
 

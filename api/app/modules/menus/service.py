@@ -46,7 +46,7 @@ async def get_location(db: AsyncSession, location: str, *, only_active: bool = T
             if i.parent_id:
                 by_parent.setdefault(i.parent_id, []).append(i)
 
-        async def node(i: MenuItem) -> dict:
+        async def node(i: MenuItem, by_parent: dict[uuid.UUID, list[MenuItem]] = by_parent) -> dict:
             children = sorted(by_parent.get(i.id, []), key=lambda x: x.position)
             size_shortcuts = []
             if i.show_size_shortcuts and i.size_shortcut_category_id:

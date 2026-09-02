@@ -20,7 +20,11 @@ from urllib.parse import urlparse, urlunparse  # noqa: E402
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.bootstrap import discover_modules  # noqa: E402
 from app.core.config import settings  # noqa: E402
@@ -45,7 +49,7 @@ def _derive_test_url() -> str:
 TEST_DB_URL = _derive_test_url()
 
 # --- trava de segurança: nunca rodar contra o banco de desenvolvimento --------
-if TEST_DB_URL == settings.database_url and not urlparse(TEST_DB_URL).path.rstrip("/").endswith("_test"):
+if settings.database_url == TEST_DB_URL and not urlparse(TEST_DB_URL).path.rstrip("/").endswith("_test"):
     raise RuntimeError(
         "ABORTADO: a suíte de testes apagaria o banco de desenvolvimento.\n"
         f"  DATABASE_URL dev  = {settings.database_url}\n"

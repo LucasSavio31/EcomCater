@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0022_leads_popup"
@@ -53,7 +54,6 @@ def upgrade() -> None:
     for name, type_, default in _THEME_COLS:
         if name in have:
             continue
-        kw: dict = {"nullable": default is None and name.endswith("coupon_code")}
         if default is not None:
             op.add_column(
                 "theme_settings",
