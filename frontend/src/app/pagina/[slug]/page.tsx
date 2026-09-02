@@ -6,6 +6,14 @@ import { buildMetadata } from '@/lib/seo';
 
 export const revalidate = 300; // ISR — invalidação por tag no /api/revalidate
 
+// Sem isto, uma rota com segmento dinâmico ([slug]) é renderizada a cada
+// request (não entra no cache de rota do Next). Com generateStaticParams —
+// mesmo retornando [] — a rota vira ISR: o 1º acesso a cada slug renderiza
+// no servidor e fica em cache por `revalidate`; os seguintes vêm do cache.
+export function generateStaticParams(): { slug: string }[] {
+  return [];
+}
+
 interface PageProps {
   params: Promise<{ slug: string }>;
 }

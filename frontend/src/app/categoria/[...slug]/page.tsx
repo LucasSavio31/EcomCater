@@ -13,6 +13,26 @@ import { itemFromListItem } from '@/modules/analytics';
 
 export const revalidate = 120; // ISR — invalidação por tag no /api/revalidate
 
+// Habilita ISR na rota /categoria/[...slug] (sem isto ela renderiza a cada
+// request). Pré-buildamos os caminhos de categoria conhecidos; caminhos com
+// filtros/paginação e categorias novas entram no cache sob demanda.
+export async function generateStaticParams(): Promise<{ slug: string[] }[]> {
+  try {
+    const nodes = await getCategoryTree();
+    const paths: string[] = [];
+    const walk = (list: CategoryNode[]) => {
+      for (const n of list) {
+        if (n.path) paths.push(n.path);
+        if (n.children?.length) walk(n.children);
+      }
+    };
+    walk(nodes);
+    return paths.map((p) => ({ slug: p.split('/') }));
+  } catch {
+    return [];
+  }
+}
+
 type RawSearchParams = Record<string, string | string[] | undefined>;
 
 interface PageProps {

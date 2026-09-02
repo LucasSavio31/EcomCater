@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Accordion } from '@ecom/ui';
-import { getProduct } from '@/modules/catalog/api';
+import { getProduct, getProducts } from '@/modules/catalog/api';
 import { getTheme } from '@/modules/theme';
 import { resolveMediaUrl } from '@/lib/media';
 import { Breadcrumbs, type Crumb } from '@/components/catalog/breadcrumbs';
@@ -21,6 +21,19 @@ import {
 } from '@/lib/seo';
 
 export const revalidate = 120; // ISR — invalidação por tag no /api/revalidate
+
+// Habilita ISR na rota /produto/[slug]: sem generateStaticParams o Next
+// renderiza a página a cada request. Aqui pré-buildamos os mais buscados
+// (o que der; se a API não responder no build, cai em [] e os produtos
+// entram no cache sob demanda no 1º acesso).
+export async function generateStaticParams(): Promise<{ slug: string }[]> {
+  try {
+    const page = await getProducts({ sort: 'relevancia', page: 1, page_size: 60 });
+    return page.items.map((p) => ({ slug: p.slug }));
+  } catch {
+    return [];
+  }
+}
 
 interface PageProps {
   params: Promise<{ slug: string }>;
