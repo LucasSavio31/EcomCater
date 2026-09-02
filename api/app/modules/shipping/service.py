@@ -472,6 +472,33 @@ def _me_is_no_balance(r: httpx.Response) -> bool:
     return any(h in blob for h in _NO_BALANCE_HINTS)
 
 
+# O ME recusa o checkout quando o `shipment_id` guardado no pedido não está mais
+# no carrinho da conta (lojista apagou lá) ou já foi pago numa compra anterior.
+# Mensagem típica: "Existe uma ou mais orders que já foram pagas ou inválidas."
+_INVALID_ORDER_HINTS = (
+    "pagas ou inválidas",
+    "pagas ou invalidas",
+    "already been paid",
+    "já foram pagas",
+    "ja foram pagas",
+    "uma ou mais orders",
+    "order inválida",
+    "order invalida",
+    "invalid order",
+)
+
+
+def _me_is_invalid_orders(r: httpx.Response) -> bool:
+    """O checkout falhou porque o envio guardado não existe mais / já foi pago?"""
+    blob = (r.text or "").lower()
+    try:
+        data = r.json()
+        blob += " " + (data if isinstance(data, str) else json.dumps(data)).lower()
+    except Exception:  # noqa: BLE001
+        pass
+    return any(h in blob for h in _INVALID_ORDER_HINTS)
+
+
 def _me_pick_order(checkout: dict, shipment_id: str) -> dict:
     purchase = (checkout or {}).get("purchase") or checkout or {}
     orders = purchase.get("orders") or []
@@ -617,6 +644,7 @@ async def _me_label_for_order(
     pkg,
     *,
     buy: bool,
+    _fresh_retry: bool = False,
 ) -> dict:
     from sqlalchemy.orm import selectinload
 
@@ -648,6 +676,7 @@ async def _me_label_for_order(
     total_qty = sum(it.quantity for it in order.items) or 1
     reminder = f"Pedido {number}"
     shipment_id = svc.get("shipment_id")
+    created_now = False
 
     # 1) adiciona ao carrinho do Melhor Envio
     if not shipment_id:
@@ -703,6 +732,7 @@ async def _me_label_for_order(
             return {"number": number, "ok": False, "message": "Melhor Envio não retornou o id do envio."}
         svc.update({"shipment_id": shipment_id, "me_status": "cart", "me_reminder": reminder})
         order.shipping_service_json = dict(svc)
+        created_now = True
 
     # etiqueta já foi enviada ao Melhor Envio -> pedido entra "em separação"
     await _me_apply_tracking(
@@ -724,6 +754,25 @@ async def _me_label_for_order(
         checkout = r.json()
     except Exception:  # noqa: BLE001
         pass
+    # O envio guardado no pedido não está mais no carrinho do ME (o lojista
+    # apagou lá) ou já foi pago numa tentativa anterior. Se não acabamos de
+    # criá-lo agora, descarta os ids velhos e refaz do zero (carrinho -> compra)
+    # uma única vez — assim o "reenviar" volta a funcionar depois de excluir o
+    # envio no painel do Melhor Envio.
+    if (
+        r.status_code >= 300
+        and _me_is_invalid_orders(r)
+        and not created_now
+        and not _fresh_retry
+    ):
+        for k in ("shipment_id", "protocol", "tracking_code", "me_status", "me_reminder"):
+            svc.pop(k, None)
+        order.shipping_service_json = dict(svc)
+        await db.flush()
+        return await _me_label_for_order(
+            c, base, db, number, from_block, pkg, buy=buy, _fresh_retry=True
+        )
+
     _already = any(w in r.text.lower() for w in ("already", "paid", "generated"))
     if r.status_code >= 300 and not _already:
         # Sem saldo na carteira do Melhor Envio: o envio JÁ está no carrinho do ME
