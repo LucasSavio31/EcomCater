@@ -66,8 +66,13 @@ async def send_daily_digest(db: AsyncSession, *, label: str | None = None) -> No
         or 0
     )
 
-    # snapshot de saúde (sem persistir de novo)
-    checks = await run_checks(db, persist=False)
+    # snapshot de saúde numa sessão SEPARADA — se algum check der erro de SQL
+    # (ex.: alembic_version ausente no ambiente de teste) não contamina a
+    # transação do resumo.
+    from app.core.database import SessionLocal
+
+    async with SessionLocal() as hdb:
+        checks = await run_checks(hdb, persist=False)
     services = [
         {
             "label": c["label"],

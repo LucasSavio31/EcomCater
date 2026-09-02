@@ -48,6 +48,7 @@ async def _check_migrations(db: AsyncSession) -> tuple[str, int, str]:
     try:
         current = await db.scalar(text("SELECT version_num FROM alembic_version"))
     except Exception:  # noqa: BLE001
+        await db.rollback()  # a query falha aborta a transação — limpa antes de seguir
         return "down", 0, "tabela alembic_version ausente"
     try:
         cfg = Config(os.path.join(os.getcwd(), "alembic.ini"))
