@@ -21,7 +21,12 @@ _task: asyncio.Task | None = None
 
 
 async def _tick_once() -> None:
+    from app.core.locks import acquire
     from app.modules.system.service_backup import run_scheduled
+
+    # só um worker por tick (uvicorn --workers N sobe N agendadores)
+    if not await acquire("backup-scheduler-tick", ttl_seconds=300):
+        return
 
     async with SessionLocal() as db:
         result = await run_scheduled(db)

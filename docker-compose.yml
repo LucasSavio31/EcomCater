@@ -54,6 +54,7 @@ services:
         condition: service_healthy
     volumes:
       - media:/data/media
+      - backups:/data/backups
     networks: [internal]
 
   frontend:
@@ -86,6 +87,7 @@ volumes:
   pgdata:
   redisdata:
   media:
+  backups:
 
 networks:
   internal:

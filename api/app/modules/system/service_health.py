@@ -77,18 +77,28 @@ def _check_cache() -> tuple[str, int, str]:
 
 def _check_storage() -> tuple[str, int, str]:
     path = settings.storage_local_dir
-    try:
-        os.makedirs(path, exist_ok=True)
-        probe = os.path.join(path, ".healthcheck")
-        with open(probe, "w") as fh:
-            fh.write("ok")
-        os.remove(probe)
-        usage = shutil.disk_usage(path)
-        free_pct = usage.free / usage.total * 100
-        status = "ok" if free_pct > 10 else "degraded"
-        return status, 0, f"{_mib(usage.free)} MiB livres ({free_pct:.0f}%)"
-    except Exception as exc:  # noqa: BLE001
-        return "down", 0, f"não gravável: {exc}"
+    probe = os.path.join(path, ".healthcheck")
+    last_exc: Exception | None = None
+    # O ponto de montagem do volume pode "sumir" por um instante durante a
+    # recriação do container. Isso não é falha de storage — tenta de novo
+    # algumas vezes antes de pintar vermelho.
+    for attempt in range(4):
+        try:
+            os.makedirs(path, exist_ok=True)
+            with open(probe, "w") as fh:
+                fh.write("ok")
+            os.remove(probe)
+            usage = shutil.disk_usage(path)
+            free_pct = usage.free / usage.total * 100
+            status = "ok" if free_pct > 10 else "degraded"
+            return status, 0, f"{_mib(usage.free)} MiB livres ({free_pct:.0f}%)"
+        except OSError as exc:
+            last_exc = exc
+            if attempt < 3:
+                time.sleep(0.3)
+        except Exception as exc:  # noqa: BLE001
+            return "down", 0, f"não gravável: {exc}"
+    return "down", 0, f"não gravável após 4 tentativas: {last_exc}"
 
 
 async def _check_smtp(db: AsyncSession) -> tuple[str, int, str]:

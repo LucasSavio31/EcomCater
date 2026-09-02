@@ -22,7 +22,12 @@ _task: asyncio.Task | None = None
 
 
 async def _tick_once() -> None:
+    from app.core.locks import acquire
     from app.modules.system.service_health import run_checks
+
+    # só um worker amostra por janela (uvicorn --workers N sobe N amostradores)
+    if not await acquire("health-sample-tick", ttl_seconds=120):
+        return
 
     async with SessionLocal() as db:
         try:
