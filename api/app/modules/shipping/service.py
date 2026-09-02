@@ -446,6 +446,32 @@ def _me_err(step: str, r: httpx.Response) -> str:
     return f"Melhor Envio ({step}) {r.status_code}: {msg or r.text[:200]}"
 
 
+_NO_BALANCE_HINTS = (
+    "saldo insuficiente",
+    "saldo é insuficiente",
+    "saldo e insuficiente",
+    "sem saldo",
+    "não possui saldo",
+    "nao possui saldo",
+    "adicione saldo",
+    "insufficient balance",
+    "insufficient funds",
+    "balance is insufficient",
+    "not enough balance",
+)
+
+
+def _me_is_no_balance(r: httpx.Response) -> bool:
+    """A compra falhou por falta de saldo na carteira do Melhor Envio?"""
+    blob = (r.text or "").lower()
+    try:
+        data = r.json()
+        blob += " " + (data if isinstance(data, str) else json.dumps(data)).lower()
+    except Exception:  # noqa: BLE001
+        pass
+    return any(h in blob for h in _NO_BALANCE_HINTS)
+
+
 def _me_pick_order(checkout: dict, shipment_id: str) -> dict:
     purchase = (checkout or {}).get("purchase") or checkout or {}
     orders = purchase.get("orders") or []
@@ -698,9 +724,25 @@ async def _me_label_for_order(
         checkout = r.json()
     except Exception:  # noqa: BLE001
         pass
-    if r.status_code >= 300 and not any(
-        w in r.text.lower() for w in ("already", "paid", "generated")
-    ):
+    _already = any(w in r.text.lower() for w in ("already", "paid", "generated"))
+    if r.status_code >= 300 and not _already:
+        # Sem saldo na carteira do Melhor Envio: o envio JÁ está no carrinho do ME
+        # (passo 1 feito). Não trata como erro — o lojista paga no painel do
+        # Melhor Envio e a etiqueta/rastreio entram depois (rotina de sync ou
+        # reenvio). O pedido já ficou "em separação" acima.
+        if _me_is_no_balance(r):
+            svc["me_status"] = "awaiting_me_payment"
+            order.shipping_service_json = dict(svc)
+            return {
+                "number": number,
+                "ok": True,
+                "message": (
+                    "Sem saldo no Melhor Envio — o envio foi criado no carrinho do ME. "
+                    "Faça o pagamento no painel do Melhor Envio; a etiqueta e o rastreio "
+                    "são sincronizados automaticamente depois."
+                ),
+                **_svc_public(svc),
+            }
         return {"number": number, "ok": False, "message": _me_err("compra", r)}
 
     po = _me_pick_order(checkout, shipment_id)
@@ -1064,6 +1106,34 @@ async def poll_melhor_envio_tracking(db: AsyncSession) -> dict:
                 me_status = "canceled"
             elif not me_status and info.get("posted_at"):
                 me_status = "posted"
+
+            # Envio que ficou "aguardando pagamento no ME" e agora foi pago lá
+            # (status released/paid ou já tem rastreio/geração): busca o PDF da
+            # etiqueta para aparecer também no nosso painel.
+            _svc = dict(order.shipping_service_json or {})
+            _paid_in_me = bool(
+                code
+                or info.get("generated_at")
+                or info.get("paid_at")
+                or me_status in ("released", "paid", "posted", "delivered", "in_transit")
+            )
+            if _paid_in_me and not _svc.get("label_url"):
+                try:
+                    await c.post(f"{base}/api/v2/me/shipment/generate", json={"orders": [sid]})
+                    pr = await c.post(
+                        f"{base}/api/v2/me/shipment/print",
+                        json={"mode": "public", "orders": [sid]},
+                    )
+                    if pr.status_code < 300:
+                        url = (pr.json() or {}).get("url")
+                        if url:
+                            _svc["label_url"] = url
+                            _svc["me_status"] = "label_ready"
+                            order.shipping_service_json = _svc
+                            updated += 1
+                except Exception:  # noqa: BLE001
+                    logger.exception("poll ME: falha ao gerar/imprimir etiqueta %s", sid)
+
             if await _me_apply_tracking(
                 db, order, tracking_code=code, me_status=me_status or None, source="rotina"
             ):
