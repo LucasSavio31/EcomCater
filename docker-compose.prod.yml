@@ -36,11 +36,20 @@ services:
     build:
       target: prod
     restart: unless-stopped
+    # o SSR chama a API pela URL pública (https, cert autoassinado) — confia no cert
+    environment:
+      NODE_EXTRA_CA_CERTS: /certs/cert.pem
+    volumes:
+      - ./certs:/certs:ro
 
   admin:
     build:
       target: prod
     restart: unless-stopped
+    environment:
+      NODE_EXTRA_CA_CERTS: /certs/cert.pem
+    volumes:
+      - ./certs:/certs:ro
 
   db:
     restart: unless-stopped
