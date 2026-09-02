@@ -60,7 +60,7 @@ async def register(
     await db.flush()
     pair = issue_pair(str(user.id), scope="customer")
     await _store_refresh(db, str(user.id), pair)
-    await emit("customer.registered", {"user_id": str(user.id)})
+    await emit("customer.registered", {"user_id": str(user.id), "via": "register"})
     return user, pair
 
 
@@ -103,7 +103,7 @@ async def ensure_user_for_checkout(
     await db.flush()
     pair = issue_pair(str(user.id), scope="customer")
     await _store_refresh(db, str(user.id), pair)
-    await emit("customer.registered", {"user_id": str(user.id)})
+    await emit("customer.registered", {"user_id": str(user.id), "via": "checkout"})
     return user, pair
 
 

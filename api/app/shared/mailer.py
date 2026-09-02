@@ -20,14 +20,47 @@ logger = logging.getLogger("mailer")
 
 _env = Environment(autoescape=select_autoescape(["html", "xml"]))
 
+# bloco reutilizável: itens + totais + pagamento + envio + endereço.
+# usado nos e-mails de pedido (cliente e lojista).
+_ORDER_DETAILS = (
+    "<table role='presentation' style='width:100%;border-collapse:collapse;margin:12px 0'>"
+    "{% for it in items %}"
+    "<tr>"
+    "<td style='padding:6px 0;border-bottom:1px solid #eee'>{{ it.qty }}× {{ it.name }}"
+    "{% if it.variant %} <span style='color:#888'>({{ it.variant }})</span>{% endif %}</td>"
+    "<td style='padding:6px 0;border-bottom:1px solid #eee;text-align:right;white-space:nowrap'>"
+    "R$ {{ '%.2f'|format(it.line_cents/100) }}</td>"
+    "</tr>{% endfor %}"
+    "<tr><td style='padding:6px 0'>Subtotal</td>"
+    "<td style='padding:6px 0;text-align:right'>R$ {{ '%.2f'|format(items_total_cents/100) }}</td></tr>"
+    "{% if discount_cents %}<tr><td style='padding:2px 0;color:#0a7d33'>Desconto"
+    "{% if coupon_code %} ({{ coupon_code }}){% endif %}</td>"
+    "<td style='padding:2px 0;text-align:right;color:#0a7d33'>- R$ {{ '%.2f'|format(discount_cents/100) }}</td></tr>{% endif %}"
+    "<tr><td style='padding:2px 0'>Frete{% if shipping_method %} — {{ shipping_method }}{% endif %}</td>"
+    "<td style='padding:2px 0;text-align:right'>R$ {{ '%.2f'|format(shipping_cents/100) }}</td></tr>"
+    "<tr><td style='padding:8px 0;font-weight:bold;font-size:15px'>Total</td>"
+    "<td style='padding:8px 0;text-align:right;font-weight:bold;font-size:15px'>R$ {{ '%.2f'|format(total_cents/100) }}</td></tr>"
+    "</table>"
+    "<p style='margin:10px 0 2px'><b>Pagamento:</b> {{ payment_method or '—' }}"
+    "{% if installments and installments > 1 %} — {{ installments }}x{% endif %}</p>"
+    "{% if pix_qr %}<p style='margin:6px 0'><b>Pix copia e cola:</b><br>"
+    "<span style='word-break:break-all;font-family:monospace;font-size:12px'>{{ pix_qr }}</span></p>{% endif %}"
+    "{% if boleto_url %}<p style='margin:6px 0'><a href='{{ boleto_url }}'>Abrir boleto</a></p>{% endif %}"
+    "<p style='margin:10px 0 2px'><b>Envio:</b> {{ shipping_method or '—' }}"
+    "{% if shipping_eta %} — prazo estimado {{ shipping_eta }} dia(s){% endif %}</p>"
+    "{% if tracking_code %}<p style='margin:2px 0'><b>Rastreio:</b> {{ tracking_code }}</p>{% endif %}"
+    "{% if address %}<p style='margin:10px 0 2px'><b>Entrega em:</b><br>"
+    "{{ address.recipient }}<br>{{ address.line }}"
+    "{% if address.district %} — {{ address.district }}{% endif %}<br>"
+    "{{ address.city }}/{{ address.state }} — CEP {{ address.zip }}</p>{% endif %}"
+)
+
 TEMPLATES: dict[str, tuple[str, str]] = {
     "order_created": (
         "Pedido {{ number }} recebido",
         "<h2>Recebemos seu pedido {{ number }}</h2>"
         "<p>Olá! Seu pedido foi registrado e está <b>aguardando pagamento</b>.</p>"
-        "<p>Total: <b>R$ {{ '%.2f'|format(total_cents/100) }}</b></p>"
-        "{% if pix_qr %}<p><b>Pix copia e cola:</b><br><code>{{ pix_qr }}</code></p>{% endif %}"
-        "{% if boleto_url %}<p><a href='{{ boleto_url }}'>Abrir boleto</a></p>{% endif %}",
+        + _ORDER_DETAILS,
     ),
     "payment_confirmed": (
         "Pagamento confirmado — pedido {{ number }}",
@@ -112,21 +145,45 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         "Bem-vindo(a) à {{ store_name }}",
         "<h2>Conta criada 🎉</h2>"
         "<p>Sua conta na <b>{{ store_name }}</b> foi criada com sucesso.</p>"
-        "<p>Use seu e-mail para entrar e acompanhar seus pedidos.</p>",
+        "<p>Use seu e-mail e a senha que você escolheu para entrar e acompanhar seus pedidos.</p>",
+    ),
+    "account_access": (
+        "Sua conta na {{ store_name }} — dados de acesso",
+        "<h2>Sua conta está pronta ✅</h2>"
+        "<p>Criamos uma conta para você acompanhar as compras na <b>{{ store_name }}</b>.</p>"
+        "<p><b>Dados de acesso:</b></p>"
+        "<p style='margin:4px 0'>Login (e-mail): <b>{{ email }}</b></p>"
+        "<p style='margin:4px 0'>Senha: <b>seu CPF</b> (só números{% if cpf_masked %}, ex.: {{ cpf_masked }}{% endif %})</p>"
+        "<p style='margin:12px 0'><a href='{{ login_url }}' class='btn'>Acessar minha conta</a></p>"
+        "<p style='font-size:12px;color:#9aa0a6'>Recomendamos trocar a senha depois do primeiro acesso, em Minha conta.</p>",
     ),
     "admin_order_created": (
         "[Loja] Novo pedido {{ number }} — R$ {{ '%.2f'|format(total_cents/100) }}",
         "<h2>Novo pedido: {{ number }}</h2>"
-        "<p>Cliente: <b>{{ customer_name }}</b> ({{ email }})</p>"
-        "<p>Total: <b>R$ {{ '%.2f'|format(total_cents/100) }}</b></p>"
-        "<p>Itens:</p><ul>{% for it in items %}<li>{{ it }}</li>{% endfor %}</ul>"
-        "<p><a href='{{ admin_url }}'>Abrir no painel</a></p>",
+        "<p>Cliente: <b>{{ customer_name }}</b> ({{ email }})"
+        "{% if customer_phone %} — {{ customer_phone }}{% endif %}</p>"
+        + _ORDER_DETAILS
+        + "<p style='margin-top:14px'><a href='{{ admin_url }}' class='btn'>Abrir no painel</a></p>",
     ),
 }
 
 
 async def admin_notify_email(db: AsyncSession) -> str:
-    """E-mail que recebe as notificações do lojista (só o aviso de novo pedido)."""
+    """E-mail que recebe os alertas do lojista (novo pedido, anomalia de saúde).
+
+    Preferência: a conta de administrador (super admin) → qualquer admin ativo
+    → remetente do SMTP → ADMIN_EMAIL do .env.
+    """
+    from app.modules.admin.models import AdminUser
+
+    admin = await db.scalar(
+        select(AdminUser)
+        .where(AdminUser.is_active.is_(True))
+        .order_by((AdminUser.role == "super_admin").desc(), AdminUser.created_at.asc())
+        .limit(1)
+    )
+    if admin and admin.email:
+        return admin.email
     conf = await _smtp_conf(db)
     return conf.get("from_email") or settings.admin_email or settings.smtp_from_email
 
@@ -165,6 +222,7 @@ _EMAIL_DEFAULTS = {
 async def _email_theme(db: AsyncSession) -> dict:
     out = dict(_EMAIL_DEFAULTS)
     out["logo_url"] = None
+    out["logo_key"] = None
     out["store_name"] = None
     try:
         from app.modules.admin.models import StoreSettings
@@ -184,6 +242,7 @@ async def _email_theme(db: AsyncSession) -> dict:
             )
             if row.logo_key:
                 out["logo_url"] = storage.url(row.logo_key)
+                out["logo_key"] = row.logo_key
         store = await db.get(StoreSettings, 1)
         if store and store.store_name:
             out["store_name"] = store.store_name
@@ -204,12 +263,20 @@ def _wrap_html(inner: str, subject: str, t: dict, store_name: str) -> str:
         if t["footer"]
         else ""
     )
-    logo = t.get("logo_url")
-    header_inner = (
-        f"<img src='{logo}' alt='{name}' style='max-height:40px;vertical-align:middle'>"
-        if logo
-        else name
-    )
+    # logo embutido como anexo inline (cid:) — e-mail funciona mesmo sem URL
+    # pública válida; cai para texto se não houver logo.
+    if t.get("logo_cid"):
+        header_inner = (
+            f"<img src='cid:{t['logo_cid']}' alt='{name}' "
+            "style='max-height:40px;vertical-align:middle'>"
+        )
+    elif t.get("logo_url"):
+        header_inner = (
+            f"<img src='{t['logo_url']}' alt='{name}' "
+            "style='max-height:40px;vertical-align:middle'>"
+        )
+    else:
+        header_inner = name
     return (
         f"<div style='margin:0;padding:24px;background:#f1f1f1;font-family:Arial,Helvetica,sans-serif'>"
         f"<div style='max-width:560px;margin:0 auto;background:{t['body_bg']};border-radius:12px;overflow:hidden'>"
@@ -227,12 +294,27 @@ async def send(
     template: str,
     context: dict,
     order_id: str | None = None,
+    attachments: list[tuple[str, bytes, str, str]] | None = None,
 ) -> bool:
+    """`attachments`: lista de (filename, data, maintype, subtype), ex.:
+    ("fatura.pdf", b"...", "application", "pdf")."""
     subj_tpl, body_tpl = TEMPLATES.get(template, ("Notificação", "<p>{{ message|default('') }}</p>"))
     subject = _env.from_string(subj_tpl).render(**context)
     inner = _env.from_string(body_tpl).render(**context)
     conf = await _smtp_conf(db)
     et = await _email_theme(db)
+
+    # tenta embutir o logo como imagem inline (cid:)
+    logo_bytes: bytes | None = None
+    if et.get("logo_key"):
+        try:
+            from app.shared.storage import storage
+
+            logo_bytes = storage.read(et["logo_key"])
+            et["logo_cid"] = "storelogo"
+        except Exception:  # noqa: BLE001
+            logo_bytes = None
+
     html = _wrap_html(inner, subject, et, conf["from_name"] or "Loja")
 
     msg = EmailMessage()
@@ -241,6 +323,11 @@ async def send(
     msg["Subject"] = subject
     msg.set_content("Este e-mail requer um cliente compatível com HTML.")
     msg.add_alternative(html, subtype="html")
+    if logo_bytes:
+        sub = "png" if logo_bytes[:8].startswith(b"\x89PNG") else "webp" if logo_bytes[:4] == b"RIFF" else "jpeg"
+        msg.get_payload()[1].add_related(logo_bytes, maintype="image", subtype=sub, cid="storelogo")
+    for fname, data, maintype, subtype in attachments or []:
+        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=fname)
 
     status, error = "sent", None
     if settings.api_env == "test":

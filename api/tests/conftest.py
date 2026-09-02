@@ -86,6 +86,15 @@ async def engine():
     global _schema_ready
     await _ensure_test_database()
     eng = create_async_engine(TEST_DB_URL, poolclass=None)
+
+    # os subscribers do event bus (e-mail de pedido, leads, saúde) abrem a
+    # própria sessão via `app.core.database.SessionLocal` — reaponta pro banco
+    # de teste enquanto a fixture viver, senão eles falam com o banco real.
+    import app.core.database as _db_mod
+
+    _orig_session_local = _db_mod.SessionLocal
+    _db_mod.SessionLocal = async_sessionmaker(eng, class_=AsyncSession, expire_on_commit=False)
+
     if not _schema_ready:
         async with eng.begin() as conn:
             await conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS pg_trgm")
@@ -95,6 +104,7 @@ async def engine():
             await conn.run_sync(Base.metadata.create_all)
         _schema_ready = True
     yield eng
+    _db_mod.SessionLocal = _orig_session_local
     # isola os testes: zera todas as tabelas ao fim de cada um
     try:
         async with eng.begin() as conn:

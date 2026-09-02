@@ -53,6 +53,92 @@ def _tracking_url(order: Order) -> str | None:
     return svc.get("tracking_url") or f"https://www.linkcorreios.com.br/?id={code}"
 
 
+_PAY_LABELS = {
+    "pix": "Pix", "boleto": "Boleto", "credit_card": "Cartão de crédito",
+    "card": "Cartão de crédito", "debit_card": "Cartão de débito",
+}
+
+
+def _order_ctx(order: Order, pay: Payment | None) -> dict:
+    """Contexto rico (itens + totais + pagamento + envio + endereço) para os
+    e-mails de pedido — cliente e lojista compartilham."""
+    addr = order.shipping_address_json or {}
+    svc = order.shipping_service_json or {}
+    eta = (
+        svc.get("delivery_time")
+        or svc.get("delivery_range", {}).get("max")
+        or svc.get("custom_delivery_time")
+    )
+    line = f"{addr.get('street', '')}, {addr.get('number', '')}".strip(", ")
+    if addr.get("complement"):
+        line += f" - {addr['complement']}"
+    return {
+        "number": order.number,
+        "items": [
+            {
+                "name": i.name,
+                "qty": i.quantity,
+                "variant": i.variant_label,
+                "line_cents": (i.unit_price_cents or 0) * i.quantity,
+            }
+            for i in order.items
+        ],
+        "items_total_cents": order.items_total_cents,
+        "discount_cents": order.discount_cents,
+        "shipping_cents": order.shipping_cents,
+        "total_cents": order.grand_total_cents,
+        "coupon_code": order.coupon_code,
+        "payment_method": _PAY_LABELS.get(pay.method, pay.method) if pay else None,
+        "installments": pay.installments if pay else None,
+        "pix_qr": pay.pix_qr_code if pay else None,
+        "boleto_url": pay.boleto_url if pay else None,
+        "shipping_method": order.shipping_method or svc.get("name") or svc.get("service"),
+        "shipping_eta": eta,
+        "tracking_code": svc.get("tracking_code"),
+        "address": {
+            "recipient": addr.get("recipient_name") or order.email,
+            "line": line,
+            "district": addr.get("district"),
+            "city": addr.get("city"),
+            "state": (addr.get("state") or "").upper(),
+            "zip": addr.get("zip"),
+        }
+        if addr
+        else None,
+    }
+
+
+async def _send_account_access(db, order: Order) -> None:
+    """Manda o e-mail com os dados de acesso quando o comprador tem uma conta
+    cujo login é e-mail + CPF (conta criada no checkout, sem senha própria)."""
+    if not order.user_id:
+        return
+    from app.core.security import verify_password
+    from app.modules.admin.models import StoreSettings
+    from app.modules.customers.models import User
+
+    user = await db.get(User, order.user_id)
+    if not user or not user.email or not user.cpf:
+        return
+    # só se o CPF ainda é a senha (não trocou por uma própria)
+    if not verify_password(user.cpf, user.password_hash):
+        return
+    store = await db.get(StoreSettings, 1)
+    cpf = user.cpf
+    masked = f"{cpf[:3]}.***.***-{cpf[-2:]}" if len(cpf) == 11 else None
+    await mailer.send(
+        db,
+        to=user.email,
+        template="account_access",
+        context={
+            "store_name": (store.store_name if store else None) or "nossa loja",
+            "email": user.email,
+            "cpf_masked": masked,
+            "login_url": f"{settings.site_url.rstrip('/')}/minha-conta",
+        },
+    )
+
+
 @on("order.created")
 async def _on_created(payload: dict) -> None:
     async with SessionLocal() as db:
@@ -62,19 +148,19 @@ async def _on_created(payload: dict) -> None:
         pay = await db.scalar(
             select(Payment).where(Payment.order_id == order.id).order_by(Payment.created_at.desc())
         )
-        # Cliente
+        ctx = _order_ctx(order, pay)
+
+        # Cliente — confirmação do pedido com detalhes de pagamento e envio
         await mailer.send(
-            db,
-            to=order.email,
-            template="order_created",
-            order_id=str(order.id),
-            context={
-                "number": order.number,
-                "total_cents": order.grand_total_cents,
-                "pix_qr": pay.pix_qr_code if pay else None,
-                "boleto_url": pay.boleto_url if pay else None,
-            },
+            db, to=order.email, template="order_created", order_id=str(order.id), context=ctx
         )
+
+        # Comprador convidado: e-mail com os dados de acesso (login = e-mail,
+        # senha = CPF) — enquanto a conta ainda usa o CPF como senha.
+        try:
+            await _send_account_access(db, order)
+        except Exception:  # noqa: BLE001
+            logger.exception("falha ao enviar dados de acesso p/ %s", order.email)
         # Marca carrinho abandonado como recuperado
         try:
             from app.modules.cart_recovery.module import mark_recovered
@@ -98,13 +184,9 @@ async def _on_created(payload: dict) -> None:
         except Exception:  # noqa: BLE001
             logger.exception("falha ao registrar lead do comprador %s", order.email)
 
-        # Lojista (ÚNICO e-mail que o admin recebe)
+        # Lojista — aviso de novo pedido (vai para a conta de administrador)
         try:
             admin_to = await mailer.admin_notify_email(db)
-            items = [
-                f"{i.quantity}x {i.name}" + (f" ({i.variant_label})" if i.variant_label else "")
-                for i in order.items
-            ]
             from app.modules.orders.service import _customer_name
 
             await mailer.send(
@@ -113,11 +195,10 @@ async def _on_created(payload: dict) -> None:
                 template="admin_order_created",
                 order_id=str(order.id),
                 context={
-                    "number": order.number,
-                    "total_cents": order.grand_total_cents,
+                    **ctx,
                     "email": order.email,
                     "customer_name": _customer_name(order),
-                    "items": items,
+                    "customer_phone": (order.shipping_address_json or {}).get("phone"),
                     "admin_url": f"{settings.admin_url.rstrip('/')}/pedidos/{order.number}",
                 },
             )

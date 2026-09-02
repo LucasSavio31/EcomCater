@@ -16,6 +16,10 @@ logger = logging.getLogger("customers.events")
 
 @on("customer.registered")
 async def _on_registered(payload: dict) -> None:
+    # conta criada no checkout recebe o e-mail de "dados de acesso" pelo
+    # fluxo de order.created (login = e-mail + CPF); aqui só o cadastro explícito.
+    if payload.get("via") == "checkout":
+        return
     async with SessionLocal() as db:
         user = await db.scalar(select(User).where(User.id == payload["user_id"]))
         if not user or not user.email:
