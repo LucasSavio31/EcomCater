@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -25,8 +26,13 @@ logger = logging.getLogger("orders.events")
 
 
 async def _order(db, order_id: str) -> Order | None:
+    # `items` é carregado junto: os handlers rodam fora do contexto de request
+    # e o acesso lazy a relationship em sessão async estoura MissingGreenlet.
     return await db.scalar(
-        select(Order).where(Order.id == order_id).execution_options(populate_existing=True)
+        select(Order)
+        .where(Order.id == order_id)
+        .options(selectinload(Order.items))
+        .execution_options(populate_existing=True)
     )
 
 
