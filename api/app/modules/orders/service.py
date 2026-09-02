@@ -396,8 +396,14 @@ async def transition(
         db, order, type="status_changed", from_status=prev, to_status=new_status,
         message=message, actor_type=actor_type, actor_id=actor_id,
     )
-    await db.flush()
-    await emit("order.status_changed", {"order_id": str(order.id), "status": new_status})
+    # commit ANTES de emitir: os subscribers de `order.status_changed` (e-mail
+    # ao cliente com o novo status + resumo + rastreio) abrem a própria sessão
+    # e precisam enxergar o status/rastreio JÁ gravados.
+    await db.commit()
+    await emit(
+        "order.status_changed",
+        {"order_id": str(order.id), "status": new_status, "from_status": prev},
+    )
     return order
 
 

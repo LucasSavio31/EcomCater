@@ -61,6 +61,7 @@ _ORDER_DETAILS = (
     "{% if address.district %} — {{ address.district }}{% endif %}<br>"
     "{{ address.city }}/{{ address.state }} — CEP {{ address.zip }}</p>"
     "{% endif %}"
+    "{% endif %}"  # fecha o "{% if items is defined and items %}"
 )
 
 
