@@ -411,7 +411,7 @@ async def get_smtp(db: DbDep, _: Annotated[AdminUser, Depends(require_role("admi
 
     row = await db.get(SmtpSettings, 1)
     if not row:
-        return {"host": None, "configured": False}
+        return {"host": None, "configured": False, "password_set": False}
     return {
         "host": row.host,
         "port": row.port,
@@ -421,6 +421,8 @@ async def get_smtp(db: DbDep, _: Annotated[AdminUser, Depends(require_role("admi
         "from_email": row.from_email,
         "from_name": row.from_name,
         "configured": bool(row.host),
+        # nunca devolve a senha; só diz se há uma salva (o painel mostra •••• fixo)
+        "password_set": bool(row.password_enc),
     }
 
 
@@ -437,11 +439,14 @@ async def update_smtp(payload: dict, db: DbDep, _: Annotated[AdminUser, Depends(
     for k in ("host", "port", "username", "use_tls", "use_ssl", "from_email", "from_name"):
         if k in payload:
             setattr(row, k, payload[k])
-    if payload.get("password"):
-        row.password_enc = payload["password"]  # TODO F9: cifrar em repouso
+    # o painel manda a senha só quando o usuário realmente digitou outra; o
+    # placeholder de bolinhas nunca chega aqui como senha nova.
+    pwd = payload.get("password")
+    if pwd and pwd.strip() and set(pwd) != {"•"}:
+        row.password_enc = pwd  # TODO F9: cifrar em repouso
     row.updated_at = datetime.now(UTC)
     await db.flush()
-    return {"ok": True}
+    return {"ok": True, "password_set": bool(row.password_enc)}
 
 
 @router.post("/smtp/test")
@@ -453,5 +458,8 @@ async def test_smtp(
     to = payload.get("to")
     if not to:
         raise ValidationError("Informe o e-mail de destino.")
-    ok = await mailer.send_test(db, to)
-    return {"sent": ok}
+    res = await mailer.send_test(db, to)
+    await db.commit()
+    if not res["ok"]:
+        raise ValidationError(f"SMTP recusou o envio: {res['error']}")
+    return {"sent": True}

@@ -140,6 +140,7 @@ async def _smtp_conf(db: AsyncSession) -> dict:
             "username": row.username,
             "password": row.password_enc,
             "use_tls": row.use_tls,
+            "use_ssl": row.use_ssl,
             "from_email": row.from_email or settings.smtp_from_email,
             "from_name": row.from_name or settings.smtp_from_name,
         }
@@ -149,6 +150,7 @@ async def _smtp_conf(db: AsyncSession) -> dict:
         "username": settings.smtp_user or None,
         "password": settings.smtp_password or None,
         "use_tls": settings.smtp_use_tls,
+        "use_ssl": False,
         "from_email": settings.smtp_from_email,
         "from_name": settings.smtp_from_name,
     }
@@ -245,6 +247,12 @@ async def send(
         # não abre conexão SMTP real na suíte; só registra o EmailLog
         pass
     else:
+        # porta 465 = TLS implícito (use_ssl); 587 = STARTTLS (use_tls).
+        # aiosmtplib recusa os dois juntos, então escolhe um.
+        if conf.get("use_ssl") or conf["port"] == 465:
+            tls_kwargs = {"use_tls": True}
+        else:
+            tls_kwargs = {"start_tls": bool(conf["use_tls"])}
         try:
             await aiosmtplib.send(
                 msg,
@@ -252,8 +260,8 @@ async def send(
                 port=conf["port"],
                 username=conf["username"] or None,
                 password=conf["password"] or None,
-                start_tls=bool(conf["use_tls"]),
                 timeout=15,
+                **tls_kwargs,
             )
         except Exception as exc:  # noqa: BLE001
             status, error = "failed", str(exc)[:400]
@@ -273,5 +281,18 @@ async def send(
     return status == "sent"
 
 
-async def send_test(db: AsyncSession, to: str) -> bool:
-    return await send(db, to=to, template="__test__", context={"message": "Teste de SMTP OK."})
+async def send_test(db: AsyncSession, to: str) -> dict:
+    """Envia o e-mail de teste e devolve {ok, error} — o `error` traz a
+    mensagem real do servidor SMTP (ex.: '535 BadCredentials') pra aparecer
+    no painel."""
+    await send(db, to=to, template="__test__", context={"message": "Teste de SMTP OK."})
+    await db.flush()
+    row = await db.scalar(
+        select(EmailLog)
+        .where(EmailLog.template == "__test__", EmailLog.to_email == to)
+        .order_by(EmailLog.created_at.desc())
+        .limit(1)
+    )
+    if row and row.status == "sent":
+        return {"ok": True, "error": None}
+    return {"ok": False, "error": (row.error if row and row.error else "Falha ao enviar (sem detalhe).")}

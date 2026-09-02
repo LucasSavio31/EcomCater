@@ -11,10 +11,12 @@ export interface SmtpConfig {
   use_ssl: boolean;
   from_email: string;
   from_name: string;
+  /** true quando já há uma senha salva no servidor (a senha em si nunca vem). */
+  password_set?: boolean;
 }
 
 export const smtpApi = {
   get: () => adminFetch<SmtpConfig>('/api/admin/smtp'),
   put: (body: Partial<SmtpConfig>) => adminFetch<SmtpConfig>('/api/admin/smtp', { method: 'PUT', body }),
-  test: (to: string) => adminFetch<void>('/api/admin/smtp/test', { method: 'POST', body: { to } }),
+  test: (to: string) => adminFetch<{ sent: boolean }>('/api/admin/smtp/test', { method: 'POST', body: { to } }),
 };

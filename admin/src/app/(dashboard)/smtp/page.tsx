@@ -9,6 +9,10 @@ import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { smtpApi, type SmtpConfig } from '@/modules/smtp/api';
 
+// Mostrado no campo Senha sempre que já existe uma senha salva no servidor.
+// Nunca é enviado de volta como senha nova.
+const SAVED_MASK = '••••••••••••';
+
 export default function SmtpPage() {
   const toast = useToast();
   const { data, loading, error, reload, setData } = useResource(() => smtpApi.get());
@@ -17,7 +21,11 @@ export default function SmtpPage() {
   const [testTo, setTestTo] = useState('');
   const [testing, setTesting] = useState(false);
 
-  const cfg = draft ?? data;
+  const base = data
+    ? { ...data, password: data.password_set ? SAVED_MASK : (data.password ?? '') }
+    : null;
+  const cfg = draft ?? base;
+
   const set = <K extends keyof SmtpConfig>(k: K, v: SmtpConfig[K]): void => {
     if (!cfg) return;
     setDraft({ ...cfg, [k]: v });
@@ -26,15 +34,18 @@ export default function SmtpPage() {
   async function save(): Promise<void> {
     if (!cfg) return;
     setSaving(true);
-    const result = await smtpApi.put(cfg);
+    // só manda a senha se o usuário realmente digitou outra (não o mascarão)
+    const body: Partial<SmtpConfig> = { ...cfg };
+    if (body.password === SAVED_MASK || !body.password) delete body.password;
+    const result = await smtpApi.put(body);
     setSaving(false);
     if (!result.ok) {
       toast.error(result.error.message);
       return;
     }
     toast.success('Configuração SMTP salva.');
-    setData(result.data);
     setDraft(null);
+    await reload();
   }
 
   async function sendTest(): Promise<void> {
@@ -69,14 +80,22 @@ export default function SmtpPage() {
                 label="Senha"
                 type="password"
                 value={cfg.password}
+                onFocus={(e) => {
+                  if (e.target.value === SAVED_MASK) set('password', '');
+                }}
                 onChange={(e) => set('password', e.target.value)}
+                hint={
+                  data?.password_set
+                    ? 'Há uma senha salva. Deixe o mascarão para mantê-la; digite outra para trocar.'
+                    : 'Para Gmail use uma Senha de app de 16 caracteres (não a senha da conta).'
+                }
               />
               <Input label="Remetente (e-mail)" value={cfg.from_email} onChange={(e) => set('from_email', e.target.value)} />
               <Input label="Remetente (nome)" value={cfg.from_name} onChange={(e) => set('from_name', e.target.value)} />
             </div>
             <div className="flex flex-wrap gap-4">
-              <Checkbox label="Usar TLS" checked={cfg.use_tls} onChange={(v) => set('use_tls', v)} />
-              <Checkbox label="Usar SSL" checked={cfg.use_ssl} onChange={(v) => set('use_ssl', v)} />
+              <Checkbox label="Usar TLS (porta 587 / STARTTLS)" checked={cfg.use_tls} onChange={(v) => set('use_tls', v)} />
+              <Checkbox label="Usar SSL (porta 465 / TLS implícito)" checked={cfg.use_ssl} onChange={(v) => set('use_ssl', v)} />
             </div>
             <Button loading={saving} onClick={() => void save()} className="self-start">
               Salvar configuração
@@ -96,6 +115,9 @@ export default function SmtpPage() {
                   Enviar teste
                 </Button>
               </div>
+              <p className="text-xs text-text-muted">
+                Se falhar, a mensagem exata do servidor SMTP aparece no aviso de erro.
+              </p>
             </div>
           </Card>
         )}
