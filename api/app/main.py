@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.bootstrap import discover_modules
+from app.core.cache_bust import CacheBust
 from app.core.cache_headers import PublicCacheHeaders
 from app.core.config import settings
 from app.core.errors import register_error_handlers
@@ -76,6 +77,8 @@ def create_app() -> FastAPI:
     # Cache-Control em GET público (catálogo/tema/menus/mídia) — janela curta
     # p/ proxy/navegador/CDN; invalidação real é por tag no Next.
     app.add_middleware(PublicCacheHeaders)
+    # Invalida o cache de leitura (Redis) quando o admin salva catálogo/tema.
+    app.add_middleware(CacheBust)
 
     register_error_handlers(app)
 

@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import NS_MENUS, cached_json
 from app.core.database import get_db
 from app.modules.menus import service
 
@@ -18,4 +19,7 @@ DbDep = Annotated[AsyncSession, Depends(get_db)]
 async def get_menu(location: str, db: DbDep) -> list[dict]:
     if location not in ("header", "footer"):
         return []
-    return await service.get_location(db, location, only_active=True)
+    return await cached_json(
+        NS_MENUS, ("menus:location", location), 300,
+        lambda: service.get_location(db, location, only_active=True),
+    )

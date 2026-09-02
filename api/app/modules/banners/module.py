@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import NS_CATALOG, cached_json
 from app.core.database import get_db
 from app.core.deps import get_current_admin, require_role
 from app.core.module_registry import ModuleSpec, register
@@ -19,7 +20,10 @@ EditorDep = Annotated[AdminUser, Depends(require_role("admin", "staff"))]
 
 @public_router.get("")
 async def list_banners(db: DbDep, slot: str | None = None) -> list[dict]:
-    return await service.list_public(db, slot)
+    return await cached_json(
+        NS_CATALOG, ("banners:public", slot), 300,
+        lambda: service.list_public(db, slot),
+    )
 
 
 @admin_router.get("")

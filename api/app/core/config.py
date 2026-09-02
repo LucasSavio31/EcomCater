@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # redis
     redis_url: str = "redis://redis:6379/0"
 
+    # cache de leitura (catálogo/tema/menus) em Redis — best-effort
+    cache_enabled: bool = True
+
     # segurança
     api_secret_key: str = "dev-secret-troque-em-producao"
     jwt_access_ttl_seconds: int = 900

@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import NS_CATALOG, NS_PRODUCT, cached_json
 from app.core.database import get_db
 from app.core.deps import get_current_customer
 from app.core.ratelimit import rate_limit
@@ -34,25 +35,37 @@ async def list_products(
     page: int = Query(1, ge=1),
     page_size: int = Query(24, ge=1, le=60),
 ) -> dict:
-    return await service.list_products(
-        db,
-        category=category,
-        price_min=price_min,
-        price_max=price_max,
-        option_values=option_value or [],
-        sizes=size or [],
-        materials=material or [],
-        colors=color or [],
-        in_stock=in_stock,
-        sort=sort,
-        page=page,
-        page_size=page_size,
+    key = {
+        "category": category, "price_min": price_min, "price_max": price_max,
+        "option_value": sorted(option_value or []), "size": sorted(size or []),
+        "material": sorted(material or []), "color": sorted(color or []),
+        "in_stock": in_stock, "sort": sort, "page": page, "page_size": page_size,
+    }
+    return await cached_json(
+        NS_CATALOG, ("products:list", key), 60,
+        lambda: service.list_products(
+            db,
+            category=category,
+            price_min=price_min,
+            price_max=price_max,
+            option_values=option_value or [],
+            sizes=size or [],
+            materials=material or [],
+            colors=color or [],
+            in_stock=in_stock,
+            sort=sort,
+            page=page,
+            page_size=page_size,
+        ),
     )
 
 
 @router.get("/featured")
 async def featured(db: DbDep, limit: int = Query(12, ge=1, le=40)) -> list[dict]:
-    return await service.featured(db, limit)
+    return await cached_json(
+        NS_CATALOG, ("products:featured", limit), 120,
+        lambda: service.featured(db, limit),
+    )
 
 
 @router.get("/by-ids")
@@ -70,12 +83,18 @@ async def search(
     q: str = Query(min_length=1),
     limit: int = Query(8, ge=1, le=20),
 ) -> list[dict]:
-    return await service.search(db, q, limit)
+    return await cached_json(
+        NS_CATALOG, ("products:search", q.strip().lower(), limit), 45,
+        lambda: service.search(db, q, limit),
+    )
 
 
 @router.get("/{slug}", response_model=ProductDetail)
 async def get_product(slug: str, db: DbDep) -> dict:
-    return await service.get_detail_by_slug(db, slug)
+    return await cached_json(
+        NS_PRODUCT, ("products:detail", slug), 120,
+        lambda: service.get_detail_by_slug(db, slug),
+    )
 
 
 @router.post("/{slug}/reviews", status_code=201)
