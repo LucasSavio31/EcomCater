@@ -11,27 +11,11 @@ import { buildMetadata, breadcrumbJsonLd, jsonLdScript } from '@/lib/seo';
 import { TrackOnMount } from '@/components/analytics/track-on-mount';
 import { itemFromListItem } from '@/modules/analytics';
 
-export const revalidate = 120; // ISR — invalidação por tag no /api/revalidate
-
-// Habilita ISR na rota /categoria/[...slug] (sem isto ela renderiza a cada
-// request). Pré-buildamos os caminhos de categoria conhecidos; caminhos com
-// filtros/paginação e categorias novas entram no cache sob demanda.
-export async function generateStaticParams(): Promise<{ slug: string[] }[]> {
-  try {
-    const nodes = await getCategoryTree();
-    const paths: string[] = [];
-    const walk = (list: CategoryNode[]) => {
-      for (const n of list) {
-        if (n.path) paths.push(n.path);
-        if (n.children?.length) walk(n.children);
-      }
-    };
-    walk(nodes);
-    return paths.map((p) => ({ slug: p.split('/') }));
-  } catch {
-    return [];
-  }
-}
+// A PLP depende de `searchParams` (filtros, ordenação, paginação na URL), então
+// NÃO dá pra colocar no Full Route Cache do Next — `generateStaticParams` aqui
+// quebra o render com DYNAMIC_SERVER_USAGE. Fica dinâmica mesmo; a velocidade
+// vem do cache Redis da API (`/api/products`, `/api/categories`).
+export const dynamic = 'force-dynamic';
 
 type RawSearchParams = Record<string, string | string[] | undefined>;
 
