@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     revalidate_secret: str = ""
     # token para o cron externo disparar o envio de recuperação de carrinho
     recovery_cron_token: str = "dev-recovery-token"
+    # agendador interno da recuperação de carrinho (roda no processo da API)
+    recovery_scheduler_enabled: bool = True
+    recovery_scheduler_interval_seconds: int = 300
     # token para o cron externo disparar o backup agendado
     system_cron_token: str = "dev-system-token"
 

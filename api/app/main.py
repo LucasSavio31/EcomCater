@@ -27,23 +27,23 @@ async def lifespan(_: FastAPI):
     # garante o diretório de mídia local
     if settings.storage_backend == "local":
         Path(settings.storage_local_dir).mkdir(parents=True, exist_ok=True)
-    # agendador interno de backup (ver app/modules/system/scheduler.py)
-    # rotina de sincronização de rastreio com o Melhor Envio
+    # agendadores internos (rodam no processo da API, trava de worker único)
+    from app.modules.cart_recovery import scheduler as recovery_scheduler
     from app.modules.shipping import scheduler as me_tracking_scheduler
-
-    # amostragem de saúde dos serviços a cada janela de 15 min
     from app.modules.system import health_scheduler
     from app.modules.system import scheduler as backup_scheduler
 
     backup_scheduler.start()
     me_tracking_scheduler.start()
     health_scheduler.start()
+    recovery_scheduler.start()
     try:
         yield
     finally:
         await backup_scheduler.stop()
         await me_tracking_scheduler.stop()
         await health_scheduler.stop()
+        await recovery_scheduler.stop()
 
 
 def create_app() -> FastAPI:

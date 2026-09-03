@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Badge, Button, Card, Input } from '@ecom/ui';
+import { IconTrash } from '@/components/nav-icons';
 import { PageHeader } from '@/components/page-header';
 import { Checkbox } from '@/components/form-controls';
 import { AsyncBoundary } from '@/components/async-boundary';
@@ -325,20 +326,31 @@ export default function CartRecoveryPage() {
               const open = openId === m.id;
               return (
                 <div key={m.id}>
-                  <button
-                    type="button"
-                    aria-expanded={open}
-                    onClick={() => openPanel(m.id, m)}
-                    className="flex min-h-touch w-full flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-bg-subtle"
-                  >
-                    <span className="text-sm font-medium text-text-muted">#{m.position}</span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{m.subject}</span>
-                    <Badge tone="neutral">após {m.delay_minutes} min</Badge>
-                    {!m.is_active && <Badge tone="warning">inativa</Badge>}
-                    <span aria-hidden className="text-text-muted">
-                      {open ? '–' : '+'}
-                    </span>
-                  </button>
+                  <div className="flex min-h-touch items-center gap-1 pr-2 hover:bg-bg-subtle">
+                    <button
+                      type="button"
+                      aria-expanded={open}
+                      onClick={() => openPanel(m.id, m)}
+                      className="flex flex-1 flex-wrap items-center gap-3 px-4 py-3 text-left"
+                    >
+                      <span className="text-sm font-medium text-text-muted">#{m.position}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{m.subject}</span>
+                      <Badge tone="neutral">após {m.delay_minutes} min</Badge>
+                      {!m.is_active && <Badge tone="warning">inativa</Badge>}
+                      <span aria-hidden className="text-text-muted">
+                        {open ? '–' : '+'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDel(m.id)}
+                      aria-label={`Excluir a mensagem "${m.subject}"`}
+                      title="Excluir esta mensagem"
+                      className="shrink-0 rounded-card p-2 text-text-muted hover:bg-danger/10 hover:text-danger"
+                    >
+                      <IconTrash className="h-4 w-4" />
+                    </button>
+                  </div>
                   {open && <div className="px-4 pb-4">{messageForm}</div>}
                 </div>
               );
