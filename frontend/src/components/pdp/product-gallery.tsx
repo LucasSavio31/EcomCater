@@ -73,11 +73,11 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
                     }}
                     aria-label={`Ver imagem ${i + 1}`}
                     aria-current={selected ? 'true' : undefined}
-                    className={`relative block h-16 w-16 shrink-0 overflow-hidden rounded-card border-2 transition ${
+                    className={`relative block h-20 w-20 shrink-0 overflow-hidden rounded-card border-2 transition ${
                       selected ? 'border-primary' : 'border-surface-border hover:border-primary/60'
                     }`}
                   >
-                    {thumb && <Image src={thumb} alt="" fill sizes="64px" className="object-cover" />}
+                    {thumb && <Image src={thumb} alt="" fill sizes="80px" className="object-cover" />}
                   </button>
                   {selected && (
                     <span
