@@ -30,12 +30,12 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const [animate, setAnimate] = useState(true);
 
   const [mobileZoom, setMobileZoom] = useState(false);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [bgPos, setBgPos] = useState({ x: 50, y: 50 }); // % da imagem ampliada visível
 
   const frameRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number; dragging: boolean } | null>(null);
   const lastTapRef = useRef(0);
-  const panStartRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
+  const panStartRef = useRef<{ x: number; y: number; bx: number; by: number } | null>(null);
 
   // reativa a transição depois do "pulo" invisível de wrap (nunca durante o arrasto)
   useEffect(() => {
@@ -95,13 +95,10 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
   };
 
   const openMobileZoom = () => {
-    setPan({ x: 0, y: 0 });
+    setBgPos({ x: 50, y: 50 });
     setMobileZoom(true);
   };
-  const closeMobileZoom = () => {
-    setMobileZoom(false);
-    setPan({ x: 0, y: 0 });
-  };
+  const closeMobileZoom = () => setMobileZoom(false);
 
   const onMove = (event: React.MouseEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -110,12 +107,17 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
     setOrigin(`${x}% ${y}%`);
   };
 
-  // --- gestos do carrossel mobile (fechado): arrasta a faixa / 2 toques = zoom
+  // --- gestos do quadro mobile: com zoom arrasta a imagem ampliada (dentro do
+  //     quadro) e um toque sai; sem zoom, arrasta o carrossel e 2 toques ampliam
   const onFrameTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
     if (!t) return;
     dragRef.current = { x: t.clientX, y: t.clientY, dragging: false };
-    setAnimate(false);
+    if (mobileZoom) {
+      panStartRef.current = { x: t.clientX, y: t.clientY, bx: bgPos.x, by: bgPos.y };
+    } else {
+      setAnimate(false);
+    }
   };
   const onFrameTouchMove = (e: React.TouchEvent) => {
     const d = dragRef.current;
@@ -123,20 +125,38 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
     if (!d || !t) return;
     const dx = t.clientX - d.x;
     const dy = t.clientY - d.y;
-    if (!d.dragging && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) d.dragging = true;
-    if (d.dragging) setDragX(dx);
+    if (!d.dragging && Math.hypot(dx, dy) > 8) d.dragging = true;
+
+    if (mobileZoom) {
+      const s = panStartRef.current;
+      const el = frameRef.current;
+      if (!s || !el) return;
+      const nx = s.bx - (dx / el.clientWidth) * 90;
+      const ny = s.by - (dy / el.clientHeight) * 90;
+      setBgPos({ x: Math.min(100, Math.max(0, nx)), y: Math.min(100, Math.max(0, ny)) });
+      return;
+    }
+    if (d.dragging && Math.abs(dx) > Math.abs(dy)) setDragX(dx);
   };
   const onFrameTouchEnd = (e: React.TouchEvent) => {
     const d = dragRef.current;
     dragRef.current = null;
+    panStartRef.current = null;
     if (!d) return;
     const t = e.changedTouches[0];
     const dx = t ? t.clientX - d.x : 0;
+    const now = Date.now();
 
+    // com zoom: toque (sem arrasto) volta ao normal
+    if (mobileZoom) {
+      if (!d.dragging) closeMobileZoom();
+      return;
+    }
+
+    // sem zoom: toque simples/duplo; arrasto = troca de imagem
     if (!d.dragging) {
       setAnimate(true);
       setDragX(0);
-      const now = Date.now();
       if (now - lastTapRef.current < 300) {
         lastTapRef.current = 0;
         openMobileZoom();
@@ -151,35 +171,6 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
     else {
       setAnimate(true);
       setDragX(0);
-    }
-  };
-
-  // --- gestos com o zoom mobile aberto: arrasta pra navegar / 2 toques fecham
-  const onZoomTouchStart = (e: React.TouchEvent) => {
-    const t = e.touches[0];
-    if (!t) return;
-    dragRef.current = { x: t.clientX, y: t.clientY, dragging: false };
-    panStartRef.current = { x: t.clientX, y: t.clientY, px: pan.x, py: pan.y };
-  };
-  const onZoomTouchMove = (e: React.TouchEvent) => {
-    const t = e.touches[0];
-    const s = panStartRef.current;
-    const d = dragRef.current;
-    if (!t || !s || !d) return;
-    if (Math.hypot(t.clientX - s.x, t.clientY - s.y) > 10) d.dragging = true;
-    setPan({ x: s.px + (t.clientX - s.x), y: s.py + (t.clientY - s.y) });
-  };
-  const onZoomTouchEnd = () => {
-    const d = dragRef.current;
-    dragRef.current = null;
-    panStartRef.current = null;
-    if (!d || d.dragging) return;
-    const now = Date.now();
-    if (now - lastTapRef.current < 300) {
-      lastTapRef.current = 0;
-      closeMobileZoom();
-    } else {
-      lastTapRef.current = now;
     }
   };
 
@@ -283,11 +274,13 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
         </div>
       </div>
 
-      {/* Mobile: carrossel deslizante (a imagem "anda" no swipe) */}
+      {/* Mobile: carrossel deslizante; 2 toques = zoom DENTRO do quadro */}
       <div
         ref={frameRef}
-        className="relative h-[min(88vw,58vh)] w-full overflow-hidden rounded-card border border-surface-border bg-bg-subtle md:hidden"
-        style={{ touchAction: 'pan-y' }}
+        className={`relative h-[min(88vw,58vh)] w-full overflow-hidden rounded-card border border-surface-border bg-bg-subtle md:hidden ${
+          mobileZoom ? 'cursor-zoom-out' : ''
+        }`}
+        style={{ touchAction: mobileZoom ? 'none' : 'pan-y' }}
         onTouchStart={onFrameTouchStart}
         onTouchMove={onFrameTouchMove}
         onTouchEnd={onFrameTouchEnd}
@@ -317,15 +310,29 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
           ))}
         </div>
 
+        {/* camada de zoom — ampliada dentro do próprio quadro */}
+        {mobileZoom && (
+          <div
+            className="absolute inset-0 z-20 bg-surface bg-no-repeat"
+            style={{
+              backgroundImage: `url(${mobileZoomSrc})`,
+              backgroundSize: '230%',
+              backgroundPosition: `${bgPos.x}% ${bgPos.y}%`,
+            }}
+          />
+        )}
+
         {/* lupa discreta */}
-        <button
-          type="button"
-          onClick={openMobileZoom}
-          aria-label="Ampliar imagem"
-          className="absolute right-2 top-2 z-10 rounded-full bg-black/30 p-1.5 text-white backdrop-blur-sm active:bg-black/50"
-        >
-          <SearchIcon className="h-4 w-4" />
-        </button>
+        {!mobileZoom && (
+          <button
+            type="button"
+            onClick={openMobileZoom}
+            aria-label="Ampliar imagem"
+            className="absolute right-2 top-2 z-10 rounded-full bg-black/30 p-1.5 text-white backdrop-blur-sm active:bg-black/50"
+          >
+            <SearchIcon className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {images.length > 1 && (
@@ -346,27 +353,6 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
         </div>
       )}
 
-      {/* Zoom mobile — overlay: arrasta pra navegar; toque fora / 2 toques na
-          imagem fecham */}
-      {mobileZoom && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/90 md:hidden"
-          onClick={closeMobileZoom}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={mobileZoomSrc}
-            alt=""
-            draggable={false}
-            onClick={(e) => e.stopPropagation()}
-            onTouchStart={onZoomTouchStart}
-            onTouchMove={onZoomTouchMove}
-            onTouchEnd={onZoomTouchEnd}
-            className="h-auto w-[185%] max-w-none select-none"
-            style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0)`, touchAction: 'none' }}
-          />
-        </div>
-      )}
     </div>
   );
 }
