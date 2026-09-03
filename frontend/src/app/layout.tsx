@@ -22,12 +22,13 @@ import { SITE_NAME, SITE_URL, jsonLdScript, organizationJsonLd, webSiteJsonLd } 
 export async function generateMetadata(): Promise<Metadata> {
   const theme = await getTheme();
   const favicon = theme.favicon_url || '/icons/icon-192.png';
+  const name = theme.store_name?.trim() || SITE_NAME;
   return {
     metadataBase: new URL(SITE_URL),
-    title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
+    title: { default: name, template: `%s · ${name}` },
     description: 'Loja online.',
-    manifest: '/manifest.json',
-    applicationName: SITE_NAME,
+    manifest: '/manifest.webmanifest',
+    applicationName: name,
     icons: {
       icon: favicon,
       shortcut: favicon,
@@ -56,7 +57,10 @@ export default async function RootLayout({
     getAnalyticsConfig(),
   ]);
 
-  const orgLd = jsonLdScript([organizationJsonLd({ logoUrl: theme.logo_url ?? undefined }), webSiteJsonLd()]);
+  const orgLd = jsonLdScript([
+    organizationJsonLd({ logoUrl: theme.logo_url ?? undefined, name: theme.store_name }),
+    webSiteJsonLd(theme.store_name),
+  ]);
 
   return (
     // suppressHydrationWarning: extensões (Google Tag Assistant etc.) injetam
@@ -83,8 +87,8 @@ export default async function RootLayout({
         <AuthProvider>
           <CartProvider>
             <StorefrontShell
-              header={<SiteHeader theme={theme} menu={headerMenu} storeName={SITE_NAME} />}
-              footer={<SiteFooter theme={theme} menu={footerMenu} storeName={SITE_NAME} />}
+              header={<SiteHeader theme={theme} menu={headerMenu} storeName={theme.store_name ?? SITE_NAME} />}
+              footer={<SiteFooter theme={theme} menu={footerMenu} storeName={theme.store_name ?? SITE_NAME} />}
             >
               {children}
             </StorefrontShell>

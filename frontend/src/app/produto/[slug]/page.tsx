@@ -41,7 +41,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const product = await getProduct(slug);
+  const [product, theme] = await Promise.all([getProduct(slug), getTheme()]);
   if (!product) return buildMetadata({ title: 'Produto', path: `/produto/${slug}`, noindex: true });
 
   const image = product.images.find((i) => i.is_primary) ?? product.images[0];
@@ -54,6 +54,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       `${product.name} — compre com segurança na nossa loja.`,
     path: `/produto/${product.slug}`,
     images: imageUrl ? [imageUrl] : undefined,
+    siteName: theme.store_name,
   });
 }
 

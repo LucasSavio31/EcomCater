@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getPage } from '@/modules/content/api';
+import { getTheme } from '@/modules/theme';
 import { Breadcrumbs } from '@/components/catalog/breadcrumbs';
 import { buildMetadata } from '@/lib/seo';
 
@@ -20,12 +21,13 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const page = await getPage(slug);
+  const [page, theme] = await Promise.all([getPage(slug), getTheme()]);
   if (!page) return buildMetadata({ title: 'Página', path: `/pagina/${slug}`, noindex: true });
   return buildMetadata({
     title: page.seo_title || page.title,
     description: page.seo_description || undefined,
     path: `/pagina/${slug}`,
+    siteName: theme.store_name,
   });
 }
 

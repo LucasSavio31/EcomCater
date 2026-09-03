@@ -13,10 +13,12 @@ import { buildMetadata } from '@/lib/seo';
 
 export const revalidate = 120; // ISR — invalidação por tag no /api/revalidate
 
-export function generateMetadata(): Metadata {
+export async function generateMetadata(): Promise<Metadata> {
+  const theme = await getTheme();
   return buildMetadata({
     description: 'Novidades, ofertas e os produtos mais buscados da loja.',
     path: '/',
+    siteName: theme.store_name,
   });
 }
 

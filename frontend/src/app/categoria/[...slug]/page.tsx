@@ -74,9 +74,10 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const { slug } = await params;
   const path = slug.join('/');
   const { page } = parseSearch(await searchParams);
-  const category = await getCategoryByPath(path);
+  const [category, theme] = await Promise.all([getCategoryByPath(path), getTheme()]);
   const suffix = page > 1 ? ` — página ${page}` : '';
   return buildMetadata({
+    siteName: theme.store_name,
     title: (category?.seo_title || category?.name || 'Categoria') + suffix,
     description:
       category?.seo_description ||

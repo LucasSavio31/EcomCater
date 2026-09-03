@@ -20,7 +20,7 @@ export default async function CheckoutObrigadoPage() {
   return (
     <div className="checkout-scope min-h-dvh bg-bg">
       <CheckoutThemeStyle theme={theme} />
-      <CheckoutHeader theme={theme} storeName={SITE_NAME} />
+      <CheckoutHeader theme={theme} storeName={theme.store_name ?? SITE_NAME} />
       <main id="conteudo" className="mx-auto w-full max-w-3xl px-4 py-8">
         <h1 className="mb-4 text-xl font-semibold sm:text-2xl">Obrigado pela compra!</h1>
         <Suspense

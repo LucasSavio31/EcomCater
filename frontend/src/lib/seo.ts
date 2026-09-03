@@ -7,7 +7,8 @@ import type { Metadata } from 'next';
 export const SITE_URL: string =
   process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
-export const SITE_NAME = 'Minha Loja';
+/** Fallback genérico — o nome real vem de `theme.store_name` (admin). */
+export const SITE_NAME = 'Loja';
 
 export interface BuildMetadataInput {
   title?: string;
@@ -17,12 +18,15 @@ export interface BuildMetadataInput {
   images?: string[];
   /** Marca a rota como noindex (carrinho, checkout, minha-conta, busca). */
   noindex?: boolean;
+  /** Nome da loja (do tema). Sem ele, usa o genérico. */
+  siteName?: string | null;
 }
 
 export function buildMetadata(input: BuildMetadataInput = {}): Metadata {
   const { title, description, path = '/', images, noindex } = input;
   const canonical = new URL(path, SITE_URL).toString();
-  const fullTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
+  const name = input.siteName?.trim() || SITE_NAME;
+  const fullTitle = title ? `${title} · ${name}` : name;
 
   return {
     metadataBase: new URL(SITE_URL),
@@ -32,7 +36,7 @@ export function buildMetadata(input: BuildMetadataInput = {}): Metadata {
     robots: noindex ? { index: false, follow: false } : undefined,
     openGraph: {
       type: 'website',
-      siteName: SITE_NAME,
+      siteName: name,
       title: fullTitle,
       description,
       url: canonical,
@@ -51,21 +55,21 @@ export function buildMetadata(input: BuildMetadataInput = {}): Metadata {
 
 export type JsonLd = Record<string, unknown> & { '@context': 'https://schema.org' };
 
-export function organizationJsonLd(input: { logoUrl?: string } = {}): JsonLd {
+export function organizationJsonLd(input: { logoUrl?: string; name?: string | null } = {}): JsonLd {
   return {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: SITE_NAME,
+    name: input.name?.trim() || SITE_NAME,
     url: SITE_URL,
     ...(input.logoUrl ? { logo: input.logoUrl } : {}),
   };
 }
 
-export function webSiteJsonLd(): JsonLd {
+export function webSiteJsonLd(name?: string | null): JsonLd {
   return {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: SITE_NAME,
+    name: name?.trim() || SITE_NAME,
     url: SITE_URL,
     potentialAction: {
       '@type': 'SearchAction',
