@@ -22,6 +22,12 @@ export function ColorSiblings({ currentColorName, siblings }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
 
+  // chave estável do grupo de cor (igual em qualquer produto irmão)
+  const groupKey =
+    siblings && siblings.length > 1
+      ? 'cs-exp:' + siblings.map((s) => s.id).slice().sort().join('|')
+      : '';
+
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)');
     const sync = () => setIsDesktop(mq.matches);
@@ -29,6 +35,26 @@ export function ColorSiblings({ currentColorName, siblings }: Props) {
     mq.addEventListener('change', sync);
     return () => mq.removeEventListener('change', sync);
   }, []);
+
+  // uma vez que o cliente abriu "ver mais cores" nesta sessão, não recolhe mais
+  // (vale ao navegar entre as cores do mesmo modelo). Zera só em nova sessão.
+  useEffect(() => {
+    if (!groupKey) return;
+    try {
+      if (sessionStorage.getItem(groupKey)) setExpanded(true);
+    } catch {
+      /* sessionStorage indisponível */
+    }
+  }, [groupKey]);
+
+  const openAll = () => {
+    setExpanded(true);
+    try {
+      sessionStorage.setItem(groupKey, '1');
+    } catch {
+      /* ok */
+    }
+  };
 
   if (!siblings || siblings.length < 2) return null;
   const LIMIT = isDesktop ? 8 : 6;
@@ -77,7 +103,7 @@ export function ColorSiblings({ currentColorName, siblings }: Props) {
           <li>
             <button
               type="button"
-              onClick={() => setExpanded(true)}
+              onClick={openAll}
               title="Ver mais cores"
               className="relative block h-[70px] w-[103px] overflow-hidden rounded-card border-2 border-surface-border bg-white hover:border-var-border"
             >
