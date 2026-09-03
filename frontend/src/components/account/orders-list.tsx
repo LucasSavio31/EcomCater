@@ -176,6 +176,25 @@ export function OrdersList() {
     };
   }, [load]);
 
+  // deep-link ?pedido=2026-000123 (QR da fatura): abre e rola até o pedido
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (deepLinked.current || !orders) return;
+    const want = new URLSearchParams(window.location.search).get('pedido');
+    if (!want) return;
+    const target = orders.find((o) => o.number === want.trim());
+    if (!target) return;
+    deepLinked.current = true;
+    setOpenId(target.id);
+    window.setTimeout(
+      () =>
+        document
+          .getElementById(`pedido-${target.number}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      120,
+    );
+  }, [orders]);
+
   // pedido aberto: bate um "pulse" leve a cada 4s e só refaz o GET quando muda
   const openNumber = orders?.find((o) => o.id === openId)?.number ?? null;
   const lastPulse = useRef<string>('');
@@ -219,7 +238,7 @@ export function OrdersList() {
       {orders.map((o) => {
         const open = openId === o.id;
         return (
-          <li key={o.id}>
+          <li key={o.id} id={`pedido-${o.number}`} className="scroll-mt-4">
             <Card variant="outline" className="flex flex-col gap-3">
               <button
                 type="button"

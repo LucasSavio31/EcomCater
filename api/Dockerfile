@@ -6,10 +6,13 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     POETRY_VIRTUALENVS_CREATE=false
 WORKDIR /app
-# postgresql-client-16 (pg_dump/pg_restore) vem do repo PGDG — precisa casar com
-# o servidor postgres:16 pra os backups/restauração funcionarem.
+# - postgresql-client-16 (pg_dump/pg_restore, repo PGDG) p/ backup/restauração
+# - libpango/harfbuzz + fontes (Liberation ~= Arial) p/ o WeasyPrint gerar a
+#   fatura em PDF (HTML+CSS -> PDF, sem browser)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libpq-dev curl ca-certificates gnupg \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libffi8 \
+        fonts-liberation fonts-dejavu-core \
     && install -d /usr/share/postgresql-common/pgdg \
     && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
         -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \

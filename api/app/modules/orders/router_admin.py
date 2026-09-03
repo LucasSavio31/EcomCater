@@ -84,17 +84,12 @@ async def order_pulse(number: str, db: DbDep, _: AdminDep) -> dict:
     return await service.order_pulse(db, number)
 
 
-def _order_code_data_uri(number: str) -> str:
-    """Data Matrix (SVG data URI) com o número do pedido — código 2D da Fatura.
-    Embutido direto na resposta para não depender de outra requisição
-    autenticada na hora de imprimir."""
-    import base64
+def _order_code_data_uri(number: str) -> str | None:
+    """QR Code (PNG data URI) que aponta para o pedido na loja. Embutido direto
+    na resposta para não depender de outra requisição na hora de imprimir."""
+    from app.modules.orders.codes import order_qr_data_uri
 
-    from ppf.datamatrix import DataMatrix
-
-    svg = DataMatrix(number).svg()
-    b64 = base64.b64encode(svg.encode("utf-8")).decode("ascii")
-    return f"data:image/svg+xml;base64,{b64}"
+    return order_qr_data_uri(number)
 
 
 @router.get("/{number}/qr.svg")
@@ -103,12 +98,12 @@ async def order_qr(
     db: DbDep,
     _: Annotated[AdminUser, Depends(get_current_admin_downloadable)],
 ) -> Response:
-    """Código 2D (Data Matrix, SVG) com o número do pedido — uso avulso."""
-    from ppf.datamatrix import DataMatrix
+    """QR Code (SVG) com o link do pedido na loja — uso avulso."""
+    from app.modules.orders.codes import order_qr_svg
 
     order = await service.get_by_number(db, number)  # 404 se não existe
     return Response(
-        content=DataMatrix(order.number).svg(),
+        content=order_qr_svg(order.number),
         media_type="image/svg+xml",
         headers={"Cache-Control": "private, max-age=300"},
     )
