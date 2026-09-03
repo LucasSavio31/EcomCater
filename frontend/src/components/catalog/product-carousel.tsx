@@ -11,39 +11,80 @@ interface ProductCarouselProps {
   /** Lista de origem (GA4 `select_item`). */
   listId?: string;
   listName?: string;
+  /**
+   * Loop infinito (padrão): ao chegar no fim volta pro começo sem emenda.
+   * Precisa de pelo menos 3 itens; abaixo disso vira carrossel comum.
+   */
+  loop?: boolean;
 }
 
-/** Carrossel horizontal com scroll-snap + setas (desktop). Teclado: setas nativas do scroll. */
+/**
+ * Carrossel horizontal com scroll-snap + setas (desktop).
+ * Loop: renderiza a lista 3x e, quando o scroll para perto de uma borda, salta
+ * uma "cópia" inteira de volta ao centro — como o conteúdo é idêntico, a volta
+ * é invisível e o usuário rola pra sempre nos dois sentidos.
+ */
 export function ProductCarousel({
   products,
   ariaLabel,
   listId,
   listName,
+  loop = true,
 }: ProductCarouselProps) {
   const trackRef = useRef<HTMLUListElement>(null);
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(false);
 
+  const looping = loop && products.length >= 3;
+  const slides = looping
+    ? [0, 1, 2].flatMap((copy) => products.map((p) => ({ p, copy })))
+    : products.map((p) => ({ p, copy: 0 }));
+
   const updateEdges = useCallback(() => {
     const el = trackRef.current;
-    if (!el) return;
+    if (!el || looping) return;
     setAtStart(el.scrollLeft <= 4);
     setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
-  }, []);
+  }, [looping]);
 
+  const normalize = useCallback(() => {
+    const el = trackRef.current;
+    if (!el || !looping) return;
+    const copy = el.scrollWidth / 3;
+    if (copy <= 0) return;
+    if (el.scrollLeft < copy * 0.5) el.scrollLeft += copy;
+    else if (el.scrollLeft > copy * 1.5) el.scrollLeft -= copy;
+  }, [looping]);
+
+  // posiciona na cópia central ao montar / trocar a lista (instantâneo)
   useEffect(() => {
-    updateEdges();
     const el = trackRef.current;
     if (!el) return;
-    el.addEventListener('scroll', updateEdges, { passive: true });
+    if (looping) el.scrollLeft = el.scrollWidth / 3;
+    updateEdges();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [looping, products]);
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    let idle: number | undefined;
+    const onScroll = () => {
+      updateEdges();
+      if (!looping) return;
+      window.clearTimeout(idle);
+      idle = window.setTimeout(normalize, 120); // só normaliza quando o scroll para
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', updateEdges);
     return () => {
-      el.removeEventListener('scroll', updateEdges);
+      window.clearTimeout(idle);
+      el.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', updateEdges);
     };
-  }, [updateEdges]);
+  }, [updateEdges, normalize, looping]);
 
-  const scrollBy = (dir: 1 | -1) => {
+  const step = (dir: 1 | -1) => {
     const el = trackRef.current;
     if (!el) return;
     el.scrollBy({ left: dir * Math.round(el.clientWidth * 0.9), behavior: 'smooth' });
@@ -55,8 +96,8 @@ export function ProductCarousel({
     <div className="relative" role="group" aria-label={ariaLabel}>
       <button
         type="button"
-        onClick={() => scrollBy(-1)}
-        disabled={atStart}
+        onClick={() => step(-1)}
+        disabled={!looping && atStart}
         aria-label="Anterior"
         className="absolute -left-3 top-1/2 z-10 hidden -translate-y-1/2 rounded-full border border-surface-border bg-surface p-2 shadow-sm disabled:opacity-0 lg:block"
       >
@@ -64,27 +105,28 @@ export function ProductCarousel({
       </button>
       <ul
         ref={trackRef}
-        className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-2 lg:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 lg:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {products.map((product, i) => (
+        {slides.map(({ p, copy }, i) => (
           <li
-            key={product.id}
+            key={`${p.id}-${copy}`}
             className="w-[46%] shrink-0 snap-start sm:w-[38%] md:w-[30%] lg:w-[23%]"
+            aria-hidden={looping && copy !== 1 ? true : undefined}
           >
             <ProductCard
-              product={product}
+              product={p}
               className="h-full"
               listId={listId}
               listName={listName ?? ariaLabel}
-              index={i}
+              index={i % products.length}
             />
           </li>
         ))}
       </ul>
       <button
         type="button"
-        onClick={() => scrollBy(1)}
-        disabled={atEnd}
+        onClick={() => step(1)}
+        disabled={!looping && atEnd}
         aria-label="Próximo"
         className="absolute -right-3 top-1/2 z-10 hidden -translate-y-1/2 rounded-full border border-surface-border bg-surface p-2 shadow-sm disabled:opacity-0 lg:block"
       >
