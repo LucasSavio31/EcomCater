@@ -71,11 +71,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh]);
 
-  // Sincroniza o carrinho ao voltar o foco / trocar de aba.
+  // Sincroniza o carrinho ao VOLTAR PARA A ABA (não a cada `focus` de window —
+  // no mobile o foco muda ao abrir/fechar o teclado, e o refetch + setCart a
+  // cada tecla travava os campos do checkout). `visibilitychange` só dispara
+  // numa troca real de aba/app.
   useEffect(() => {
-    const onFocus = () => void refresh();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refresh]);
 
   const addItem = useCallback<CartState['addItem']>(
