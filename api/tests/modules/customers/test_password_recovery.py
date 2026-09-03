@@ -59,7 +59,7 @@ async def test_customer_forgot_and_reset(client, db):
     again = await client.post(
         "/api/customers/auth/reset-password", json={"token": raw, "new_password": "outra-123"}
     )
-    assert again.status_code == 400
+    assert again.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -102,7 +102,7 @@ async def test_admin_forgot_and_reset(client, db, admin_token):
     short = await client.post(
         "/api/admin/auth/reset-password", json={"token": raw, "new_password": "curta"}
     )
-    assert short.status_code == 400  # painel exige >= 8
+    assert short.status_code == 422  # painel exige >= 8
 
     r = await client.post(
         "/api/admin/auth/reset-password", json={"token": raw, "new_password": "PainelNovo1"}
