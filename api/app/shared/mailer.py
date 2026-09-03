@@ -224,6 +224,14 @@ TEMPLATES: dict[str, tuple[str, str]] = {
             "<p style='margin-top:14px'><a href='{{ admin_url }}' class='btn' style='{{ btn_style }}'>Abrir no painel</a></p>",
         ),
     ),
+    "admin_order_error": (
+        "[Loja] Falha ao finalizar o pedido {{ number }}",
+        "<h2 style='color:#b00020'>Erro na finalização do pedido {{ number }}</h2>"
+        "<p>O pedido foi criado normalmente, mas alguns passos pós-pedido falharam "
+        "e ficaram registrados no pedido:</p>"
+        "<ul>{{ failures_html | safe }}</ul>"
+        "<p style='margin-top:14px'><a href='{{ admin_url }}' class='btn' style='{{ btn_style }}'>Abrir no painel</a></p>",
+    ),
     "backup_result": (
         "[Loja] Backup {{ 'OK' if ok else 'FALHOU' }} — {{ when }}",
         "<h2>{{ '✅ Backup concluído' if ok else '❌ Backup falhou' }}</h2>"

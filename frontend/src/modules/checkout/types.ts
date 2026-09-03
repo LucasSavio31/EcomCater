@@ -71,6 +71,8 @@ export interface Order {
   status: string;
   payment_status: string;
   fulfillment_status: string;
+  /** Motivo, quando algum registro pós-pedido (e-mails etc.) falhou. */
+  processing_error?: string | null;
   email: string;
   payment?: OrderPayment | null;
   items: OrderItem[];
@@ -124,4 +126,5 @@ export interface PaymentStatus {
   payment_status: string;
   method: string | null;
   updated_at: string | null;
+  processing_error?: string | null;
 }

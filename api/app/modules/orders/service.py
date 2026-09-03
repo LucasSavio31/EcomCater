@@ -331,6 +331,7 @@ async def order_pulse(
                 Order.updated_at,
                 func.count(OrderEvent.id),
                 func.max(OrderEvent.created_at),
+                Order.processing_error,
             )
             .outerjoin(OrderEvent, OrderEvent.order_id == Order.id)
             .where(Order.number == number)
@@ -339,7 +340,7 @@ async def order_pulse(
     ).first()
     if not row or (email is not None and (row[0] or "").lower() != email.lower()):
         raise NotFoundError("Pedido não encontrado.")
-    _email, status_, pay, ful, updated_at, ev_count, ev_max = row
+    _email, status_, pay, ful, updated_at, ev_count, ev_max, proc_err = row
     stamp = ev_max or updated_at
     return {
         "number": number,
@@ -348,6 +349,7 @@ async def order_pulse(
         "fulfillment_status": ful,
         "event_count": int(ev_count or 0),
         "last_change_at": stamp.isoformat() if stamp else None,
+        "processing_error": proc_err,
     }
 
 
@@ -502,6 +504,7 @@ def to_out(order: Order) -> dict:
         "status": order.status,
         "payment_status": order.payment_status,
         "fulfillment_status": order.fulfillment_status,
+        "processing_error": order.processing_error,
         "email": order.email,
         "customer_name": _customer_name(order),
         "cpf": order.cpf,
@@ -644,6 +647,7 @@ def list_item_out(order: Order) -> dict:
         "status": order.status,
         "payment_status": order.payment_status,
         "fulfillment_status": order.fulfillment_status,
+        "processing_error": order.processing_error,
         "email": order.email,
         "customer_name": _customer_name(order),
         "grand_total_cents": order.grand_total_cents,

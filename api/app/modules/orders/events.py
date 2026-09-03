@@ -141,6 +141,11 @@ async def _send_account_access(db, order: Order) -> None:
 
 @on("order.created")
 async def _on_created(payload: dict) -> None:
+    """Finalização "por baixo dos panos": e-mails + registros pós-pedido. Roda
+    em BackgroundTask (o cliente já viu "pedido recebido"). Cada passo é isolado;
+    o que falhar é registrado em `order.processing_error` e avisado por e-mail
+    ao lojista — o pedido em si já está gravado e íntegro."""
+    failures: list[str] = []
     async with SessionLocal() as db:
         order = await _order(db, payload["order_id"])
         if not order:
@@ -151,50 +156,34 @@ async def _on_created(payload: dict) -> None:
         ctx = _order_ctx(order, pay)
         ctx["status_label"] = _STATUS_LABELS.get(order.status, "Aguardando pagamento")
 
-        # Cliente — confirmação do pedido com detalhes de pagamento e envio
-        await mailer.send(
-            db, to=order.email, template="order_created", order_id=str(order.id), context=ctx
-        )
+        from app.modules.orders.service import _customer_name
 
-        # Comprador convidado: e-mail com os dados de acesso (login = e-mail,
-        # senha = CPF) — enquanto a conta ainda usa o CPF como senha.
-        try:
-            await _send_account_access(db, order)
-        except Exception:  # noqa: BLE001
-            logger.exception("falha ao enviar dados de acesso p/ %s", order.email)
-        # Marca carrinho abandonado como recuperado
-        try:
+        async def _confirm_email() -> None:
+            ok = await mailer.send(
+                db, to=order.email, template="order_created",
+                order_id=str(order.id), context=ctx,
+            )
+            if not ok:
+                raise RuntimeError("mailer retornou status != sent")
+
+        async def _mark_recovered() -> None:
             from app.modules.cart_recovery.module import mark_recovered
 
             await mark_recovered(db, email=order.email, order_id=order.id)
-        except Exception:  # noqa: BLE001
-            logger.exception("falha ao marcar carrinho recuperado de %s", order.email)
 
-        # Comprador entra na lista de leads (para campanhas)
-        try:
+        async def _lead() -> None:
             from app.modules.newsletter.module import upsert_lead
 
             addr = order.shipping_address_json or {}
             await upsert_lead(
-                db,
-                email=order.email,
-                name=addr.get("recipient_name"),
-                phone=addr.get("phone"),
-                source="checkout",
+                db, email=order.email, name=addr.get("recipient_name"),
+                phone=addr.get("phone"), source="checkout",
             )
-        except Exception:  # noqa: BLE001
-            logger.exception("falha ao registrar lead do comprador %s", order.email)
 
-        # Lojista — aviso de novo pedido (vai para a conta de administrador)
-        try:
+        async def _admin_email() -> None:
             admin_to = await mailer.admin_notify_email(db)
-            from app.modules.orders.service import _customer_name
-
             await mailer.send(
-                db,
-                to=admin_to,
-                template="admin_order_created",
-                order_id=str(order.id),
+                db, to=admin_to, template="admin_order_created", order_id=str(order.id),
                 context={
                     **ctx,
                     "email": order.email,
@@ -203,9 +192,48 @@ async def _on_created(payload: dict) -> None:
                     "admin_url": f"{settings.admin_url.rstrip('/')}/pedidos/{order.number}",
                 },
             )
-        except Exception:  # noqa: BLE001
-            logger.exception("falha ao notificar lojista do pedido %s", order.number)
+
+        steps = [
+            ("e-mail de confirmação ao cliente", _confirm_email),
+            ("e-mail de dados de acesso", lambda: _send_account_access(db, order)),
+            ("marcação de carrinho recuperado", _mark_recovered),
+            ("registro de lead", _lead),
+            ("aviso de novo pedido ao lojista", _admin_email),
+        ]
+        for label, step in steps:
+            try:
+                await step()
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("order.created [%s] falhou (pedido %s)", label, order.number)
+                failures.append(f"{label}: {type(exc).__name__}: {exc}")
+
+        if failures:
+            order.processing_error = " | ".join(failures)[:2000]
         await db.commit()
+
+    if failures:
+        await _alert_store_owner(payload["order_id"], payload.get("number"), failures)
+
+
+async def _alert_store_owner(order_id: str, number: str | None, failures: list[str]) -> None:
+    """E-mail de erro ao lojista (sessão própria, best-effort)."""
+    try:
+        async with SessionLocal() as db:
+            admin_to = await mailer.admin_notify_email(db)
+            body = "".join(f"<li>{f}</li>" for f in failures)
+            await mailer.send(
+                db,
+                to=admin_to,
+                template="admin_order_error",
+                order_id=order_id,
+                context={
+                    "number": number or "",
+                    "failures_html": body,
+                    "admin_url": f"{settings.admin_url.rstrip('/')}/pedidos/{number or ''}",
+                },
+            )
+    except Exception:  # noqa: BLE001
+        logger.exception("falha ao avisar lojista do erro de finalização (%s)", number)
 
 
 async def _latest_payment(db, order: Order) -> Payment | None:

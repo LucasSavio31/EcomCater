@@ -3,7 +3,16 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, Query, Request, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Cookie,
+    Depends,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -25,6 +34,7 @@ async def checkout(
     body: CheckoutIn,
     request: Request,
     response: Response,
+    background: BackgroundTasks,
     db: DbDep,
     user: UserDep,
     _rl: Annotated[None, Depends(rate_limit("20/minute", scope="checkout"))],
@@ -89,13 +99,19 @@ async def checkout(
     await cart_service.clear(db, cart)
     full = await service._load(db, order.id)
 
-    # commit ANTES de emitir: os subscribers de `order.created` (e-mail ao
-    # cliente/lojista, marcar carrinho recuperado, virar lead) abrem a própria
+    # commit ANTES de emitir: os subscribers de `order.created` abrem a própria
     # sessão e só enxergam o pedido depois de gravado.
     await db.commit()
+
+    # Finalização "por baixo dos panos": e-mails + registros pós-pedido rodam
+    # DEPOIS da resposta (BackgroundTask). O cliente já vê "pedido recebido"
+    # na hora; se algum passo falhar, fica em `order.processing_error`
+    # (aparece na conta) e um e-mail de erro vai pro lojista.
     from app.core.events import emit
 
-    await emit("order.created", {"order_id": str(order.id), "number": order.number})
+    background.add_task(
+        emit, "order.created", {"order_id": str(order.id), "number": order.number}
+    )
 
     return {**service.to_out(full), "auth": auth}
 

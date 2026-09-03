@@ -96,6 +96,15 @@ export function ThankYouView() {
     void load();
   }, [load]);
 
+  // A finalização (e-mails/registros) roda em segundo plano no servidor.
+  // Recarrega o pedido algumas vezes nos primeiros ~20s para pegar um eventual
+  // `processing_error` sem depender do polling de pagamento.
+  useEffect(() => {
+    if (!number) return;
+    const timers = [4000, 10000, 20000].map((ms) => window.setTimeout(() => void load(), ms));
+    return () => timers.forEach(window.clearTimeout);
+  }, [number, load]);
+
   // Enquanto pendente, refaz o polling do status por até ~2 min.
   useEffect(() => {
     if (!paymentStatus || paymentStatus === 'paid') return;
@@ -163,6 +172,23 @@ export function ThankYouView() {
 
   return (
     <div className="flex flex-col gap-6">
+      {order.processing_error && (
+        <Card
+          variant="outline"
+          className="flex flex-col gap-1 border-danger/40 bg-danger/5 text-sm"
+        >
+          <span className="font-semibold text-danger">
+            Seu pedido #{order.number} foi registrado, mas alguns passos não concluíram.
+          </span>
+          <span className="text-text-muted">
+            Nossa equipe já foi avisada e vai regularizar. Você pode acompanhar tudo em{' '}
+            <a href="/minha-conta/pedidos" className="text-primary underline">
+              Meus pedidos
+            </a>
+            .
+          </span>
+        </Card>
+      )}
       <Card variant="outline" className="flex flex-col gap-2">
         <span className="text-sm text-text-muted">Pedido</span>
         <span className="text-2xl font-semibold">#{order.number}</span>

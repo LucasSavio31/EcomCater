@@ -115,3 +115,29 @@ async def test_cancel_restores_stock(client, variant, admin_token, auth_headers)
     await client.post(f"/api/admin/orders/{order['number']}/status", json={"status": "canceled"}, headers=h)
     slug = (await client.get("/api/products?category=c")).json()["items"][0]["slug"]
     assert (await client.get(f"/api/products/{slug}")).json()["variants"][0]["stock_qty"] == 5
+
+
+@pytest.mark.asyncio
+async def test_checkout_records_processing_error_on_failed_step(client, variant, monkeypatch):
+    """Se um passo pós-pedido falha, o pedido é criado igual e o motivo fica em
+    `processing_error` (visível na conta / pulse)."""
+    from app.modules.orders import events
+
+    async def _boom(db, order):  # noqa: ANN001
+        raise RuntimeError("smtp caiu")
+
+    monkeypatch.setattr(events, "_send_account_access", _boom)
+
+    order = await _order(client, variant, email="err@test.example")
+    # a finalização roda em BackgroundTask; no TestClient ela já concluiu aqui
+    pulse = await client.get(f"/api/orders/{order['number']}/pulse", params={"email": "err@test.example"})
+    assert pulse.status_code == 200
+    assert "dados de acesso" in (pulse.json().get("processing_error") or "")
+    assert "smtp caiu" in pulse.json()["processing_error"]
+
+
+@pytest.mark.asyncio
+async def test_checkout_no_processing_error_on_happy_path(client, variant):
+    order = await _order(client, variant, email="ok@test.example")
+    pulse = await client.get(f"/api/orders/{order['number']}/pulse", params={"email": "ok@test.example"})
+    assert pulse.json().get("processing_error") is None

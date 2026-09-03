@@ -51,6 +51,9 @@ class Order(UUIDPKMixin, TimestampMixin, Base):
 
     customer_note: Mapped[str | None] = mapped_column(Text)
     placed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # motivo, quando a finalização assíncrona (e-mails/registros pós-pedido)
+    # falha — mostrado na conta do cliente e avisado por e-mail ao lojista.
+    processing_error: Mapped[str | None] = mapped_column(Text)
 
     # atribuição de marketing p/ a Conversions API da Meta / Enhanced
     # Conversions do Google: {fbp, fbc, client_ip, client_user_agent, landing_url}

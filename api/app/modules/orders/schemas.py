@@ -71,6 +71,7 @@ class OrderOut(BaseModel):
     status: str
     payment_status: str
     fulfillment_status: str
+    processing_error: str | None = None
     email: str
     items: list[OrderItemOut]
     items_total_cents: int

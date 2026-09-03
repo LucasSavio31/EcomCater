@@ -257,12 +257,19 @@ export function OrdersList() {
                   {FULFILL_PT[o.fulfillment_status] && (
                     <Tag>{FULFILL_PT[o.fulfillment_status]}</Tag>
                   )}
+                  {o.processing_error && <Tag tone="danger">Pendência no processamento</Tag>}
                   <span className="font-semibold">{formatBRL(o.grand_total_cents)}</span>
                 </span>
               </button>
 
               {open && (
                 <div className="flex flex-col gap-4 border-t border-surface-border pt-3">
+                  {o.processing_error && (
+                    <p className="rounded-card border border-danger/40 bg-danger/5 p-3 text-xs text-danger">
+                      Alguns passos pós-pedido não concluíram e nossa equipe foi avisada:{' '}
+                      <span className="text-text-muted">{o.processing_error}</span>
+                    </p>
+                  )}
                   <ul className="flex flex-col gap-3">
                     {o.items.map((i) => {
                       const img = resolveMediaUrl(i.image_url);
