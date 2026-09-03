@@ -1,27 +1,37 @@
 import { cn } from '@ecom/ui';
-import { formatBRL, installmentsText } from '@/lib/format';
+import { applyPixDiscount, formatBRL, installmentsText } from '@/lib/format';
 
 interface PriceBlockProps {
   priceCents: number;
   compareAtCents?: number | null;
   installmentsMax?: number | null;
   discountPct?: number | null;
+  /** % de desconto no PIX à vista — quando > 0, mostra a linha em verde. */
+  pixDiscountPct?: number | null;
   /** `lg` para a PDP, `sm` para cards. */
   size?: 'sm' | 'lg';
   className?: string;
 }
 
-/** Preço à vista destacado + "de/por" + parcelamento. */
+/** Preço à vista destacado + "de/por" + PIX + parcelamento. */
 export function PriceBlock({
   priceCents,
   compareAtCents,
   installmentsMax,
   discountPct,
+  pixDiscountPct,
   size = 'sm',
   className,
 }: PriceBlockProps) {
   const hasCompare = !!compareAtCents && compareAtCents > priceCents;
   const parcela = installmentsText(priceCents, installmentsMax);
+  const hasPix = typeof pixDiscountPct === 'number' && pixDiscountPct > 0;
+  const pixCents = hasPix ? applyPixDiscount(priceCents, pixDiscountPct) : priceCents;
+  const pixLine = hasPix ? (
+    <span className={cn('font-medium text-success', size === 'lg' ? 'text-sm' : 'text-xs')}>
+      {formatBRL(pixCents)} à vista no PIX {Math.round(pixDiscountPct as number)}% OFF
+    </span>
+  ) : null;
 
   if (size === 'sm') {
     return (
@@ -39,6 +49,7 @@ export function PriceBlock({
             </span>
           )}
         </span>
+        {pixLine}
         {parcela && <span className="text-xs text-text-muted">{parcela}</span>}
       </div>
     );
@@ -57,6 +68,7 @@ export function PriceBlock({
           </span>
         )}
       </span>
+      {pixLine}
       {parcela && <span className="text-sm text-text-muted">{parcela}</span>}
     </div>
   );

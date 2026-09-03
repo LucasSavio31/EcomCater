@@ -53,11 +53,6 @@ export function PdpMain({ product, redirectAfterAdd, miniCart, theme }: PdpMainP
           )}
         </div>
 
-        <ColorSiblings
-          currentColorName={product.color_name}
-          siblings={product.color_siblings}
-        />
-
         <div id="pdp-buybox">
           <PdpBuyBox
             product={product}
@@ -66,6 +61,12 @@ export function PdpMain({ product, redirectAfterAdd, miniCart, theme }: PdpMainP
             leadPopup={leadPopup}
             showQty={theme.pdp_qty_selector_enabled}
             showWishlist={theme.wishlist_enabled}
+            colorSlot={
+              <ColorSiblings
+                currentColorName={product.color_name}
+                siblings={product.color_siblings}
+              />
+            }
             sizeChartColors={{
               bg: theme.size_chart_bg_color,
               headerBg: theme.size_chart_header_bg_color,

@@ -74,7 +74,14 @@ async def get_by_id(db: AsyncSession, category_id: str) -> Category:
 
 async def get_by_slug_or_path(db: AsyncSession, ref: str) -> Category:
     ref = ref.strip("/")
-    stmt = select(Category).where((Category.path == ref) | (Category.slug == ref))
+    # `path` é o identificador canônico; `slug` é só atalho. Quando o mesmo slug
+    # se repete em níveis diferentes (ex.: "botas" no topo e em masculino/botas),
+    # o match por path tem que vencer — senão a resolução fica não-determinística.
+    stmt = (
+        select(Category)
+        .where((Category.path == ref) | (Category.slug == ref))
+        .order_by((Category.path == ref).desc())
+    )
     cat = await db.scalar(stmt.limit(1))
     if not cat:
         raise NotFoundError("Categoria não encontrada.")

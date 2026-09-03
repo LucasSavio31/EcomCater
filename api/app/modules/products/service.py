@@ -118,6 +118,7 @@ def list_item(product: Product) -> dict:
         "price_cents": price,
         "compare_at_price_cents": product.compare_at_price_cents,
         "discount_pct": _discount_pct(price, product.compare_at_price_cents),
+        "pix_discount_pct": float(product.pix_discount_pct) if product.pix_discount_pct else None,
         "installments_max": product.installments_max,
         "in_stock": _in_stock(product),
         "is_featured": product.is_featured,
@@ -369,10 +370,13 @@ async def list_products(
         conds.append(Product.status == "active")
 
     if category:
+        ref = category.strip("/")
+        # match por `path` (identificador canônico) vence o match por `slug`
+        # quando o mesmo slug existe em mais de um nível da árvore.
         cat = await db.scalar(
-            select(Category).where(
-                or_(Category.path == category.strip("/"), Category.slug == category)
-            )
+            select(Category)
+            .where(or_(Category.path == ref, Category.slug == ref))
+            .order_by((Category.path == ref).desc())
         )
         if not cat:
             raise NotFoundError("Categoria não encontrada.")
@@ -529,6 +533,79 @@ async def featured(db: AsyncSession, limit: int = 12) -> list[dict]:
         .limit(limit)
     )
     return [list_item(p) for p in rows]
+
+
+async def home_sections(db: AsyncSession, *, seed: int) -> dict:
+    """Três blocos da home, embaralhados de forma determinística por `seed`
+    (o router usa o carimbo ano-mês-dia-hora → muda sozinho a cada hora):
+
+    - `mais_buscados`: 12 itens de todo o catálogo ativo
+    - `tenis`:          8 itens do tipo tênis
+    - `feminino`:       4 itens da árvore Feminino
+    """
+    import random as _random
+
+    rows = list(
+        await db.scalars(
+            select(Product)
+            .where(Product.status == "active")
+            .options(selectinload(Product.variants), selectinload(Product.images))
+        )
+    )
+    by_id = {p.id: p for p in rows}
+
+    tenis_ids = set(
+        await db.scalars(
+            select(Product.id)
+            .where(
+                Product.status == "active",
+                or_(
+                    like_pattern_unaccent(Product.name, "tenis%"),
+                    Product.id.in_(
+                        select(ProductCategory.product_id)
+                        .join(Category, Category.id == ProductCategory.category_id)
+                        .where(Category.slug == "tenis")
+                    ),
+                    Product.category_id.in_(
+                        select(Category.id).where(Category.slug == "tenis")
+                    ),
+                ),
+            )
+        )
+    )
+    fem_ids = set(
+        await db.scalars(
+            select(Product.id).where(
+                Product.status == "active",
+                or_(
+                    Product.category_id.in_(
+                        select(Category.id).where(
+                            or_(Category.path == "feminino", Category.path.like("feminino/%"))
+                        )
+                    ),
+                    Product.id.in_(
+                        select(ProductCategory.product_id)
+                        .join(Category, Category.id == ProductCategory.category_id)
+                        .where(
+                            or_(Category.path == "feminino", Category.path.like("feminino/%"))
+                        )
+                    ),
+                ),
+            )
+        )
+    )
+
+    def _sample(pool_ids: list[uuid.UUID], n: int) -> list[dict]:
+        rng = _random.Random(seed + n)  # bloco distinto → ordem distinta
+        shuffled = pool_ids[:]
+        rng.shuffle(shuffled)
+        return [list_item(by_id[i]) for i in shuffled[:n] if i in by_id]
+
+    return {
+        "mais_buscados": _sample([p.id for p in rows], 12),
+        "tenis": _sample([i for i in tenis_ids], 8),
+        "feminino": _sample([i for i in fem_ids], 4),
+    }
 
 
 async def by_ids(db: AsyncSession, ids: list[str], limit: int = 100) -> list[dict]:

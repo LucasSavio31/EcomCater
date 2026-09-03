@@ -190,6 +190,7 @@ class ProductListItem(BaseModel):
     price_cents: int
     compare_at_price_cents: int | None
     discount_pct: int | None
+    pix_discount_pct: float | None = None
     installments_max: int | None
     in_stock: bool
     is_featured: bool

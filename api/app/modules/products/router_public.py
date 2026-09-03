@@ -68,6 +68,22 @@ async def featured(db: DbDep, limit: int = Query(12, ge=1, le=40)) -> list[dict]
     )
 
 
+@router.get("/home-sections")
+async def home_sections(db: DbDep) -> dict:
+    """Blocos da home (Mais buscados / Tênis / Feminino) sorteados de forma
+    determinística por hora — a semente é o carimbo AAAAMMDDHH (UTC), então a
+    ordem troca sozinha a cada virada de hora. Cache expira junto com a hora."""
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC)
+    bucket = now.strftime("%Y%m%d%H")
+    ttl = max(60, 3600 - (now.minute * 60 + now.second))
+    return await cached_json(
+        NS_CATALOG, ("products:home-sections", bucket), ttl,
+        lambda: service.home_sections(db, seed=int(bucket)),
+    )
+
+
 @router.get("/by-ids")
 async def by_ids(
     db: DbDep,

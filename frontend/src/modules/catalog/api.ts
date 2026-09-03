@@ -27,6 +27,24 @@ export async function getFeaturedProducts(limit = 12): Promise<ProductListItem[]
   return res.ok ? res.data : [];
 }
 
+export interface HomeSections {
+  mais_buscados: ProductListItem[];
+  tenis: ProductListItem[];
+  feminino: ProductListItem[];
+}
+
+/**
+ * Blocos da home (Mais buscados / Tênis / Feminino) — a API sorteia de forma
+ * determinística por hora, então o conjunto muda sozinho a cada virada de hora.
+ * `revalidate: 300` só limita o quanto o ISR pode ficar atrás disso.
+ */
+export async function getHomeSections(): Promise<HomeSections> {
+  const res = await apiFetch<HomeSections>('/api/products/home-sections', {
+    next: { tags: ['products'], revalidate: 300 },
+  });
+  return res.ok ? res.data : { mais_buscados: [], tenis: [], feminino: [] };
+}
+
 /** Listagem paginada com filtros/facetas (PLP e /busca). */
 export async function getProducts(params: ProductQuery): Promise<PagedProducts> {
   const query: Record<string, string | number | undefined> = {

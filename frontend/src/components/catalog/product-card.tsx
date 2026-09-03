@@ -112,6 +112,7 @@ export function ProductCard({
           className="mt-auto pt-0.5"
           priceCents={product.price_cents}
           compareAtCents={product.compare_at_price_cents}
+          pixDiscountPct={product.pix_discount_pct}
           installmentsMax={product.installments_max}
         />
         {buyButtonLabel && (

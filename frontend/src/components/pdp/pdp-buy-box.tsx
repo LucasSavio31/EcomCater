@@ -22,6 +22,8 @@ interface PdpBuyBoxProps {
   showQty?: boolean;
   showWishlist?: boolean;
   sizeChartColors?: SizeChartColors;
+  /** Seletor de COR (produtos irmãos) — renderizado logo abaixo da numeração. */
+  colorSlot?: React.ReactNode;
 }
 
 export function PdpBuyBox({
@@ -32,6 +34,7 @@ export function PdpBuyBox({
   showQty = true,
   showWishlist = true,
   sizeChartColors,
+  colorSlot = null,
 }: PdpBuyBoxProps) {
   const router = useRouter();
   const { addItem, openMiniCart } = useCart();
@@ -208,6 +211,9 @@ export function PdpBuyBox({
         <p className="text-xs text-text-muted">Selecione a numeração para continuar.</p>
       )}
       {outOfStock && <p className="text-sm font-medium text-danger">Combinação esgotada.</p>}
+
+      {/* Variação de COR (produtos irmãos) — abaixo da numeração */}
+      {colorSlot}
 
       {/* Quantidade + comprar */}
       <div className="flex flex-col gap-2">

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getBanners } from '@/modules/banners/api';
-import { getFeaturedProducts, getCategoryTree, getProducts } from '@/modules/catalog/api';
+import { getHomeSections, getCategoryTree, getProducts } from '@/modules/catalog/api';
+import type { ProductListItem } from '@/modules/catalog/types';
 import { getTheme } from '@/modules/theme';
 import { BannerGrid } from '@/components/layout/banner-grid';
 import { HeroBanner } from '@/components/layout/hero-banner';
@@ -47,11 +48,50 @@ async function homeFilterSummary() {
   return { categories, priceLinks };
 }
 
+function HomeProductSection({
+  id,
+  title,
+  products,
+  theme,
+  priorityCount = 0,
+}: {
+  id: string;
+  title: string;
+  products: ProductListItem[];
+  theme: Awaited<ReturnType<typeof getTheme>>;
+  priorityCount?: number;
+}) {
+  if (products.length === 0) return null;
+  return (
+    <section aria-labelledby={`${id}-title`} className="flex flex-col gap-4">
+      <TrackOnMount
+        event="view_item_list"
+        dedupeKey={id}
+        itemListId={id}
+        itemListName={title}
+        items={products
+          .slice(0, 20)
+          .map((p, i) => itemFromListItem(p, { index: i, list: { id, name: title } }))}
+      />
+      <h2 id={`${id}-title`} className="text-lg font-semibold sm:text-xl">
+        {title}
+      </h2>
+      <ProductGrid
+        products={products}
+        priorityCount={priorityCount}
+        listId={id}
+        listName={title}
+        buyButtonLabel={theme.card_buy_button_enabled ? theme.card_buy_button_label : undefined}
+      />
+    </section>
+  );
+}
+
 export default async function HomePage() {
-  const [hero, showcase, featured, shortcuts, theme, filterSummary] = await Promise.all([
+  const [hero, showcase, sections, shortcuts, theme, filterSummary] = await Promise.all([
     getBanners('hero'),
     getBanners('showcase'),
-    getFeaturedProducts(12),
+    getHomeSections(),
     homeSizeShortcuts(),
     getTheme(),
     homeFilterSummary(),
@@ -62,7 +102,9 @@ export default async function HomePage() {
     theme.filters_on_home &&
     ((theme.filter_category_enabled && filterSummary.categories.length > 0) ||
       (theme.filter_price_enabled && filterSummary.priceLinks.length > 0));
-  const nothing = hero.length === 0 && showcase.length === 0 && featured.length === 0;
+  const anySection =
+    sections.mais_buscados.length + sections.tenis.length + sections.feminino.length > 0;
+  const nothing = hero.length === 0 && showcase.length === 0 && !anySection;
 
   return (
     <div className="flex flex-col gap-10">
@@ -124,42 +166,33 @@ export default async function HomePage() {
         </section>
       )}
 
-      {featured.length > 0 && (
-        <section aria-labelledby="vitrine-title" className="flex flex-col gap-4">
-          <TrackOnMount
-            event="view_item_list"
-            dedupeKey="home_featured"
-            itemListId="home_featured"
-            itemListName="Mais buscados"
-            items={featured
-              .slice(0, 20)
-              .map((p, i) =>
-                itemFromListItem(p, {
-                  index: i,
-                  list: { id: 'home_featured', name: 'Mais buscados' },
-                }),
-              )}
-          />
-          <h2 id="vitrine-title" className="text-lg font-semibold sm:text-xl">
-            Mais buscados
-          </h2>
-          <ProductGrid
-            products={featured}
-            priorityCount={4}
-            listId="home_featured"
-            listName="Mais buscados"
-            buyButtonLabel={
-              theme.card_buy_button_enabled ? theme.card_buy_button_label : undefined
-            }
-          />
-        </section>
-      )}
+      <HomeProductSection
+        id="home_featured"
+        title="Mais buscados"
+        products={sections.mais_buscados}
+        theme={theme}
+        priorityCount={4}
+      />
 
       {showcase.length > 0 && (
         <section aria-label="Coleções">
           <BannerGrid banners={showcase.slice(0, 4)} variant="showcase" />
         </section>
       )}
+
+      <HomeProductSection
+        id="home_tenis"
+        title="Tênis"
+        products={sections.tenis}
+        theme={theme}
+      />
+
+      <HomeProductSection
+        id="home_feminino"
+        title="Feminino"
+        products={sections.feminino}
+        theme={theme}
+      />
 
       {nothing && (
         <section className="rounded-card border border-dashed border-surface-border p-10 text-center">

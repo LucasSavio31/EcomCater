@@ -10,6 +10,7 @@ export interface ProductListItem {
   price_cents: number;
   compare_at_price_cents: number | null;
   discount_pct: number | null;
+  pix_discount_pct: number | null;
   installments_max: number | null;
   in_stock: boolean;
   is_featured: boolean;

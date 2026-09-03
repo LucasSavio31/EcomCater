@@ -123,6 +123,63 @@ async def test_list_by_category_and_price_filter(client, admin_token, auth_heade
 
 
 @pytest.mark.asyncio
+async def test_list_by_ambiguous_slug_prefers_top_level_path(client, admin_token, auth_headers):
+    """Quando o mesmo slug existe no topo e como subcategoria (ex.: 'botas'),
+    `?category=botas` tem que resolver o do TOPO (match por path), não o filho."""
+    h = auth_headers(admin_token)
+    top_botas = await _mk_category(client, h, "Botas")
+    masc = await _mk_category(client, h, "Masculino")
+    sub_botas = await _mk_category(client, h, "Botas", parent_id=masc["id"])
+    assert sub_botas["path"] == "masculino/botas"
+
+    # produto cuja categoria principal é a subcategoria, mas com a do topo como extra
+    r = await client.post(
+        "/api/admin/products",
+        json={
+            "name": "Coturno Teste",
+            "category_id": sub_botas["id"],
+            "extra_category_ids": [top_botas["id"]],
+            "price_cents": 9990,
+            "status": "active",
+        },
+        headers=h,
+    )
+    assert r.status_code == 201, r.text
+
+    top = await client.get("/api/products", params={"category": "botas"})
+    assert top.status_code == 200
+    assert [i["name"] for i in top.json()["items"]] == ["Coturno Teste"]
+
+    child = await client.get("/api/products", params={"category": "masculino/botas"})
+    assert [i["name"] for i in child.json()["items"]] == ["Coturno Teste"]
+
+
+@pytest.mark.asyncio
+async def test_home_sections_deterministic_by_seed(client, admin_token, auth_headers, db):
+    from app.modules.products import service
+
+    h = auth_headers(admin_token)
+    fem = await _mk_category(client, h, "Feminino")
+    fem_tenis = await _mk_category(client, h, "Tênis", parent_id=fem["id"])
+    for i in range(10):
+        await _mk_product(client, h, fem_tenis["id"], name=f"TENIS {i:02d}", price=1000 + i)
+
+    a = await service.home_sections(db, seed=2026090310)
+    b = await service.home_sections(db, seed=2026090310)
+    c = await service.home_sections(db, seed=2026090311)
+
+    assert [p["id"] for p in a["mais_buscados"]] == [p["id"] for p in b["mais_buscados"]]
+    assert len(a["tenis"]) == 8 and len(a["feminino"]) == 4
+    # troca de hora (seed) muda a ordem de pelo menos um bloco
+    assert [p["id"] for p in a["mais_buscados"]] != [p["id"] for p in c["mais_buscados"]]
+
+    # endpoint público responde com as três chaves
+    res = await client.get("/api/products/home-sections")
+    assert res.status_code == 200
+    assert set(res.json()) == {"mais_buscados", "tenis", "feminino"}
+
+
+@pytest.mark.asyncio
 async def test_search_fuzzy(client, admin_token, auth_headers):
     h = auth_headers(admin_token)
     cat = await _mk_category(client, h)
