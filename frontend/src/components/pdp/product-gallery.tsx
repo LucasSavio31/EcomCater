@@ -57,14 +57,14 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
       <div className="hidden md:flex md:gap-3">
         {images.length > 1 && (
           <ul
-            className="flex max-h-[520px] flex-col gap-2 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="flex max-h-[520px] flex-col gap-2 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             aria-label="Miniaturas do produto"
           >
             {images.map((image, i) => {
               const thumb = resolveMediaUrl(image.thumb_url);
               const selected = i === safeIndex;
               return (
-                <li key={image.id} className="relative">
+                <li key={image.id} className="relative pr-3.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -82,13 +82,13 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
                   {selected && (
                     <span
                       aria-hidden
-                      className="pointer-events-none absolute -right-2 top-1/2 -translate-y-1/2 text-text"
+                      className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-text"
                       style={{
                         width: 0,
                         height: 0,
-                        borderTop: '8px solid transparent',
-                        borderBottom: '8px solid transparent',
-                        borderLeft: '10px solid currentColor',
+                        borderTop: '9px solid transparent',
+                        borderBottom: '9px solid transparent',
+                        borderLeft: '11px solid currentColor',
                       }}
                     />
                   )}
