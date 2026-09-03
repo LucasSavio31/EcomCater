@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 
 const FOCUSABLE = [
@@ -27,12 +27,23 @@ export function useFocusTrap(
   containerRef: RefObject<HTMLElement | null>,
   { active, onEscape, returnFocusTo }: Options,
 ): void {
+  // Guarda os callbacks/opções mutáveis em refs: o efeito abaixo só deve
+  // (re)rodar quando `active` muda — não a cada render do pai. Sem isso, um
+  // `onClose={() => ...}` inline fazia o trap re-inicializar e ROUBAR o foco
+  // do input a cada tecla digitada dentro de um Modal.
+  const onEscapeRef = useRef(onEscape);
+  onEscapeRef.current = onEscape;
+  const returnFocusRef = useRef(returnFocusTo);
+  returnFocusRef.current = returnFocusTo;
+
   useEffect(() => {
     if (!active) return;
     const container = containerRef.current;
     if (!container) return;
 
-    const previouslyFocused = (returnFocusTo ?? document.activeElement) as HTMLElement | null;
+    const previouslyFocused = (returnFocusRef.current ?? document.activeElement) as
+      | HTMLElement
+      | null;
 
     const focusFirst = (): void => {
       const first = container.querySelector<HTMLElement>(FOCUSABLE);
@@ -43,7 +54,7 @@ export function useFocusTrap(
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onEscape?.();
+        onEscapeRef.current?.();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -74,5 +85,5 @@ export function useFocusTrap(
       document.removeEventListener('keydown', onKeyDown, true);
       previouslyFocused?.focus?.();
     };
-  }, [active, containerRef, onEscape, returnFocusTo]);
+  }, [active, containerRef]);
 }
