@@ -40,11 +40,6 @@ export function PdpMain({ product, redirectAfterAdd, miniCart, theme }: PdpMainP
       <ProductGallery images={product.images} productName={product.name} />
 
       <div className="flex flex-col gap-5">
-        {product.brand && (
-          <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-            {product.brand}
-          </span>
-        )}
         <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{product.name}</h1>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Stars value={product.rating_avg} count={product.rating_count} size="md" />
