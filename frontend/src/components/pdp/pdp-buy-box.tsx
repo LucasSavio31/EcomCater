@@ -153,6 +153,9 @@ export function PdpBuyBox({
         {parcela && <p className="text-sm text-text-muted">{parcela.replace(/^ou /, 'Ou ')}</p>}
       </div>
 
+      {/* Variação de COR (produtos irmãos) — acima da numeração */}
+      {colorSlot}
+
       {/* Eixos de variação → caixinhas (numeração/tamanho etc.) */}
       {product.option_types.map((type) => {
         const missing = triedBuy && !effectiveSelected[type.id];
@@ -211,9 +214,6 @@ export function PdpBuyBox({
         <p className="text-xs text-text-muted">Selecione a numeração para continuar.</p>
       )}
       {outOfStock && <p className="text-sm font-medium text-danger">Combinação esgotada.</p>}
-
-      {/* Variação de COR (produtos irmãos) — abaixo da numeração */}
-      {colorSlot}
 
       {/* Quantidade + comprar */}
       <div className="flex flex-col gap-2">
