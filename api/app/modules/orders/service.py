@@ -804,3 +804,46 @@ async def admin_bulk(db: AsyncSession, numbers: list[str]) -> list[dict]:
         .order_by(Order.number)
     )
     return [to_out(o) for o in rows]
+
+
+async def supplier_export_rows(db: AsyncSession, numbers: list[str]) -> list[dict]:
+    """Dados enxutos p/ o .xlsx por fornecedor: pedido + itens com cor/numeração.
+    Traz `product_color` (color_name do produto) como fallback de cor."""
+    from app.modules.products.models import Product
+
+    rows = list(
+        await db.scalars(
+            select(Order)
+            .where(Order.number.in_(numbers))
+            .options(selectinload(Order.items))
+            .order_by(Order.number)
+        )
+    )
+    prod_ids = {i.product_id for o in rows for i in o.items if i.product_id}
+    colors: dict = {}
+    if prod_ids:
+        for pid, cname in (
+            await db.execute(
+                select(Product.id, Product.color_name).where(Product.id.in_(prod_ids))
+            )
+        ).all():
+            colors[pid] = cname
+    return [
+        {
+            "number": o.number,
+            "placed_at": o.placed_at.isoformat() if o.placed_at else None,
+            "items": [
+                {
+                    "name": i.name,
+                    "sku": i.sku,
+                    "variant_label": i.variant_label,
+                    "variant_attrs": i.variant_attrs,
+                    "supplier": i.supplier,
+                    "quantity": i.quantity,
+                    "product_color": colors.get(i.product_id),
+                }
+                for i in o.items
+            ],
+        }
+        for o in rows
+    ]

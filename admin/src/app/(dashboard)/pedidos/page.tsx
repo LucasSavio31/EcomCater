@@ -154,9 +154,6 @@ function PedidosPageInner() {
     });
   }
 
-  const printHref = (kind: 'imprimir' | 'etiquetas', ids: string) =>
-    `/pedidos/${kind}?ids=${encodeURIComponent(ids)}`;
-
   const columns: Array<Column<OrderListItem>> = [
     {
       key: 'sel',
@@ -315,6 +312,46 @@ function PedidosPageInner() {
     if (fail.length) toast.error(fail[0]?.message ?? 'Alguns pedidos falharam.');
     setSelected(new Set());
     reload();
+  }
+
+  const [xlsBusy, setXlsBusy] = useState(false);
+  async function downloadSupplierXlsx(numbers: string[]) {
+    if (!numbers.length) return;
+    setXlsBusy(true);
+    const t = getSession()?.accessToken ?? '';
+    try {
+      const qs = new URLSearchParams({ numbers: numbers.join(',') });
+      if (dateFrom) qs.set('from', dateFrom);
+      if (dateTo) qs.set('to', dateTo);
+      const r = await fetch(
+        `${ADMIN_API_BASE_URL}/api/admin/orders/export/suppliers.xlsx?${qs.toString()}`,
+        { headers: { Authorization: `Bearer ${t}` } },
+      );
+      if (!r.ok) {
+        let msg = 'Não foi possível gerar a planilha.';
+        try {
+          const j = await r.json();
+          msg = j?.error?.message ?? j?.detail ?? msg;
+        } catch {
+          /* corpo não-JSON */
+        }
+        toast.error(typeof msg === 'string' ? msg : 'Falha ao gerar a planilha.');
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pedidos-por-fornecedor.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      toast.error('Falha de rede ao baixar a planilha.');
+    } finally {
+      setXlsBusy(false);
+    }
   }
 
   const [labelBusy, setLabelBusy] = useState(false);
@@ -491,13 +528,14 @@ function PedidosPageInner() {
               </option>
             ))}
           </select>
-          <Link
-            href={printHref('imprimir', selectedList.join(','))}
-            target="_blank"
-            className="inline-flex items-center gap-1.5 rounded-card border border-surface-border px-3 py-1.5 text-sm text-text hover:border-primary"
+          <Button
+            size="sm"
+            variant="outline"
+            loading={xlsBusy}
+            onClick={() => void downloadSupplierXlsx(selectedList)}
           >
-            <IconPrinter width={16} height={16} /> PDF resumo (por fornecedor)
-          </Link>
+            <IconPrinter width={16} height={16} /> Baixar .xlsx (por fornecedor)
+          </Button>
           <Button size="sm" variant="outline" loading={busy} onClick={() => void sendToME()}>
             Gerar etiquetas (ME)
           </Button>

@@ -141,3 +141,31 @@ async def test_checkout_no_processing_error_on_happy_path(client, variant):
     order = await _order(client, variant, email="ok@test.example")
     pulse = await client.get(f"/api/orders/{order['number']}/pulse", params={"email": "ok@test.example"})
     assert pulse.json().get("processing_error") is None
+
+
+@pytest.mark.asyncio
+async def test_supplier_xlsx_export(client, variant, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    o1 = await _order(client, variant)
+    o2 = await _order(client, variant)
+    r = await client.get(
+        "/api/admin/orders/export/suppliers.xlsx",
+        params={"numbers": f"{o1['number']},{o2['number']}", "from": "2026-09-01", "to": "2026-09-30"},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert r.content[:2] == b"PK"  # zip container do .xlsx
+
+    import io
+
+    from openpyxl import load_workbook
+
+    wb = load_workbook(io.BytesIO(r.content))
+    assert wb.sheetnames  # ao menos uma aba (por fornecedor)
+    ws = wb[wb.sheetnames[0]]
+    rows = [tuple(c for c in row) for row in ws.iter_rows(values_only=True)]
+    assert any(row and str(row[0]).startswith("Fornecedor:") for row in rows)
+    assert ("Pedido", "Quantidade", "Item", "Número", "Cor", "Obs") in rows

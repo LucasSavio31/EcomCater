@@ -60,6 +60,34 @@ async def orders_bulk(db: DbDep, _: AdminDep, numbers: list[str] = Body(..., emb
     return await service.admin_bulk(db, numbers)
 
 
+@router.get("/export/suppliers.xlsx")
+async def export_suppliers_xlsx(
+    db: DbDep,
+    _: Annotated[AdminUser, Depends(get_current_admin_downloadable)],
+    numbers: str = Query(..., description="números de pedido separados por vírgula"),
+    date_from: str | None = Query(None, alias="from"),
+    date_to: str | None = Query(None, alias="to"),
+) -> Response:
+    """Planilha .xlsx dos pedidos selecionados, uma aba por fornecedor."""
+    from app.core.errors import ValidationError
+    from app.modules.orders.supplier_export import build_supplier_xlsx
+
+    nums = [n.strip() for n in numbers.split(",") if n.strip()]
+    if not nums:
+        raise ValidationError("Selecione ao menos um pedido.")
+    orders = await service.supplier_export_rows(db, nums)
+    data = build_supplier_xlsx(orders, date_from=date_from, date_to=date_to)
+    stamp = __import__("datetime").datetime.now().strftime("%Y%m%d-%H%M")
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="pedidos-por-fornecedor-{stamp}.xlsx"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 async def _payment_out(db: AsyncSession, order: Order) -> dict | None:
     p = await db.scalar(
         select(Payment).where(Payment.order_id == order.id).order_by(Payment.created_at.desc())
