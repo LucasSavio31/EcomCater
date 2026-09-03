@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import Image from 'next/image';
 import type { ProductImage } from '@/modules/catalog/types';
 import { resolveMediaUrl } from '@/lib/media';
@@ -15,9 +15,10 @@ interface ProductGalleryProps {
  * Galeria da PDP.
  * - Desktop: coluna de miniaturas À ESQUERDA + imagem principal. Zoom só NO
  *   CLIQUE (hover = lupa); com o zoom, o mouse "arrasta" a imagem.
- * - Mobile: carrossel deslizante infinito (a imagem "anda" de um lado pro
- *   outro no swipe) + bolinhas. Ícone de lupa discreto no topo e/ou 2 toques
- *   abrem o zoom; arrasta pra navegar; 2 toques na imagem ou toque fora fecham.
+ * - Mobile: as fotos ficam TODAS pré-carregadas (eager) e empilhadas; o swipe
+ *   faz a atual sair e a próxima entrar deslizando + fade (loop infinito por
+ *   módulo). Nunca fica em branco, mesmo passando rápido. 2 toques ampliam
+ *   DENTRO do quadro (arrasta pra navegar); um toque sai.
  */
 export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const [index, setIndex] = useState(0);
@@ -25,24 +26,17 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const [origin, setOrigin] = useState('50% 50%');
 
   const [mobileIndex, setMobileIndex] = useState(0);
-  const [pos, setPos] = useState(1); // posição na faixa (slides reais em 1..N; clones em 0 e N+1)
+  const [prevIndex, setPrevIndex] = useState<number | null>(null);
+  const [slideDir, setSlideDir] = useState<1 | -1>(1);
   const [dragX, setDragX] = useState(0);
-  const [animate, setAnimate] = useState(true);
 
   const [mobileZoom, setMobileZoom] = useState(false);
-  const [bgPos, setBgPos] = useState({ x: 50, y: 50 }); // % da imagem ampliada visível
+  const [bgPos, setBgPos] = useState({ x: 50, y: 50 });
 
   const frameRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number; dragging: boolean } | null>(null);
   const lastTapRef = useRef(0);
   const panStartRef = useRef<{ x: number; y: number; bx: number; by: number } | null>(null);
-
-  // reativa a transição depois do "pulo" invisível de wrap (nunca durante o arrasto)
-  useEffect(() => {
-    if (animate || dragRef.current) return;
-    const id = requestAnimationFrame(() => setAnimate(true));
-    return () => cancelAnimationFrame(id);
-  }, [animate]);
 
   if (images.length === 0) {
     return (
@@ -61,37 +55,23 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const mobileZoomSrc =
     resolveMediaUrl(mobileImg?.zoom_url) ?? resolveMediaUrl(mobileImg?.medium_url) ?? '';
 
-  const loopMobile = images.length > 1;
-  const slides: ProductImage[] = loopMobile
-    ? [images[images.length - 1] as ProductImage, ...images, images[0] as ProductImage]
-    : images;
-
   const go = (delta: number) => {
     setZoom(false);
     setIndex((i) => (i + delta + images.length) % images.length);
   };
 
-  const stepMobile = (dir: 1 | -1) => {
+  const changeMobile = (dir: 1 | -1) => {
+    setSlideDir(dir);
+    setPrevIndex(mobileIndex);
     setMobileIndex((i) => (i + dir + images.length) % images.length);
-    setPos((p) => p + dir);
     setDragX(0);
-    setAnimate(true);
   };
   const goToMobile = (i: number) => {
+    if (i === mobileIndex) return;
+    setSlideDir(i > mobileIndex ? 1 : -1);
+    setPrevIndex(mobileIndex);
     setMobileIndex(i);
-    setPos(i + 1);
     setDragX(0);
-    setAnimate(true);
-  };
-  const onTrackTransitionEnd = () => {
-    if (!loopMobile) return;
-    if (pos === 0) {
-      setAnimate(false);
-      setPos(images.length);
-    } else if (pos === images.length + 1) {
-      setAnimate(false);
-      setPos(1);
-    }
   };
 
   const openMobileZoom = () => {
@@ -107,17 +87,12 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
     setOrigin(`${x}% ${y}%`);
   };
 
-  // --- gestos do quadro mobile: com zoom arrasta a imagem ampliada (dentro do
-  //     quadro) e um toque sai; sem zoom, arrasta o carrossel e 2 toques ampliam
+  // --- gestos do quadro mobile
   const onFrameTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
     if (!t) return;
     dragRef.current = { x: t.clientX, y: t.clientY, dragging: false };
-    if (mobileZoom) {
-      panStartRef.current = { x: t.clientX, y: t.clientY, bx: bgPos.x, by: bgPos.y };
-    } else {
-      setAnimate(false);
-    }
+    if (mobileZoom) panStartRef.current = { x: t.clientX, y: t.clientY, bx: bgPos.x, by: bgPos.y };
   };
   const onFrameTouchMove = (e: React.TouchEvent) => {
     const d = dragRef.current;
@@ -136,7 +111,9 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
       setBgPos({ x: Math.min(100, Math.max(0, nx)), y: Math.min(100, Math.max(0, ny)) });
       return;
     }
-    if (d.dragging && Math.abs(dx) > Math.abs(dy)) setDragX(dx);
+    if (d.dragging && Math.abs(dx) > Math.abs(dy)) {
+      setDragX(Math.max(-60, Math.min(60, dx * 0.35))); // leve resistência ao arrasto
+    }
   };
   const onFrameTouchEnd = (e: React.TouchEvent) => {
     const d = dragRef.current;
@@ -147,16 +124,12 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
     const dx = t ? t.clientX - d.x : 0;
     const now = Date.now();
 
-    // com zoom: toque (sem arrasto) volta ao normal
     if (mobileZoom) {
       if (!d.dragging) closeMobileZoom();
       return;
     }
-
-    // sem zoom: toque simples/duplo; arrasto = troca de imagem
+    setDragX(0);
     if (!d.dragging) {
-      setAnimate(true);
-      setDragX(0);
       if (now - lastTapRef.current < 300) {
         lastTapRef.current = 0;
         openMobileZoom();
@@ -165,13 +138,15 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
       }
       return;
     }
-    const w = frameRef.current?.clientWidth ?? 1;
-    if (loopMobile && dx <= -w * 0.2) stepMobile(1);
-    else if (loopMobile && dx >= w * 0.2) stepMobile(-1);
-    else {
-      setAnimate(true);
-      setDragX(0);
-    }
+    if (images.length > 1 && Math.abs(dx) >= 40) changeMobile(dx < 0 ? 1 : -1);
+  };
+
+  const slideStyle = (i: number): React.CSSProperties => {
+    if (i === mobileIndex)
+      return { opacity: 1, transform: `translate3d(${dragX}px, 0, 0)`, zIndex: 2 };
+    if (i === prevIndex)
+      return { opacity: 0, transform: `translate3d(${-slideDir * 16}%, 0, 0)`, zIndex: 1 };
+    return { opacity: 0, transform: `translate3d(${slideDir * 16}%, 0, 0)`, zIndex: 0 };
   };
 
   return (
@@ -274,7 +249,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
         </div>
       </div>
 
-      {/* Mobile: carrossel deslizante; 2 toques = zoom DENTRO do quadro */}
+      {/* Mobile: fotos empilhadas (todas eager) — swipe desliza/faz o fade */}
       <div
         ref={frameRef}
         className={`relative h-[min(88vw,58vh)] w-full overflow-hidden rounded-card border border-surface-border bg-bg-subtle md:hidden ${
@@ -287,28 +262,23 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
         role="img"
         aria-label={`${productName} — imagem ${mobileIndex + 1} de ${images.length}`}
       >
-        <div
-          className="flex h-full w-full"
-          onTransitionEnd={onTrackTransitionEnd}
-          style={{
-            transform: `translate3d(calc(${-100 * (loopMobile ? pos : 0)}% + ${dragX}px), 0, 0)`,
-            transition: animate ? 'transform 300ms ease-out' : 'none',
-          }}
-        >
-          {slides.map((image, i) => (
-            <div key={`${image.id}-${i}`} className="relative h-full w-full shrink-0">
-              <Image
-                src={resolveMediaUrl(image.medium_url) ?? ''}
-                alt={image.alt ?? productName}
-                fill
-                sizes="100vw"
-                priority={i <= 1}
-                className="object-cover"
-                draggable={false}
-              />
-            </div>
-          ))}
-        </div>
+        {images.map((image, i) => (
+          <div
+            key={image.id}
+            className="absolute inset-0 transition-[opacity,transform] duration-200 ease-out"
+            style={slideStyle(i)}
+          >
+            <Image
+              src={resolveMediaUrl(image.medium_url) ?? ''}
+              alt={image.alt ?? `${productName} — imagem ${i + 1}`}
+              fill
+              sizes="100vw"
+              loading="eager"
+              className="object-cover"
+              draggable={false}
+            />
+          </div>
+        ))}
 
         {/* camada de zoom — ampliada dentro do próprio quadro */}
         {mobileZoom && (
@@ -322,7 +292,6 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
           />
         )}
 
-        {/* lupa discreta */}
         {!mobileZoom && (
           <button
             type="button"
@@ -352,7 +321,6 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
           ))}
         </div>
       )}
-
     </div>
   );
 }
