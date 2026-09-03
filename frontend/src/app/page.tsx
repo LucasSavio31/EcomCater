@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { getBanners } from '@/modules/banners/api';
 import { getHomeSections, getCategoryTree, getProducts } from '@/modules/catalog/api';
 import type { ProductListItem } from '@/modules/catalog/types';
@@ -201,6 +202,17 @@ export default async function HomePage() {
             O catálogo aparece aqui assim que houver produtos e banners cadastrados.
           </p>
         </section>
+      )}
+
+      {anySection && (
+        <div className="flex justify-center">
+          <Link
+            href="/categoria/todos-os-produtos"
+            className="inline-flex min-h-touch items-center justify-center rounded-btn bg-btn px-8 text-sm font-black uppercase tracking-wide text-black hover:opacity-90"
+          >
+            Ver todos
+          </Link>
+        </div>
       )}
 
       {theme.newsletter_enabled && (
