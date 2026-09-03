@@ -1,26 +1,30 @@
-"""Invalida o cache de leitura (Redis) quando o admin salva algo público.
+"""Invalida os DOIS caches de leitura quando o admin salva algo público:
+o cache Redis da API (``bump``) e as tags de SSR do Next (``/api/revalidate``).
 
-Qualquer POST/PUT/PATCH/DELETE bem-sucedido nas rotas de catálogo do
-admin dá um ``bump`` no(s) namespace(s) correspondente(s) — a próxima
-leitura da loja já recalcula. Simples e sem risco de servir dado velho.
+Qualquer POST/PUT/PATCH/DELETE bem-sucedido nas rotas de catálogo/tema do
+admin dispara a invalidação correspondente — a loja reflete na hora, sem
+esperar o ``revalidate`` das páginas.
 """
 from __future__ import annotations
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.cache import bump
+from app.core.next_revalidate import revalidate_tags
 
 _WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
-# (prefixo do path admin, namespaces a invalidar)
-_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("/api/admin/products", ("catalog", "product")),
-    ("/api/admin/categories", ("catalog", "product")),
-    ("/api/admin/banners", ("catalog",)),
-    ("/api/admin/menus", ("menus",)),
-    ("/api/admin/theme", ("theme", "content")),
+# (prefixo do path admin, namespaces Redis, tags do Next)
+_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
+    ("/api/admin/products", ("catalog", "product"), ("products",)),
+    ("/api/admin/categories", ("catalog", "product"), ("categories", "products")),
+    ("/api/admin/banners", ("catalog",), ("banners",)),
+    ("/api/admin/menus", ("menus",), ("menus",)),
+    ("/api/admin/theme", ("theme", "content"), ("theme", "pages")),
     # nome da loja / CNPJ / redes sociais entram no payload de /api/theme
-    ("/api/admin/settings", ("theme",)),
+    ("/api/admin/settings", ("theme",), ("theme", "settings")),
+    ("/api/admin/rastreamento", (), ("analytics",)),
+    ("/api/admin/analytics", (), ("analytics",)),
 )
 
 
@@ -34,8 +38,8 @@ class CacheBust:
             return
 
         path: str = scope.get("path", "")
-        nss = next((ns for p, ns in _RULES if path.startswith(p)), None)
-        if nss is None:
+        rule = next((r for r in _RULES if path.startswith(r[0])), None)
+        if rule is None:
             await self.app(scope, receive, send)
             return
 
@@ -50,4 +54,8 @@ class CacheBust:
         await self.app(scope, receive, send_wrapper)
 
         if 200 <= status_code < 400:
-            await bump(*nss)
+            _prefix, redis_ns, next_tags = rule
+            if redis_ns:
+                await bump(*redis_ns)
+            if next_tags:
+                await revalidate_tags(*next_tags)

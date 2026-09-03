@@ -9,7 +9,9 @@ import { revalidateTag } from 'next/cache';
  * Protegido por um segredo compartilhado quando `REVALIDATE_SECRET` está
  * definido; em dev local (sem o segredo) fica liberado.
  */
-const ALLOWED_TAGS = new Set(['theme', 'analytics', 'menus', 'banners', 'settings']);
+const ALLOWED_TAGS = new Set([
+  'theme', 'analytics', 'menus', 'banners', 'settings', 'products', 'categories', 'pages',
+]);
 
 function authorized(req: Request): boolean {
   const secret = process.env.REVALIDATE_SECRET;
