@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import Image from 'next/image';
 import type { ProductImage } from '@/modules/catalog/types';
 import { resolveMediaUrl } from '@/lib/media';
@@ -14,64 +14,17 @@ interface ProductGalleryProps {
 /**
  * Galeria da PDP.
  * - Desktop: coluna de miniaturas À ESQUERDA (com uma seta na selecionada) +
- *   imagem principal. O zoom só entra NO CLIQUE: ao passar o cursor aparece a
- *   lupa (`cursor: zoom-in`); clicando, a imagem amplia e o mouse passa a
- *   "arrastar" o produto (pan via `background-position`). Clicar de novo — ou
- *   tirar o cursor — sai do zoom.
- * - Mobile: carrossel com scroll-snap.
+ *   imagem principal. Zoom só NO CLIQUE (hover mostra a lupa); com o zoom, o
+ *   mouse "arrasta" a imagem. Clicar de novo / tirar o cursor sai do zoom.
+ * - Mobile: quadro fixo, a imagem TROCA no swipe (infinito, sem deslizar a
+ *   faixa nem travar — igual ao desktop) + bolinhas de paginação.
  */
 export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const [index, setIndex] = useState(0);
   const [zoom, setZoom] = useState(false);
   const [origin, setOrigin] = useState('50% 50%');
   const [mobileIndex, setMobileIndex] = useState(0);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const idleRef = useRef<number | undefined>(undefined);
-
-  // Carrossel mobile infinito: renderiza as fotos 3x e, quando o swipe para
-  // perto de uma borda, salta uma "cópia" inteira de volta ao centro.
-  const mobileLoop = images.length >= 2;
-  const mobileSlides = mobileLoop
-    ? [0, 1, 2].flatMap((copy) => images.map((img, i) => ({ img, i, copy })))
-    : images.map((img, i) => ({ img, i, copy: 0 }));
-
-  const normalizeMobile = useCallback(() => {
-    const el = trackRef.current;
-    if (!el || !mobileLoop) return;
-    const block = images.length * (el.clientWidth + 8); // avanço exato de 1 cópia
-    if (block <= 0) return;
-    if (el.scrollLeft < block * 0.5) el.scrollLeft += block;
-    else if (el.scrollLeft > block * 1.5) el.scrollLeft -= block;
-  }, [mobileLoop, images.length]);
-
-  const onTrackScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    const per = el.clientWidth + 8; // largura do slide + gap-2
-    if (per <= 8) return;
-    const raw = Math.round(el.scrollLeft / per);
-    setMobileIndex(((raw % images.length) + images.length) % images.length);
-    if (mobileLoop) {
-      window.clearTimeout(idleRef.current);
-      idleRef.current = window.setTimeout(normalizeMobile, 120);
-    }
-  };
-
-  const goToMobile = (i: number) => {
-    const el = trackRef.current;
-    if (!el) return;
-    const per = el.clientWidth + 8;
-    const base = mobileLoop ? images.length : 0; // cópia central
-    el.scrollTo({ left: (base + i) * per, behavior: 'smooth' });
-  };
-
-  // posiciona na cópia central ao montar (quando o carrossel tem largura)
-  useEffect(() => {
-    const el = trackRef.current;
-    if (!el || !mobileLoop) return;
-    if (el.clientWidth > 0) el.scrollLeft = images.length * (el.clientWidth + 8);
-    return () => window.clearTimeout(idleRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mobileLoop, images.length]);
+  const touchStartX = useRef<number | null>(null);
 
   if (images.length === 0) {
     return (
@@ -91,11 +44,25 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
     setIndex((i) => (i + delta + images.length) % images.length);
   };
 
+  const goMobile = (delta: number) =>
+    setMobileIndex((i) => (i + delta + images.length) % images.length);
+
   const onMove = (event: React.MouseEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * 100;
     const y = ((event.clientY - rect.top) / rect.height) * 100;
     setOrigin(`${x}% ${y}%`);
+  };
+
+  const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    touchStartX.current = e.touches[0]?.clientX ?? null;
+  };
+  const onTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartX.current == null || images.length < 2) return;
+    const dx = (e.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 40) return;
+    goMobile(dx < 0 ? 1 : -1);
   };
 
   return (
@@ -198,32 +165,27 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
         </div>
       </div>
 
-      {/* Carrossel (mobile) — altura limitada p/ preço + numeração + Comprar
-          entrarem na dobra */}
+      {/* Mobile: quadro fixo; a imagem troca no swipe (infinito, sem travar) */}
       <div
-        ref={trackRef}
-        onScroll={onTrackScroll}
-        className="flex snap-x snap-mandatory gap-2 overflow-x-auto rounded-card md:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative h-[min(88vw,58vh)] w-full overflow-hidden rounded-card border border-surface-border bg-bg-subtle md:hidden"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        role="img"
+        aria-label={`${productName} — imagem ${mobileIndex + 1} de ${images.length}`}
       >
-        {mobileSlides.map(({ img, i, copy }) => {
-          const src = resolveMediaUrl(img.medium_url) ?? '';
-          return (
-            <div
-              key={`${img.id}-${copy}`}
-              className="relative h-[min(88vw,58vh)] w-full shrink-0 snap-center overflow-hidden rounded-card border border-surface-border bg-bg-subtle"
-              aria-hidden={mobileLoop && copy !== 1 ? true : undefined}
-            >
-              <Image
-                src={src}
-                alt={img.alt ?? `${productName} — imagem ${i + 1}`}
-                fill
-                sizes="100vw"
-                priority={i === 0 && copy <= 1}
-                className="object-cover"
-              />
-            </div>
-          );
-        })}
+        {images.map((image, i) => (
+          <Image
+            key={image.id}
+            src={resolveMediaUrl(image.medium_url) ?? ''}
+            alt={image.alt ?? `${productName} — imagem ${i + 1}`}
+            fill
+            sizes="100vw"
+            priority={i === 0}
+            className={`object-cover transition-opacity duration-200 ${
+              i === mobileIndex ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+        ))}
       </div>
       {images.length > 1 && (
         <div className="flex justify-center gap-2 md:hidden" role="tablist" aria-label="Fotos do produto">
@@ -234,7 +196,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
               role="tab"
               aria-selected={i === mobileIndex}
               aria-label={`Ir para a foto ${i + 1}`}
-              onClick={() => goToMobile(i)}
+              onClick={() => setMobileIndex(i)}
               className={`h-2 rounded-full transition-all ${
                 i === mobileIndex ? 'w-4 bg-btn' : 'w-2 bg-surface-border'
               }`}
