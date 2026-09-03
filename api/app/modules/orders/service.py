@@ -404,6 +404,10 @@ async def transition(
         "order.status_changed",
         {"order_id": str(order.id), "status": new_status, "from_status": prev},
     )
+    # "pago" tem seu próprio evento (e-mail de pagamento confirmado + fatura PDF).
+    # Só o `order.paid` manda esse e-mail — `order.status_changed` não duplica.
+    if new_status == "paid" and prev != "paid":
+        await emit("order.paid", {"order_id": str(order.id), "number": order.number})
     return order
 
 
@@ -455,7 +459,8 @@ async def finalize_paid(db: AsyncSession, order: Order) -> Order:
                 user_id=order.user_id,
                 discount_cents=order.discount_cents,
             )
-    await emit("order.paid", {"order_id": str(order.id), "number": order.number})
+    # o e-mail de "pagamento confirmado" (+ fatura) sai do evento emitido dentro
+    # de `transition(... "paid")`, acima — não reemitir aqui (evita duplicar).
     return order
 
 

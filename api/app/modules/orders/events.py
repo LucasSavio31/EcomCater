@@ -222,16 +222,28 @@ async def _on_paid(payload: dict) -> None:
             return
         ctx = _order_ctx(order, await _latest_payment(db, order))
         ctx["status_label"] = _STATUS_LABELS.get("paid", "Pago")
+
+        # anexa a fatura em PDF (best-effort — falha não bloqueia o e-mail)
+        attachments = None
+        try:
+            from app.modules.orders.invoice import build_invoice_pdf
+
+            pdf = await build_invoice_pdf(db, order)
+            attachments = [(f"fatura-{order.number}.pdf", pdf, "application", "pdf")]
+        except Exception:  # noqa: BLE001
+            logger.exception("falha ao gerar a fatura PDF do pedido %s", order.number)
+
         await mailer.send(
             db, to=order.email, template="payment_confirmed",
-            order_id=str(order.id), context=ctx,
+            order_id=str(order.id), context=ctx, attachments=attachments,
         )
         await db.commit()
 
 
-# status do pedido -> template do e-mail para o CLIENTE
+# status do pedido -> template do e-mail para o CLIENTE.
+# "paid" NÃO está aqui: o e-mail de pagamento confirmado (com a fatura em PDF)
+# sai do handler `order.paid`, pra não duplicar.
 _STATUS_TEMPLATE = {
-    "paid": "payment_confirmed",
     "processing": "order_processing",
     "tracking_available": "order_tracking_available",
     "shipped": "order_shipped",
