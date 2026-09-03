@@ -114,8 +114,10 @@ async def set_image(
 
     old = getattr(b, field)
     if _is_animated_gif(raw):
+        from app.shared.images import reencode_gif
+
         key = f"banners/{uuid.uuid4().hex}/banner.gif"
-        storage.save(key, raw, "image/gif")
+        storage.save(key, reencode_gif(raw), "image/gif")
     else:
         processed = process_image(raw, filename, prefix="banners")
         key = processed.zoom_key

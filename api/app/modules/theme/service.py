@@ -243,8 +243,10 @@ async def set_seal_image(
     row = await get_theme(db)
     seals = _clean_seals(row.footer_seals_json)
     if b"<svg" in raw[:1024].lower():
+        from app.shared.images import sanitize_svg
+
         key = f"theme/seals/{uuid.uuid4().hex}/selo.svg"
-        storage.save(key, raw, "image/svg+xml")
+        storage.save(key, sanitize_svg(raw), "image/svg+xml")
     else:
         if whiten:
             raw = whiten_bytes(raw)

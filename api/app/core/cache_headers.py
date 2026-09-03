@@ -42,12 +42,17 @@ class PublicCacheHeaders:
             await self.app(scope, receive, send)
             return
 
+        is_media = path.startswith(("/media/", "/static/"))
+
         async def send_wrapper(message: Message) -> None:
             if message["type"] == "http.response.start" and 200 <= message["status"] < 300:
                 headers = message.setdefault("headers", [])
                 if not any(k.lower() == b"cache-control" for k, _ in headers):
                     headers.append((b"cache-control", cc.encode()))
                     headers.append((b"vary", b"Accept-Encoding"))
+                if is_media and not any(k.lower() == b"x-robots-tag" for k, _ in headers):
+                    # mídia fora do índice de imagens dos buscadores / crawlers de IA
+                    headers.append((b"x-robots-tag", b"noimageindex, noai, noimageai"))
             await send(message)
 
         await self.app(scope, receive, send_wrapper)
