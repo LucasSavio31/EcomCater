@@ -12,6 +12,7 @@ Fluxo:
 """
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -120,6 +121,81 @@ async def recover_link(rec_id: str, db: DbDep) -> Response:
 
 
 # ------------------------------------------------------------- envio (cron)
+async def _resolve_name(db: AsyncSession, email: str) -> str:
+    """Primeiro nome do cliente: lead → conta → último pedido → vazio."""
+    from app.modules.newsletter.models import NewsletterSubscriber
+
+    sub = await db.scalar(
+        select(NewsletterSubscriber).where(NewsletterSubscriber.email == email)
+    )
+    full = (sub.name if sub and sub.name else "") or ""
+    if not full.strip():
+        from app.modules.customers.models import User
+
+        u = await db.scalar(select(User).where(User.email == email))
+        full = (u.full_name if u and u.full_name else "") or ""
+    if not full.strip():
+        from app.modules.orders.models import Order
+
+        o = await db.scalar(
+            select(Order).where(Order.email == email).order_by(Order.placed_at.desc())
+        )
+        if o and o.shipping_address_json:
+            full = (o.shipping_address_json.get("recipient_name") or "").strip()
+    return full.split()[0] if full.strip() else ""
+
+
+def _fill(text: str, *, name: str, link: str) -> str:
+    """Troca {link} e {nome}. Sem nome, remove o placeholder e a vírgula/espaço
+    logo depois (evita '‚ você esqueceu...' e 'Olá , notamos...')."""
+    text = (text or "").replace("{link}", link)
+    if name:
+        return text.replace("{nome}", name)
+    return re.sub(r"\{nome\}\s*,?\s*", "", text).strip()
+
+
+async def _cart_lines(db: AsyncSession, cart_id) -> tuple[list[dict], int]:
+    """Resumo do carrinho: [{name, variant, qty, unit_cents, line_cents}], total."""
+    if not cart_id:
+        return [], 0
+    from sqlalchemy.orm import selectinload
+
+    from app.modules.cart.models import Cart
+    from app.modules.products.models import Product, ProductVariant
+
+    cart = await db.scalar(
+        select(Cart).where(Cart.id == cart_id).options(selectinload(Cart.items))
+    )
+    if not cart or not cart.items:
+        return [], 0
+    lines: list[dict] = []
+    total = 0
+    for it in cart.items:
+        prod = await db.get(Product, it.product_id)
+        var = await db.scalar(
+            select(ProductVariant)
+            .where(ProductVariant.id == it.variant_id)
+            .options(selectinload(ProductVariant.option_values))
+        )
+        vlabel = (
+            " / ".join(ov.value for ov in var.option_values)
+            if var and var.option_values
+            else None
+        )
+        line = it.unit_price_cents * it.quantity
+        total += line
+        lines.append(
+            {
+                "name": prod.name if prod else "Item",
+                "variant": vlabel,
+                "qty": it.quantity,
+                "unit_cents": it.unit_price_cents,
+                "line_cents": line,
+            }
+        )
+    return lines, total
+
+
 async def _process_due(db: AsyncSession) -> dict:
     msgs = list(
         await db.scalars(
@@ -135,7 +211,6 @@ async def _process_due(db: AsyncSession) -> dict:
             select(AbandonedCart).where(AbandonedCart.recovered_at.is_(None))
         )
     )
-    from app.modules.newsletter.models import NewsletterSubscriber
     from app.shared import mailer
 
     now = datetime.now(UTC)
@@ -149,26 +224,19 @@ async def _process_due(db: AsyncSession) -> dict:
         if now < due:
             continue
 
-        sub = await db.scalar(
-            select(NewsletterSubscriber).where(NewsletterSubscriber.email == ac.email)
-        )
-        name = (sub.name if sub and sub.name else "") or ""
+        name = await _resolve_name(db, ac.email)
+        lines, total = await _cart_lines(db, ac.cart_id)
         cta_url = f"{settings.public_api_url.rstrip('/')}/api/cart-recovery/r/{ac.id}"
-        body = (
-            (msg.body or "")
-            .replace("{nome}", name)
-            .replace("{link}", cta_url)
-        )
-        subject = (msg.subject or "").replace("{nome}", name)
         ok = await mailer.send(
             db,
             to=ac.email,
             template="cart_recovery",
             context={
-                "subject": subject,
-                "body": body,
+                "subject": _fill(msg.subject, name=name, link=cta_url),
+                "body": _fill(msg.body, name=name, link=cta_url),
                 "cta_url": cta_url,
-                "total": ac.total_cents,
+                "items": lines,
+                "total_cents": total or ac.total_cents,
             },
         )
         ac.reminders_sent += 1
@@ -356,7 +424,6 @@ async def send_to_carts(
     a última. Não envia para carrinho já recuperado."""
     import uuid as _uuid
 
-    from app.modules.newsletter.models import NewsletterSubscriber
     from app.shared import mailer
 
     msgs = list(
@@ -386,21 +453,19 @@ async def send_to_carts(
             skipped += 1
             continue
         msg = msgs[min(ac.reminders_sent, len(msgs) - 1)]
-        sub = await db.scalar(
-            select(NewsletterSubscriber).where(NewsletterSubscriber.email == ac.email)
-        )
-        name = (sub.name if sub and sub.name else "") or ""
+        name = await _resolve_name(db, ac.email)
+        lines, total = await _cart_lines(db, ac.cart_id)
         cta_url = f"{settings.public_api_url.rstrip('/')}/api/cart-recovery/r/{ac.id}"
-        body = (msg.body or "").replace("{nome}", name).replace("{link}", cta_url)
         ok = await mailer.send(
             db,
             to=ac.email,
             template="cart_recovery",
             context={
-                "subject": (msg.subject or "").replace("{nome}", name),
-                "body": body,
+                "subject": _fill(msg.subject, name=name, link=cta_url),
+                "body": _fill(msg.body, name=name, link=cta_url),
                 "cta_url": cta_url,
-                "total": ac.total_cents,
+                "items": lines,
+                "total_cents": total or ac.total_cents,
             },
         )
         ac.last_email_at = now

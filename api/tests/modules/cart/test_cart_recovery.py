@@ -112,3 +112,32 @@ async def test_send_to_carts_forces_send_ignoring_delay(client, admin_token, aut
         await db.execute(select(EmailLog).where(EmailLog.template == "cart_recovery"))
     ).scalars().all()
     assert any(log.to_email == "forcar@test.example" for log in logs)
+
+
+def test_fill_placeholders():
+    from app.modules.cart_recovery.module import _fill
+
+    assert _fill("{nome}, você esqueceu {link}", name="João", link="U") == "João, você esqueceu U"
+    # sem nome: some o "{nome}, "
+    assert _fill("{nome}, você esqueceu", name="", link="U") == "você esqueceu"
+    assert _fill("Olá {nome}, notamos", name="", link="U") == "Olá notamos"
+
+
+def test_cart_recovery_template_shows_items_and_total():
+    from app.shared.mailer import TEMPLATES, _env
+
+    html = _env.from_string(TEMPLATES["cart_recovery"][1]).render(
+        subject="Volte",
+        body="Olá, você deixou itens",
+        cta_url="https://loja/x",
+        btn_style="background:#111",
+        items=[
+            {"name": "Tênis Volt", "variant": "42 / Preto", "qty": 2, "line_cents": 25980},
+        ],
+        total_cents=25980,
+    )
+    assert "Tênis Volt" in html
+    assert "42 / Preto" in html
+    assert "R$ 259.80" in html
+    assert "Total" in html
+    assert "background:#111" in html  # botão inline

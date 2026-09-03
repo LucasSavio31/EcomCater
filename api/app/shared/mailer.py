@@ -73,7 +73,7 @@ def _order_email(intro: str, cta: str = "") -> str:
 
 _TRACK_CTA = (
     "{% if tracking_url %}<p style='margin:12px 0'>"
-    "<a href='{{ tracking_url }}' class='btn'>Acompanhar entrega</a></p>{% endif %}"
+    "<a href='{{ tracking_url }}' class='btn' style='{{ btn_style }}'>Acompanhar entrega</a></p>{% endif %}"
 )
 
 TEMPLATES: dict[str, tuple[str, str]] = {
@@ -141,7 +141,7 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         _order_email(
             "<h2>Entregue! 🎉</h2>"
             "<p>O pedido <b>{{ number }}</b> foi entregue. Esperamos que goste!</p>",
-            "<p style='margin:12px 0'><a href='{{ review_url }}' class='btn'>Avaliar minha compra</a></p>",
+            "<p style='margin:12px 0'><a href='{{ review_url }}' class='btn' style='{{ btn_style }}'>Avaliar minha compra</a></p>",
         ),
     ),
     "order_canceled": (
@@ -164,7 +164,19 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         "{{ subject }}",
         "<h2 style='margin:0 0 12px;font-size:18px;text-transform:uppercase;letter-spacing:.5px'>{{ subject }}</h2>"
         "<div>{{ body | e | replace('\n', '<br>'|safe) }}</div>"
-        "<p style='margin-top:18px'><a href='{{ cta_url }}' class='btn'>Voltar para o meu carrinho</a></p>",
+        "{% if items %}"
+        "<table role='presentation' style='width:100%;border-collapse:collapse;margin:16px 0'>"
+        "{% for it in items %}<tr>"
+        "<td style='padding:8px 0;border-bottom:1px solid #eee'>{{ it.qty }}× {{ it.name }}"
+        "{% if it.variant %}<br><span style='color:#888;font-size:12px'>{{ it.variant }}</span>{% endif %}</td>"
+        "<td style='padding:8px 0;border-bottom:1px solid #eee;text-align:right;white-space:nowrap'>"
+        "R$ {{ '%.2f'|format(it.line_cents/100) }}</td>"
+        "</tr>{% endfor %}"
+        "<tr><td style='padding:10px 0;font-weight:bold;font-size:15px'>Total</td>"
+        "<td style='padding:10px 0;text-align:right;font-weight:bold;font-size:15px'>"
+        "R$ {{ '%.2f'|format((total_cents or 0)/100) }}</td></tr>"
+        "</table>{% endif %}"
+        "<p style='margin-top:18px'><a href='{{ cta_url }}' class='btn' style='{{ btn_style }}'>Voltar para o meu carrinho</a></p>",
     ),
     "campaign": (
         "{{ subject }}",
@@ -189,7 +201,7 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         "<h2>Redefinir sua senha</h2>"
         "<p>Recebemos um pedido para redefinir a senha da conta <b>{{ email }}</b>"
         "{% if is_admin %} (painel administrativo){% endif %}.</p>"
-        "<p style='margin:14px 0'><a href='{{ reset_url }}' class='btn'>Criar nova senha</a></p>"
+        "<p style='margin:14px 0'><a href='{{ reset_url }}' class='btn' style='{{ btn_style }}'>Criar nova senha</a></p>"
         "<p style='font-size:12px;color:#9aa0a6'>O link vale por {{ ttl_min }} minutos e só "
         "pode ser usado uma vez. Se não foi você, ignore este e-mail — nada muda.</p>",
     ),
@@ -200,7 +212,7 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         "<p><b>Dados de acesso:</b></p>"
         "<p style='margin:4px 0'>Login (e-mail): <b>{{ email }}</b></p>"
         "<p style='margin:4px 0'>Senha: <b>seu CPF</b> (só números{% if cpf_masked %}, ex.: {{ cpf_masked }}{% endif %})</p>"
-        "<p style='margin:12px 0'><a href='{{ login_url }}' class='btn'>Acessar minha conta</a></p>"
+        "<p style='margin:12px 0'><a href='{{ login_url }}' class='btn' style='{{ btn_style }}'>Acessar minha conta</a></p>"
         "<p style='font-size:12px;color:#9aa0a6'>Recomendamos trocar a senha depois do primeiro acesso, em Minha conta.</p>",
     ),
     "admin_order_created": (
@@ -209,7 +221,7 @@ TEMPLATES: dict[str, tuple[str, str]] = {
             "<h2>Novo pedido: {{ number }}</h2>"
             "<p>Cliente: <b>{{ customer_name }}</b> ({{ email }})"
             "{% if customer_phone %} — {{ customer_phone }}{% endif %}</p>",
-            "<p style='margin-top:14px'><a href='{{ admin_url }}' class='btn'>Abrir no painel</a></p>",
+            "<p style='margin-top:14px'><a href='{{ admin_url }}' class='btn' style='{{ btn_style }}'>Abrir no painel</a></p>",
         ),
     ),
     "backup_result": (
@@ -351,12 +363,21 @@ def _html_to_text(html: str) -> str:
     return "\n".join(ln for ln in lines if ln).strip()
 
 
+def _btn_style(t: dict) -> str:
+    """Estilo INLINE do botão (o Gmail descarta blocos <style>, então o botão
+    real vem de `style=` no próprio <a>)."""
+    return (
+        f"background:{t.get('btn_bg', '#111111')};color:{t.get('btn_fg', '#FFFFFF')};"
+        "text-decoration:none;border-radius:8px;padding:13px 24px;display:inline-block;"
+        "font-weight:bold;font-family:Arial,Helvetica,sans-serif;font-size:14px"
+    )
+
+
 def _wrap_html(inner: str, subject: str, t: dict, store_name: str) -> str:
     """Molde visual do e-mail (cabeçalho com logo/nome da loja + corpo + rodapé)."""
     name = t.get("store_name") or store_name
     style_btn = (
-        f"a[href],.btn{{background:{t['btn_bg']};color:{t['btn_fg']} !important;"
-        "text-decoration:none;border-radius:8px;padding:12px 20px;display:inline-block;font-weight:bold}}"
+        f".btn{{{_btn_style(t)}}} a.btn{{color:{t.get('btn_fg', '#FFFFFF')} !important}}"
     )
     footer = (
         f"<p style='margin:16px 0 0;font-size:12px;color:#9aa0a6'>{t['footer']}</p>"
@@ -398,11 +419,13 @@ async def send(
 ) -> bool:
     """`attachments`: lista de (filename, data, maintype, subtype), ex.:
     ("fatura.pdf", b"...", "application", "pdf")."""
-    subj_tpl, body_tpl = TEMPLATES.get(template, ("Notificação", "<p>{{ message|default('') }}</p>"))
-    subject = _env.from_string(subj_tpl).render(**context)
-    inner = _env.from_string(body_tpl).render(**context)
     conf = await _smtp_conf(db)
     et = await _email_theme(db)
+
+    subj_tpl, body_tpl = TEMPLATES.get(template, ("Notificação", "<p>{{ message|default('') }}</p>"))
+    ctx = {"btn_style": _btn_style(et), **context}
+    subject = _env.from_string(subj_tpl).render(**ctx)
+    inner = _env.from_string(body_tpl).render(**ctx)
 
     # tenta embutir o logo como imagem inline (cid:)
     logo_bytes: bytes | None = None
