@@ -80,9 +80,16 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
                     {thumb && <Image src={thumb} alt="" fill sizes="64px" className="object-cover" />}
                   </button>
                   {selected && (
-                    <ChevronRightIcon
+                    <span
                       aria-hidden
-                      className="pointer-events-none absolute -right-1 top-1/2 h-5 w-5 -translate-y-1/2 text-primary"
+                      className="pointer-events-none absolute -right-2 top-1/2 -translate-y-1/2 text-text"
+                      style={{
+                        width: 0,
+                        height: 0,
+                        borderTop: '8px solid transparent',
+                        borderBottom: '8px solid transparent',
+                        borderLeft: '10px solid currentColor',
+                      }}
                     />
                   )}
                 </li>
