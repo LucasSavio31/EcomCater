@@ -201,6 +201,17 @@ export interface SearchResultItem {
   url: string;
   price_cents: number | null;
   image_url: string | null;
+  /** campos completos do produto (a busca devolve o mesmo payload do card padrão) */
+  compare_at_price_cents?: number | null;
+  discount_pct?: number | null;
+  pix_discount_pct?: number | null;
+  installments_max?: number | null;
+  in_stock?: boolean;
+  is_featured?: boolean;
+  primary_image_url?: string | null;
+  hover_image_url?: string | null;
+  rating_avg?: number;
+  rating_count?: number;
 }
 
 export interface ProductQuery {

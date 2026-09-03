@@ -689,14 +689,10 @@ async def search(db: AsyncSession, q: str, limit: int = 8) -> list[dict]:
         item = list_item(p)
         results.append(
             {
+                **item,  # payload completo p/ o card padrão (desconto, PIX, etc.)
                 "type": "product",
-                "id": item["id"],
-                "sku_root": p.sku_root,
-                "brand": p.brand,
-                "name": p.name,
-                "slug": p.slug,
                 "url": f"/produto/{p.slug}",
-                "price_cents": item["price_cents"],
+                # compat com o painel de busca (usa `image_url`)
                 "image_url": item["primary_image_url"],
             }
         )

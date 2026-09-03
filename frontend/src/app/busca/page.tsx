@@ -1,12 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Image from 'next/image';
 import { searchProducts } from '@/modules/catalog/api';
-import { resolveMediaUrl } from '@/lib/media';
-import { formatBRL } from '@/lib/format';
+import type { ProductListItem } from '@/modules/catalog/types';
 import { buildMetadata } from '@/lib/seo';
+import { ProductGrid } from '@/components/catalog/product-grid';
 import { TrackOnMount } from '@/components/analytics/track-on-mount';
-import { TrackSelectLink } from '@/components/analytics/track-select-link';
 import { itemFromSearchResult } from '@/modules/analytics';
 
 export const dynamic = 'force-dynamic';
@@ -102,53 +100,31 @@ export default async function BuscaPage({ searchParams }: PageProps) {
       )}
 
       {products.length > 0 && (
-        <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 lg:gap-4">
-          {products.map((product, i) => {
-            const img = resolveMediaUrl(product.image_url);
-            return (
-              <li key={product.id}>
-                <TrackSelectLink
-                  href={product.url}
-                  listId="search_results"
-                  listName={`Busca: ${q}`}
-                  index={i}
-                  item={itemFromSearchResult(product, {
-                    index: i,
-                    list: { id: 'search_results', name: `Busca: ${q}` },
-                  })}
-                  className="group flex h-full flex-col overflow-hidden rounded-card border border-surface-border bg-surface transition hover:shadow-sm"
-                >
-                  <span className="relative block aspect-[3/4] overflow-hidden bg-bg-subtle">
-                    {img ? (
-                      <Image
-                        src={img}
-                        alt={product.name}
-                        fill
-                        sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw"
-                        priority={i < 4}
-                        className="object-cover"
-                      />
-                    ) : (
-                      <span className="flex h-full items-center justify-center text-xs text-text-muted">
-                        sem imagem
-                      </span>
-                    )}
-                  </span>
-                  <span className="flex flex-1 flex-col gap-1 p-3">
-                    <span className="line-clamp-2 text-sm text-text group-hover:underline">
-                      {product.name}
-                    </span>
-                    {typeof product.price_cents === 'number' && (
-                      <span className="mt-auto text-base font-semibold">
-                        {formatBRL(product.price_cents)}
-                      </span>
-                    )}
-                  </span>
-                </TrackSelectLink>
-              </li>
-            );
-          })}
-        </ul>
+        <ProductGrid
+          products={products.map(
+            (p): ProductListItem => ({
+              id: p.id,
+              name: p.name,
+              slug: p.slug,
+              sku_root: p.sku_root ?? null,
+              brand: p.brand ?? null,
+              price_cents: p.price_cents ?? 0,
+              compare_at_price_cents: p.compare_at_price_cents ?? null,
+              discount_pct: p.discount_pct ?? null,
+              pix_discount_pct: p.pix_discount_pct ?? null,
+              installments_max: p.installments_max ?? null,
+              in_stock: p.in_stock ?? true,
+              is_featured: p.is_featured ?? false,
+              primary_image_url: p.primary_image_url ?? p.image_url ?? null,
+              hover_image_url: p.hover_image_url ?? null,
+              rating_avg: p.rating_avg ?? 0,
+              rating_count: p.rating_count ?? 0,
+            }),
+          )}
+          priorityCount={4}
+          listId="search_results"
+          listName={`Busca: ${q}`}
+        />
       )}
     </div>
   );
