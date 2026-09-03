@@ -14,6 +14,10 @@ const nextConfig = {
   // `@ecom/ui` é consumido como TS/TSX cru via workspace — o Next transpila.
   transpilePackages: ['@ecom/ui'],
   images: {
+    // A API já entrega WebP no tamanho exato (thumb/medium/zoom) e com
+    // Cache-Control longo. Reprocessar em /_next/image só adicionaria um hop
+    // e re-encode — servimos direto.
+    unoptimized: true,
     // Mídia servida pela API (WebP + thumb/medium/zoom) em `/media/...`.
     remotePatterns: [
       {

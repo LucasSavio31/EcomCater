@@ -12,8 +12,10 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 # (prefixo do path, valor de Cache-Control)
 _RULES: tuple[tuple[str, str], ...] = (
-    ("/media/", "public, max-age=86400, stale-while-revalidate=604800"),
-    ("/static/", "public, max-age=86400, stale-while-revalidate=604800"),
+    # mídia tem caminho content-addressed (pasta = uuid, nunca reescrita): uma
+    # imagem nova = pasta nova. Pode cachear "para sempre" sem revalidar.
+    ("/media/", "public, max-age=31536000, immutable"),
+    ("/static/", "public, max-age=31536000, immutable"),
     ("/api/products", "public, s-maxage=60, stale-while-revalidate=300"),
     ("/api/categories", "public, s-maxage=120, stale-while-revalidate=600"),
     ("/api/theme", "public, s-maxage=60, stale-while-revalidate=300"),

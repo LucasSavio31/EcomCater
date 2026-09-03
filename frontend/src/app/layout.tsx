@@ -18,6 +18,17 @@ import { CartProvider } from '@/modules/cart/cart-context';
 import { MiniCartDrawer } from '@/components/cart/mini-cart-drawer';
 import { AuthProvider } from '@/modules/customer/auth-context';
 import { SITE_NAME, SITE_URL, jsonLdScript, organizationJsonLd, webSiteJsonLd } from '@/lib/seo';
+import { API_BASE_URL } from '@/lib/api-client';
+
+// Origem da API/mídia (porta diferente da loja = origem diferente): abrir a
+// conexão TLS cedo economiza o RTT do primeiro request de imagem/JSON.
+const API_ORIGIN = (() => {
+  try {
+    return new URL(API_BASE_URL).origin;
+  } catch {
+    return '';
+  }
+})();
 
 export async function generateMetadata(): Promise<Metadata> {
   const theme = await getTheme();
@@ -67,6 +78,12 @@ export default async function RootLayout({
     // atributos em <html>/<body> antes do React hidratar.
     <html lang="pt-BR" suppressHydrationWarning>
       <body className="min-h-dvh bg-bg text-text" suppressHydrationWarning>
+        {API_ORIGIN && (
+          <>
+            <link rel="preconnect" href={API_ORIGIN} crossOrigin="anonymous" />
+            <link rel="dns-prefetch" href={API_ORIGIN} />
+          </>
+        )}
         {/* Tags de marketing (GTM / GA4 / Google Ads / Meta Pixel) o mais alto possível. */}
         <AnalyticsHeadScripts config={analytics} />
         <AnalyticsBodyNoScript config={analytics} />

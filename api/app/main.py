@@ -2,8 +2,16 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# StaticFiles usa mimetypes.guess_type; sem isto, .webp sai como
+# application/octet-stream (o navegador sniffa, mas o tipo errado atrapalha
+# cache/otimização). Registra os formatos de imagem modernos no boot.
+mimetypes.add_type("image/webp", ".webp")
+mimetypes.add_type("image/avif", ".avif")
+mimetypes.add_type("image/svg+xml", ".svg")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
