@@ -22,13 +22,15 @@ export function StorefrontShell({
 
   if (bare) return <>{children}</>;
 
+  // coluna que ocupa a altura da tela: o <main> cresce (flex-1) e empurra o
+  // rodapé pra base mesmo quando o conteúdo é curto (sticky footer).
   return (
-    <>
+    <div className="flex min-h-dvh flex-col">
       {header}
-      <main id="conteudo" className="mx-auto w-full max-w-header px-4 py-6 sm:py-8">
+      <main id="conteudo" className="mx-auto w-full max-w-header flex-1 px-4 py-6 sm:py-8">
         {children}
       </main>
       {footer}
-    </>
+    </div>
   );
 }
