@@ -24,7 +24,20 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const [index, setIndex] = useState(0);
   const [zoom, setZoom] = useState(false);
   const [origin, setOrigin] = useState('50% 50%');
+  const [mobileIndex, setMobileIndex] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
+
+  const onTrackScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const per = el.clientWidth + 8; // largura do slide + gap-2
+    setMobileIndex(Math.max(0, Math.min(images.length - 1, Math.round(el.scrollLeft / per))));
+  };
+
+  const goToMobile = (i: number) => {
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollTo({ left: i * (el.clientWidth + 8), behavior: 'smooth' });
+  };
 
   if (images.length === 0) {
     return (
@@ -155,6 +168,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
           entrarem na dobra */}
       <div
         ref={trackRef}
+        onScroll={onTrackScroll}
         className="flex snap-x snap-mandatory gap-2 overflow-x-auto rounded-card md:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {images.map((image, i) => {
@@ -177,9 +191,21 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
         })}
       </div>
       {images.length > 1 && (
-        <p className="text-center text-xs text-text-muted md:hidden" aria-hidden>
-          {images.length} fotos — arraste para o lado
-        </p>
+        <div className="flex justify-center gap-2 md:hidden" role="tablist" aria-label="Fotos do produto">
+          {images.map((image, i) => (
+            <button
+              key={image.id}
+              type="button"
+              role="tab"
+              aria-selected={i === mobileIndex}
+              aria-label={`Ir para a foto ${i + 1}`}
+              onClick={() => goToMobile(i)}
+              className={`h-2 rounded-full transition-all ${
+                i === mobileIndex ? 'w-4 bg-btn' : 'w-2 bg-surface-border'
+              }`}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
