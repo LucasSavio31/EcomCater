@@ -173,6 +173,34 @@ async def test_home_sections_deterministic_by_seed(client, admin_token, auth_hea
     # troca de hora (seed) muda a ordem de pelo menos um bloco
     assert [p["id"] for p in a["mais_buscados"]] != [p["id"] for p in c["mais_buscados"]]
 
+
+@pytest.mark.asyncio
+async def test_home_sections_one_product_per_model(client, admin_token, auth_headers, db):
+    """Mesmo modelo em várias cores (color_group_id) entra 1x só no bloco."""
+    from app.modules.products import service
+
+    h = auth_headers(admin_token)
+    cat = await _mk_category(client, h, "Tênis")
+    ids = []
+    for cor in ("Preto", "Branco", "Azul"):
+        p = await _mk_product(client, h, cat["id"], name=f"TENIS 900 {cor}", price=9990)
+        ids.append(p["id"])
+    # liga os três como irmãos de cor
+    await client.put(
+        f"/api/admin/products/{ids[0]}/color-group",
+        json={"color_name": "Preto", "sibling_ids": ids[1:]},
+        headers=h,
+    )
+    # mais um modelo, cor única
+    solo = await _mk_product(client, h, cat["id"], name="TENIS 901 Verde", price=9990)
+
+    res = await service.home_sections(db, seed=2026090312)
+    names = [p["name"] for p in res["mais_buscados"]]
+    modelos = [n.split()[1] for n in names if n.startswith("TENIS 90")]
+    assert modelos.count("900") == 1  # só um dos 3 irmãos
+    assert "TENIS 901 Verde" in names
+    assert len(names) == len(set(names))
+
     # endpoint público responde com as três chaves
     res = await client.get("/api/products/home-sections")
     assert res.status_code == 200

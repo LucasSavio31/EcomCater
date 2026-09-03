@@ -537,20 +537,25 @@ async def featured(db: AsyncSession, limit: int = 12) -> list[dict]:
 
 async def home_sections(db: AsyncSession, *, seed: int) -> dict:
     """Três blocos da home, embaralhados de forma determinística por `seed`
-    (o router usa o carimbo ano-mês-dia-hora → muda sozinho a cada hora):
+    (o router usa o carimbo ano-mês-dia-hora → tudo re-sorteia a cada hora):
 
     - `mais_buscados`: 12 itens de todo o catálogo ativo
     - `tenis`:          8 itens do tipo tênis
     - `feminino`:       4 itens da árvore Feminino
+
+    Nunca repete o mesmo MODELO num bloco: produtos que são a mesma peça em
+    cores diferentes compartilham `color_group_id` — só um deles entra (qual
+    cor também re-sorteia por hora).
     """
     import random as _random
 
-    rows = list(
+    rows = sorted(
         await db.scalars(
             select(Product)
             .where(Product.status == "active")
             .options(selectinload(Product.variants), selectinload(Product.images))
-        )
+        ),
+        key=lambda p: str(p.id),
     )
     by_id = {p.id: p for p in rows}
 
@@ -595,16 +600,22 @@ async def home_sections(db: AsyncSession, *, seed: int) -> dict:
         )
     )
 
-    def _sample(pool_ids: list[uuid.UUID], n: int) -> list[dict]:
+    def _sample(pool_ids: set[uuid.UUID], n: int) -> list[dict]:
         rng = _random.Random(seed + n)  # bloco distinto → ordem distinta
-        shuffled = pool_ids[:]
-        rng.shuffle(shuffled)
-        return [list_item(by_id[i]) for i in shuffled[:n] if i in by_id]
+        ids = sorted((i for i in pool_ids if i in by_id), key=str)
+        # 1 representante por modelo (color_group_id); sem grupo = produto único
+        groups: dict[object, list[uuid.UUID]] = {}
+        for pid in ids:
+            key = by_id[pid].color_group_id or pid
+            groups.setdefault(key, []).append(pid)
+        reps = [g[rng.randrange(len(g))] if len(g) > 1 else g[0] for g in groups.values()]
+        rng.shuffle(reps)
+        return [list_item(by_id[i]) for i in reps[:n]]
 
     return {
-        "mais_buscados": _sample([p.id for p in rows], 12),
-        "tenis": _sample([i for i in tenis_ids], 8),
-        "feminino": _sample([i for i in fem_ids], 4),
+        "mais_buscados": _sample({p.id for p in rows}, 12),
+        "tenis": _sample(set(tenis_ids), 8),
+        "feminino": _sample(set(fem_ids), 4),
     }
 
 
