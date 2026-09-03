@@ -548,6 +548,13 @@ async def home_sections(db: AsyncSession, *, seed: int) -> dict:
     cor também re-sorteia por hora).
     """
     import random as _random
+    import re as _re
+
+    def _model_key(p: Product) -> object:
+        # "TENIS 2085 CAFE" -> ("m", "2085"); assim 2085 masc e 2085 fem contam
+        # como o mesmo modelo. Sem número no nome: cai no grupo de cor / id.
+        m = _re.search(r"\b(\d{3,4})\b", p.name or "")
+        return ("m", m.group(1)) if m else (p.color_group_id or p.id)
 
     rows = sorted(
         await db.scalars(
@@ -606,8 +613,7 @@ async def home_sections(db: AsyncSession, *, seed: int) -> dict:
         # 1 representante por modelo (color_group_id); sem grupo = produto único
         groups: dict[object, list[uuid.UUID]] = {}
         for pid in ids:
-            key = by_id[pid].color_group_id or pid
-            groups.setdefault(key, []).append(pid)
+            groups.setdefault(_model_key(by_id[pid]), []).append(pid)
         reps = [g[rng.randrange(len(g))] if len(g) > 1 else g[0] for g in groups.values()]
         rng.shuffle(reps)
         return [list_item(by_id[i]) for i in reps[:n]]
