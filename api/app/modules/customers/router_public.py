@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -53,6 +53,41 @@ async def login(
 ):
     _, pair = await service.login(db, body.email, body.password)
     return TokenOut(**pair)
+
+
+@router.post("/auth/recover-email")
+async def recover_email(
+    body: dict,
+    db: DbDep,
+    _rl: Annotated[None, Depends(rate_limit("6/minute", scope="recover-email"))],
+) -> dict:
+    """Cliente esqueceu o e-mail: informa o CPF, recebe o e-mail mascarado."""
+    return await service.recover_email_by_cpf(db, str(body.get("cpf") or ""))
+
+
+@router.post("/auth/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+async def forgot_password(
+    body: dict,
+    db: DbDep,
+    request: Request,
+    _rl: Annotated[None, Depends(rate_limit("6/minute", scope="forgot-pw"))],
+) -> dict:
+    """Envia o link de redefinição por e-mail. Resposta sempre igual (sem enumeração)."""
+    ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (
+        request.client.host if request.client else None
+    )
+    await service.request_password_reset(
+        db, email=str(body.get("email") or "").strip() or None,
+        cpf=str(body.get("cpf") or "").strip() or None, ip=ip,
+    )
+    return {"ok": True}
+
+
+@router.post("/auth/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_password(body: dict, db: DbDep) -> None:
+    await service.reset_password(
+        db, token=str(body.get("token") or ""), new_password=str(body.get("new_password") or "")
+    )
 
 
 @router.post("/auth/refresh", response_model=TokenOut)

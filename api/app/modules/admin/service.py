@@ -231,3 +231,54 @@ async def update_admin(
         admin.password_hash = hash_password(data["password"])
         admin.must_change_password = True
     return admin
+
+
+# --------------------------------------------------- recuperação de senha (admin)
+async def request_password_reset(db: AsyncSession, *, email: str, ip: str | None = None) -> None:
+    """Cria o token e manda o e-mail de redefinição. Silencioso."""
+    from app.core.config import settings
+    from app.modules.admin.models import StoreSettings
+    from app.shared import mailer
+    from app.shared.pwreset import create_reset
+
+    admin = await db.scalar(select(AdminUser).where(AdminUser.email == (email or "").strip()))
+    if not admin or not admin.is_active:
+        return
+    raw = await create_reset(db, "admin", str(admin.id), ttl_minutes=30, ip=ip)
+    srow = await db.get(StoreSettings, 1)
+    base = settings.admin_url.rstrip("/")
+    await mailer.send(
+        db,
+        to=admin.email,
+        template="password_reset",
+        context={
+            "store_name": (srow.store_name if srow else None) or "a loja",
+            "email": admin.email,
+            "is_admin": True,
+            "ttl_min": 30,
+            "reset_url": f"{base}/redefinir-senha?token={raw}",
+        },
+    )
+
+
+async def reset_password_with_token(db: AsyncSession, *, token: str, new_password: str) -> None:
+    from sqlalchemy import delete
+
+    from app.shared.pwreset import consume_reset
+
+    if not new_password or len(new_password) < 8:
+        raise ValidationError("A nova senha do painel precisa de pelo menos 8 caracteres.")
+    result = await consume_reset(db, token)
+    if not result or result[0] != "admin":
+        raise ValidationError("Link inválido ou expirado. Peça um novo.")
+    admin = await db.get(AdminUser, uuid.UUID(result[1]))
+    if not admin:
+        raise ValidationError("Conta não encontrada.")
+    admin.password_hash = hash_password(new_password)
+    admin.must_change_password = False
+    await db.execute(
+        delete(AuthRefreshToken).where(
+            AuthRefreshToken.subject_type == "admin",
+            AuthRefreshToken.subject_id == str(admin.id),
+        )
+    )

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -96,6 +96,31 @@ async def mfa_disable(body: _PasswordIn, db: DbDep, admin: CurrentAdmin) -> None
 async def update_me(body: _ProfileIn, db: DbDep, admin: CurrentAdmin):
     updated = await service.update_own_profile(db, admin, body.name, body.email)
     return AdminUserOut.model_validate({**updated.__dict__, "id": str(updated.id)})
+
+
+@router.post("/auth/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+async def admin_forgot_password(
+    body: dict,
+    db: DbDep,
+    request: Request,
+    _rl: Annotated[None, Depends(rate_limit("6/minute", scope="admin-forgot"))],
+) -> dict:
+    ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (
+        request.client.host if request.client else None
+    )
+    await service.request_password_reset(db, email=str(body.get("email") or ""), ip=ip)
+    return {"ok": True}
+
+
+@router.post("/auth/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+async def admin_reset_password(
+    body: dict,
+    db: DbDep,
+    _rl: Annotated[None, Depends(rate_limit("10/minute", scope="admin-reset"))],
+) -> None:
+    await service.reset_password_with_token(
+        db, token=str(body.get("token") or ""), new_password=str(body.get("new_password") or "")
+    )
 
 
 @router.post("/auth/refresh", response_model=TokenOut)

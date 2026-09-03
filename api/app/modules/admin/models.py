@@ -127,3 +127,17 @@ class EmailLog(UUIDPKMixin, Base):
     error: Mapped[str | None] = mapped_column(Text)
     order_id: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PasswordReset(UUIDPKMixin, Base):
+    """Token de redefinição de senha — serve cliente e admin (subject_type)."""
+
+    __tablename__ = "password_resets"
+
+    subject_type: Mapped[str] = mapped_column(String(10), index=True)  # customer | admin
+    subject_id: Mapped[str] = mapped_column(String(36), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    requested_ip: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -5,6 +5,7 @@ Registra cada envio em `email_log`. Usado pelos subscribers de eventos de pedido
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from email.message import EmailMessage
 
@@ -183,6 +184,15 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         "<p>Sua conta na <b>{{ store_name }}</b> foi criada com sucesso.</p>"
         "<p>Use seu e-mail e a senha que você escolheu para entrar e acompanhar seus pedidos.</p>",
     ),
+    "password_reset": (
+        "Redefinição de senha — {{ store_name }}",
+        "<h2>Redefinir sua senha</h2>"
+        "<p>Recebemos um pedido para redefinir a senha da conta <b>{{ email }}</b>"
+        "{% if is_admin %} (painel administrativo){% endif %}.</p>"
+        "<p style='margin:14px 0'><a href='{{ reset_url }}' class='btn'>Criar nova senha</a></p>"
+        "<p style='font-size:12px;color:#9aa0a6'>O link vale por {{ ttl_min }} minutos e só "
+        "pode ser usado uma vez. Se não foi você, ignore este e-mail — nada muda.</p>",
+    ),
     "account_access": (
         "Sua conta na {{ store_name }} — dados de acesso",
         "<h2>Sua conta está pronta ✅</h2>"
@@ -329,6 +339,18 @@ async def _email_theme(db: AsyncSession) -> dict:
     return out
 
 
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"[ \t\r\f\v]+")
+
+
+def _html_to_text(html: str) -> str:
+    txt = html.replace("</p>", "\n").replace("<br>", "\n").replace("<br/>", "\n")
+    txt = _TAG_RE.sub("", txt)
+    txt = _WS_RE.sub(" ", txt)
+    lines = [ln.strip() for ln in txt.splitlines()]
+    return "\n".join(ln for ln in lines if ln).strip()
+
+
 def _wrap_html(inner: str, subject: str, t: dict, store_name: str) -> str:
     """Molde visual do e-mail (cabeçalho com logo/nome da loja + corpo + rodapé)."""
     name = t.get("store_name") or store_name
@@ -403,7 +425,9 @@ async def send(
     msg["From"] = f"{from_name} <{conf['from_email']}>"
     msg["To"] = to
     msg["Subject"] = subject
-    msg.set_content("Este e-mail requer um cliente compatível com HTML.")
+    # fallback texto puro = versão sem tags do corpo (é o que o Gmail mostra na
+    # prévia da lista; nunca "este e-mail requer HTML").
+    msg.set_content(_html_to_text(inner) or subject)
     msg.add_alternative(html, subtype="html")
     if logo_bytes:
         sub = "png" if logo_bytes[:8].startswith(b"\x89PNG") else "webp" if logo_bytes[:4] == b"RIFF" else "jpeg"

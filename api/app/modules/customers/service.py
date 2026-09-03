@@ -320,3 +320,90 @@ async def remove_from_wishlist(db: AsyncSession, user: User, product_id: str) ->
     )
     if item:
         await db.delete(item)
+
+
+# --------------------------------------------------------- recuperação de acesso
+def _mask_email(email: str) -> str:
+    """`lucas.savio029@gmail.com` -> `lu***29@gmail.com`."""
+    try:
+        local, domain = email.split("@", 1)
+    except ValueError:
+        return "***"
+    if len(local) <= 2:
+        shown = local[:1] + "*"
+    else:
+        shown = local[:2] + "***" + local[-2:]
+    return f"{shown}@{domain}"
+
+
+async def recover_email_by_cpf(db: AsyncSession, cpf: str) -> dict:
+    """Devolve o e-mail MASCARADO da conta com aquele CPF (ou vazio)."""
+    from app.shared.cpf import only_digits
+
+    digits = only_digits(cpf)
+    if len(digits) != 11:
+        return {"found": False}
+    user = await db.scalar(select(User).where(User.cpf == digits, User.is_active.is_(True)))
+    if not user or not user.email:
+        return {"found": False}
+    return {"found": True, "email_masked": _mask_email(user.email)}
+
+
+async def request_password_reset(
+    db: AsyncSession, *, email: str | None, cpf: str | None, ip: str | None = None
+) -> None:
+    """Cria o token e envia o e-mail. Silencioso — nunca revela se a conta existe."""
+    from app.core.config import settings
+    from app.shared import mailer
+    from app.shared.cpf import only_digits
+    from app.shared.pwreset import create_reset
+
+    user: User | None = None
+    if email and "@" in email:
+        user = await db.scalar(select(User).where(User.email == email.strip()))
+    if user is None and cpf:
+        digits = only_digits(cpf)
+        if len(digits) == 11:
+            user = await db.scalar(select(User).where(User.cpf == digits))
+    if user is None or not user.is_active:
+        return
+
+    raw = await create_reset(db, "customer", str(user.id), ttl_minutes=30, ip=ip)
+    from app.modules.admin.models import StoreSettings
+
+    srow = await db.get(StoreSettings, 1)
+    await mailer.send(
+        db,
+        to=user.email,
+        template="password_reset",
+        context={
+            "store_name": (srow.store_name if srow else None) or "nossa loja",
+            "email": user.email,
+            "is_admin": False,
+            "ttl_min": 30,
+            "reset_url": f"{settings.site_url.rstrip('/')}/redefinir-senha?token={raw}",
+        },
+    )
+
+
+async def reset_password(db: AsyncSession, *, token: str, new_password: str) -> None:
+    from app.shared.pwreset import consume_reset
+
+    if not new_password or len(new_password) < 6:
+        raise ValidationError("A nova senha precisa de pelo menos 6 caracteres.")
+    result = await consume_reset(db, token)
+    if not result or result[0] != "customer":
+        raise ValidationError("Link inválido ou expirado. Peça um novo.")
+    user = await db.get(User, uuid.UUID(result[1]))
+    if not user:
+        raise ValidationError("Conta não encontrada.")
+    user.password_hash = hash_password(new_password)
+    # derruba sessões antigas
+    from sqlalchemy import delete
+
+    await db.execute(
+        delete(AuthRefreshToken).where(
+            AuthRefreshToken.subject_type == "customer",
+            AuthRefreshToken.subject_id == str(user.id),
+        )
+    )
