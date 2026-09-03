@@ -1,10 +1,10 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import type { ProductImage } from '@/modules/catalog/types';
 import { resolveMediaUrl } from '@/lib/media';
-import { ChevronLeftIcon, ChevronRightIcon } from '@/components/icons';
+import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from '@/components/icons';
 
 interface ProductGalleryProps {
   images: ProductImage[];
@@ -13,24 +13,36 @@ interface ProductGalleryProps {
 
 /**
  * Galeria da PDP.
- * - Desktop: coluna de miniaturas À ESQUERDA (com uma seta na selecionada) +
- *   imagem principal. Zoom só NO CLIQUE (hover mostra a lupa); com o zoom, o
- *   mouse "arrasta" a imagem. Clicar de novo / tirar o cursor sai do zoom.
- * - Mobile: quadro fixo, a imagem TROCA no swipe (infinito, fade). Dois toques
- *   na imagem abrem o zoom (arrasta pra navegar); dois toques nela de novo ou
- *   um toque fora da imagem fecham. + bolinhas de paginação.
+ * - Desktop: coluna de miniaturas À ESQUERDA + imagem principal. Zoom só NO
+ *   CLIQUE (hover = lupa); com o zoom, o mouse "arrasta" a imagem.
+ * - Mobile: carrossel deslizante infinito (a imagem "anda" de um lado pro
+ *   outro no swipe) + bolinhas. Ícone de lupa discreto no topo e/ou 2 toques
+ *   abrem o zoom; arrasta pra navegar; 2 toques na imagem ou toque fora fecham.
  */
 export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const [index, setIndex] = useState(0);
   const [zoom, setZoom] = useState(false);
   const [origin, setOrigin] = useState('50% 50%');
+
   const [mobileIndex, setMobileIndex] = useState(0);
+  const [pos, setPos] = useState(1); // posição na faixa (slides reais em 1..N; clones em 0 e N+1)
+  const [dragX, setDragX] = useState(0);
+  const [animate, setAnimate] = useState(true);
+
   const [mobileZoom, setMobileZoom] = useState(false);
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
-  const tapRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ x: number; y: number; dragging: boolean } | null>(null);
   const lastTapRef = useRef(0);
   const panStartRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
+
+  // reativa a transição depois do "pulo" invisível de wrap (nunca durante o arrasto)
+  useEffect(() => {
+    if (animate || dragRef.current) return;
+    const id = requestAnimationFrame(() => setAnimate(true));
+    return () => cancelAnimationFrame(id);
+  }, [animate]);
 
   if (images.length === 0) {
     return (
@@ -49,13 +61,43 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const mobileZoomSrc =
     resolveMediaUrl(mobileImg?.zoom_url) ?? resolveMediaUrl(mobileImg?.medium_url) ?? '';
 
+  const loopMobile = images.length > 1;
+  const slides: ProductImage[] = loopMobile
+    ? [images[images.length - 1] as ProductImage, ...images, images[0] as ProductImage]
+    : images;
+
   const go = (delta: number) => {
     setZoom(false);
     setIndex((i) => (i + delta + images.length) % images.length);
   };
-  const goMobile = (delta: number) =>
-    setMobileIndex((i) => (i + delta + images.length) % images.length);
 
+  const stepMobile = (dir: 1 | -1) => {
+    setMobileIndex((i) => (i + dir + images.length) % images.length);
+    setPos((p) => p + dir);
+    setDragX(0);
+    setAnimate(true);
+  };
+  const goToMobile = (i: number) => {
+    setMobileIndex(i);
+    setPos(i + 1);
+    setDragX(0);
+    setAnimate(true);
+  };
+  const onTrackTransitionEnd = () => {
+    if (!loopMobile) return;
+    if (pos === 0) {
+      setAnimate(false);
+      setPos(images.length);
+    } else if (pos === images.length + 1) {
+      setAnimate(false);
+      setPos(1);
+    }
+  };
+
+  const openMobileZoom = () => {
+    setPan({ x: 0, y: 0 });
+    setMobileZoom(true);
+  };
   const closeMobileZoom = () => {
     setMobileZoom(false);
     setPan({ x: 0, y: 0 });
@@ -68,34 +110,47 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
     setOrigin(`${x}% ${y}%`);
   };
 
-  // --- gestos do quadro mobile (não ampliado): swipe troca / 2 toques ampliam
+  // --- gestos do carrossel mobile (fechado): arrasta a faixa / 2 toques = zoom
   const onFrameTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
-    if (t) tapRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+    if (!t) return;
+    dragRef.current = { x: t.clientX, y: t.clientY, dragging: false };
+    setAnimate(false);
+  };
+  const onFrameTouchMove = (e: React.TouchEvent) => {
+    const d = dragRef.current;
+    const t = e.touches[0];
+    if (!d || !t) return;
+    const dx = t.clientX - d.x;
+    const dy = t.clientY - d.y;
+    if (!d.dragging && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) d.dragging = true;
+    if (d.dragging) setDragX(dx);
   };
   const onFrameTouchEnd = (e: React.TouchEvent) => {
-    const start = tapRef.current;
-    tapRef.current = null;
-    if (!start) return;
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d) return;
     const t = e.changedTouches[0];
-    if (!t) return;
-    const dx = t.clientX - start.x;
-    const dy = t.clientY - start.y;
-    const moved = Math.hypot(dx, dy);
-    const now = Date.now();
+    const dx = t ? t.clientX - d.x : 0;
 
-    if (moved < 12) {
+    if (!d.dragging) {
+      setAnimate(true);
+      setDragX(0);
+      const now = Date.now();
       if (now - lastTapRef.current < 300) {
         lastTapRef.current = 0;
-        setPan({ x: 0, y: 0 });
-        setMobileZoom(true);
+        openMobileZoom();
       } else {
         lastTapRef.current = now;
       }
       return;
     }
-    if (images.length > 1 && Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy)) {
-      goMobile(dx < 0 ? 1 : -1);
+    const w = frameRef.current?.clientWidth ?? 1;
+    if (loopMobile && dx <= -w * 0.2) stepMobile(1);
+    else if (loopMobile && dx >= w * 0.2) stepMobile(-1);
+    else {
+      setAnimate(true);
+      setDragX(0);
     }
   };
 
@@ -103,24 +158,22 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const onZoomTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
     if (!t) return;
-    tapRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+    dragRef.current = { x: t.clientX, y: t.clientY, dragging: false };
     panStartRef.current = { x: t.clientX, y: t.clientY, px: pan.x, py: pan.y };
   };
   const onZoomTouchMove = (e: React.TouchEvent) => {
     const t = e.touches[0];
     const s = panStartRef.current;
-    if (!t || !s) return;
+    const d = dragRef.current;
+    if (!t || !s || !d) return;
+    if (Math.hypot(t.clientX - s.x, t.clientY - s.y) > 10) d.dragging = true;
     setPan({ x: s.px + (t.clientX - s.x), y: s.py + (t.clientY - s.y) });
   };
-  const onZoomTouchEnd = (e: React.TouchEvent) => {
-    const start = tapRef.current;
-    tapRef.current = null;
+  const onZoomTouchEnd = () => {
+    const d = dragRef.current;
+    dragRef.current = null;
     panStartRef.current = null;
-    if (!start) return;
-    const t = e.changedTouches[0];
-    if (!t) return;
-    const moved = Math.hypot(t.clientX - start.x, t.clientY - start.y);
-    if (moved >= 12) return; // foi arrasto (pan), não toque
+    if (!d || d.dragging) return;
     const now = Date.now();
     if (now - lastTapRef.current < 300) {
       lastTapRef.current = 0;
@@ -230,28 +283,51 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
         </div>
       </div>
 
-      {/* Mobile: quadro fixo; imagem troca no swipe; 2 toques = zoom */}
+      {/* Mobile: carrossel deslizante (a imagem "anda" no swipe) */}
       <div
+        ref={frameRef}
         className="relative h-[min(88vw,58vh)] w-full overflow-hidden rounded-card border border-surface-border bg-bg-subtle md:hidden"
+        style={{ touchAction: 'pan-y' }}
         onTouchStart={onFrameTouchStart}
+        onTouchMove={onFrameTouchMove}
         onTouchEnd={onFrameTouchEnd}
         role="img"
         aria-label={`${productName} — imagem ${mobileIndex + 1} de ${images.length}`}
       >
-        {images.map((image, i) => (
-          <Image
-            key={image.id}
-            src={resolveMediaUrl(image.medium_url) ?? ''}
-            alt={image.alt ?? `${productName} — imagem ${i + 1}`}
-            fill
-            sizes="100vw"
-            priority={i === 0}
-            className={`object-cover transition-opacity duration-200 ${
-              i === mobileIndex ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-        ))}
+        <div
+          className="flex h-full w-full"
+          onTransitionEnd={onTrackTransitionEnd}
+          style={{
+            transform: `translate3d(calc(${-100 * (loopMobile ? pos : 0)}% + ${dragX}px), 0, 0)`,
+            transition: animate ? 'transform 300ms ease-out' : 'none',
+          }}
+        >
+          {slides.map((image, i) => (
+            <div key={`${image.id}-${i}`} className="relative h-full w-full shrink-0">
+              <Image
+                src={resolveMediaUrl(image.medium_url) ?? ''}
+                alt={image.alt ?? productName}
+                fill
+                sizes="100vw"
+                priority={i <= 1}
+                className="object-cover"
+                draggable={false}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* lupa discreta */}
+        <button
+          type="button"
+          onClick={openMobileZoom}
+          aria-label="Ampliar imagem"
+          className="absolute right-2 top-2 z-10 rounded-full bg-black/30 p-1.5 text-white backdrop-blur-sm active:bg-black/50"
+        >
+          <SearchIcon className="h-4 w-4" />
+        </button>
       </div>
+
       {images.length > 1 && (
         <div className="flex justify-center gap-2 md:hidden" role="tablist" aria-label="Fotos do produto">
           {images.map((image, i) => (
@@ -261,7 +337,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
               role="tab"
               aria-selected={i === mobileIndex}
               aria-label={`Ir para a foto ${i + 1}`}
-              onClick={() => setMobileIndex(i)}
+              onClick={() => goToMobile(i)}
               className={`h-2 rounded-full transition-all ${
                 i === mobileIndex ? 'w-4 bg-btn' : 'w-2 bg-surface-border'
               }`}
