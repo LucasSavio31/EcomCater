@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button, Card, Input } from '@ecom/ui';
 import { useToast } from '@/components/toast';
 import { formatDateTime } from '@/lib/format';
-import { useAdminAuth } from '@/modules/auth';
+import { changePassword, useAdminAuth } from '@/modules/auth';
 import { accountApi, type TwoFaSetup } from '@/modules/account/api';
 
 export function AccountTab() {
@@ -21,7 +21,28 @@ export function AccountTab() {
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [disablePwd, setDisablePwd] = useState('');
 
+  const [curPw, setCurPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [newPw2, setNewPw2] = useState('');
+  const [savingPw, setSavingPw] = useState(false);
+
   if (!user) return null;
+
+  const pwValid = curPw.length >= 1 && newPw.length >= 8 && newPw === newPw2;
+
+  async function savePassword(): Promise<void> {
+    setSavingPw(true);
+    const result = await changePassword(curPw, newPw);
+    setSavingPw(false);
+    if (!result.ok) {
+      toast.error(result.error.message);
+      return;
+    }
+    setCurPw('');
+    setNewPw('');
+    setNewPw2('');
+    toast.success('Senha alterada.');
+  }
 
   const currentName = name || user.name;
   const currentEmail = email || user.email;
@@ -108,6 +129,40 @@ export function AccountTab() {
         <div>
           <Button onClick={saveProfile} loading={savingProfile} disabled={!profileDirty}>
             Salvar dados
+          </Button>
+        </div>
+      </Card>
+
+      <Card variant="outline" className="flex flex-col gap-4">
+        <h2 className="text-base font-semibold">Alterar senha</h2>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Input
+            label="Senha atual"
+            type="password"
+            autoComplete="current-password"
+            value={curPw}
+            onChange={(e) => setCurPw(e.target.value)}
+          />
+          <Input
+            label="Nova senha"
+            type="password"
+            autoComplete="new-password"
+            value={newPw}
+            onChange={(e) => setNewPw(e.target.value)}
+            hint="Mínimo de 8 caracteres."
+          />
+          <Input
+            label="Repita a nova senha"
+            type="password"
+            autoComplete="new-password"
+            value={newPw2}
+            onChange={(e) => setNewPw2(e.target.value)}
+            error={newPw2 && newPw !== newPw2 ? 'As senhas não conferem' : undefined}
+          />
+        </div>
+        <div>
+          <Button onClick={savePassword} loading={savingPw} disabled={!pwValid}>
+            Alterar senha
           </Button>
         </div>
       </Card>

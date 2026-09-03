@@ -57,6 +57,18 @@ export const customerApi = {
   login: (body: { email: string; password: string }) =>
     apiFetch<TokenOut>(`${BASE}/auth/login`, { method: 'POST', body }),
 
+  forgotPassword: (body: { email?: string; cpf?: string }) =>
+    apiFetch<{ ok: boolean }>(`${BASE}/auth/forgot-password`, { method: 'POST', body }),
+
+  resetPassword: (body: { token: string; new_password: string }) =>
+    apiFetch<void>(`${BASE}/auth/reset-password`, { method: 'POST', body }),
+
+  recoverEmail: (cpf: string) =>
+    apiFetch<{ found: boolean; email_masked?: string }>(`${BASE}/auth/recover-email`, {
+      method: 'POST',
+      body: { cpf },
+    }),
+
   async logout(): Promise<void> {
     const session = getCustomerSession();
     if (session?.refreshToken) {

@@ -53,6 +53,20 @@ export function changePassword(
   });
 }
 
+export function forgotPassword(email: string): Promise<ApiResult<{ ok: boolean }>> {
+  return adminFetch<{ ok: boolean }>('/api/admin/auth/forgot-password', {
+    method: 'POST',
+    body: { email },
+  });
+}
+
+export function resetPassword(token: string, newPassword: string): Promise<ApiResult<void>> {
+  return adminFetch<void>('/api/admin/auth/reset-password', {
+    method: 'POST',
+    body: { token, new_password: newPassword },
+  });
+}
+
 export async function logout(): Promise<void> {
   clearSession();
 }

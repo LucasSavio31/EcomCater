@@ -149,6 +149,12 @@ export default function LoginPage() {
             <Button type="submit" block loading={submitting}>
               Entrar
             </Button>
+            <a
+              href="esqueci-senha"
+              className="text-center text-sm text-text-muted underline hover:text-text"
+            >
+              Esqueci minha senha
+            </a>
           </form>
         )}
       </Card>

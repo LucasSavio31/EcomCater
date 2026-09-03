@@ -141,6 +141,14 @@ export function AuthForms({ onDone }: { onDone?: () => void }) {
         <Button type="submit" block loading={busy} disabled={!valid}>
           {mode === 'login' ? 'Entrar' : 'Criar conta'}
         </Button>
+
+        {mode === 'login' && (
+          <p className="text-center text-sm text-text-muted">
+            <a href="/esqueci-senha" className="text-primary hover:underline">
+              Esqueci minha senha ou meu e-mail
+            </a>
+          </p>
+        )}
       </form>
     </Card>
   );
