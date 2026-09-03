@@ -196,7 +196,9 @@ async def _cart_lines(db: AsyncSession, cart_id) -> tuple[list[dict], int]:
     return lines, total
 
 
-async def _process_due(db: AsyncSession) -> dict:
+async def _process_due(db: AsyncSession, *, force: bool = False) -> dict:
+    """`force=True`: manda a próxima mensagem para TODO carrinho não recuperado
+    que ainda tenha mensagem na fila, ignorando o `delay_minutes`."""
     msgs = list(
         await db.scalars(
             select(RecoveryMessage)
@@ -205,24 +207,30 @@ async def _process_due(db: AsyncSession) -> dict:
         )
     )
     if not msgs:
-        return {"sent": 0}
+        return {"sent": 0, "skipped": 0, "reason": "nenhuma mensagem ativa cadastrada"}
     carts = list(
         await db.scalars(
             select(AbandonedCart).where(AbandonedCart.recovered_at.is_(None))
         )
     )
+    if not carts:
+        return {"sent": 0, "skipped": 0, "reason": "nenhum carrinho abandonado pendente"}
+
     from app.shared import mailer
 
     now = datetime.now(UTC)
-    sent = 0
+    sent = skipped = 0
     for ac in carts:
         idx = ac.reminders_sent
         if idx >= len(msgs):
+            skipped += 1  # já recebeu todas as mensagens
             continue
         msg = msgs[idx]
-        due = ac.created_at + timedelta(minutes=msg.delay_minutes)
-        if now < due:
-            continue
+        if not force:
+            due = ac.created_at + timedelta(minutes=msg.delay_minutes)
+            if now < due:
+                skipped += 1  # ainda não venceu o prazo
+                continue
 
         name = await _resolve_name(db, ac.email)
         lines, total = await _cart_lines(db, ac.cart_id)
@@ -243,8 +251,10 @@ async def _process_due(db: AsyncSession) -> dict:
         ac.last_email_at = now
         if ok:
             sent += 1
+        else:
+            skipped += 1  # falha no envio (SMTP / template)
     await db.commit()
-    return {"sent": sent}
+    return {"sent": sent, "skipped": skipped}
 
 
 @public_router.post("/run")
@@ -411,8 +421,10 @@ async def delete_message(msg_id: str, db: DbDep, _: EditorDep) -> None:
 
 
 @admin_router.post("/run-now")
-async def run_now(db: DbDep, _: EditorDep) -> dict:
-    return await _process_due(db)
+async def run_now(db: DbDep, _: EditorDep, force: bool = Query(False)) -> dict:
+    """Roda o disparo agora. `force=1`: envia a próxima mensagem para TODO
+    carrinho pendente (lembrete=0, 1, ...) ignorando o prazo `delay_minutes`."""
+    return await _process_due(db, force=force)
 
 
 @admin_router.post("/carts/send")

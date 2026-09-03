@@ -57,5 +57,14 @@ export const cartRecoveryApi = {
     adminFetch<RecoveryMessage>(`${BASE}/messages/${id}`, { method: 'PATCH', body }),
   deleteMessage: (id: string) =>
     adminFetch<void>(`${BASE}/messages/${id}`, { method: 'DELETE' }),
-  runNow: () => adminFetch<{ sent: number }>(`${BASE}/run-now`, { method: 'POST' }),
+  runNow: () =>
+    adminFetch<{ sent: number; skipped?: number; reason?: string }>(`${BASE}/run-now`, {
+      method: 'POST',
+    }),
+  // Envia a próxima mensagem para TODO carrinho pendente, ignorando o prazo.
+  forceRunAll: () =>
+    adminFetch<{ sent: number; skipped?: number; reason?: string }>(
+      `${BASE}/run-now?force=1`,
+      { method: 'POST' },
+    ),
 };

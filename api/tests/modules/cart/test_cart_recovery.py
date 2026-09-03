@@ -114,6 +114,45 @@ async def test_send_to_carts_forces_send_ignoring_delay(client, admin_token, aut
     assert any(log.to_email == "forcar@test.example" for log in logs)
 
 
+@pytest.mark.asyncio
+async def test_run_now_force_sends_to_all_pending_ignoring_delay(
+    client, admin_token, auth_headers, db
+):
+    h = auth_headers(admin_token)
+    await client.post(
+        "/api/admin/cart-recovery/messages",
+        json={"position": 1, "delay_minutes": 999, "subject": "aviso", "body": "{link}"},
+        headers=h,
+    )
+    for i in range(3):
+        db.add(
+            AbandonedCart(
+                email=f"pend{i}@test.example",
+                cart_token=f"tok-{i}",
+                total_cents=1000,
+                items_count=1,
+                created_at=datetime.now(UTC),  # prazo de 999 min -> nada vencido
+                reminders_sent=0,
+            )
+        )
+    await db.commit()
+
+    normal = await client.post("/api/admin/cart-recovery/run-now", headers=h)
+    assert normal.json()["sent"] == 0  # sem force respeita o delay
+
+    forced = await client.post("/api/admin/cart-recovery/run-now?force=1", headers=h)
+    assert forced.status_code == 200, forced.text
+    assert forced.json()["sent"] == 3
+
+    again = await client.post("/api/admin/cart-recovery/run-now?force=1", headers=h)
+    assert again.json()["sent"] == 0  # já esgotaram a única mensagem
+
+    logs = (
+        await db.execute(select(EmailLog).where(EmailLog.template == "cart_recovery"))
+    ).scalars().all()
+    assert len(logs) == 3
+
+
 def test_fill_placeholders():
     from app.modules.cart_recovery.module import _fill
 

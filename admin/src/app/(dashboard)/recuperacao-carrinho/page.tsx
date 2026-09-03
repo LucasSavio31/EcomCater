@@ -183,7 +183,23 @@ export default function CartRecoveryPage() {
     setBusy(false);
     setSelected(new Set());
     if (!res.ok) return toast.error(res.error.message);
+    if (res.data.reason) return toast.error(res.data.reason);
     toast.success(`Processado: ${res.data.sent} e-mail(s) enviado(s).`);
+    carts.reload();
+    stats.reload();
+  }
+
+  async function forceRunAll() {
+    setBusy(true);
+    const res = await cartRecoveryApi.forceRunAll();
+    setBusy(false);
+    setSelected(new Set());
+    if (!res.ok) return toast.error(res.error.message);
+    if (res.data.reason) return toast.error(res.data.reason);
+    const { sent, skipped } = res.data;
+    toast.success(
+      `${sent} e-mail(s) enviado(s)` + (skipped ? ` · ${skipped} pulado(s)` : '') + '.',
+    );
     carts.reload();
     stats.reload();
   }
@@ -268,9 +284,19 @@ export default function CartRecoveryPage() {
         title="Recuperação de carrinho"
         description="O e-mail é capturado no checkout e amarrado ao carrinho pelo cookie. Se a compra não acontecer, as mensagens abaixo são enviadas por SMTP; quando um pedido é feito com o mesmo e-mail, o carrinho é marcado como recuperado."
         actions={
-          <Button variant="outline" loading={busy} onClick={() => void runNow()}>
-            Processar agora
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" loading={busy} onClick={() => void runNow()}>
+              Processar agora
+            </Button>
+            <Button
+              variant="outline"
+              loading={busy}
+              onClick={() => void forceRunAll()}
+              title="Envia a próxima mensagem para todos os carrinhos pendentes, ignorando o prazo de espera."
+            >
+              Forçar envio a todos os pendentes
+            </Button>
+          </div>
         }
       />
 
