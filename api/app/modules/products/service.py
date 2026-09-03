@@ -607,21 +607,24 @@ async def home_sections(db: AsyncSession, *, seed: int) -> dict:
         )
     )
 
-    def _sample(pool_ids: set[uuid.UUID], n: int) -> list[dict]:
+    def _sample(pool_ids: set[uuid.UUID], n: int, *, dedupe_model: bool) -> list[dict]:
         rng = _random.Random(seed + n)  # bloco distinto → ordem distinta
         ids = sorted((i for i in pool_ids if i in by_id), key=str)
-        # 1 representante por modelo (color_group_id); sem grupo = produto único
-        groups: dict[object, list[uuid.UUID]] = {}
-        for pid in ids:
-            groups.setdefault(_model_key(by_id[pid]), []).append(pid)
-        reps = [g[rng.randrange(len(g))] if len(g) > 1 else g[0] for g in groups.values()]
-        rng.shuffle(reps)
-        return [list_item(by_id[i]) for i in reps[:n]]
+        if dedupe_model:
+            # 1 representante por modelo; a cor escolhida re-sorteia por hora
+            groups: dict[object, list[uuid.UUID]] = {}
+            for pid in ids:
+                groups.setdefault(_model_key(by_id[pid]), []).append(pid)
+            ids = [g[rng.randrange(len(g))] if len(g) > 1 else g[0] for g in groups.values()]
+        rng.shuffle(ids)
+        return [list_item(by_id[i]) for i in ids[:n]]
 
     return {
-        "mais_buscados": _sample({p.id for p in rows}, 12),
-        "tenis": _sample(set(tenis_ids), 8),
-        "feminino": _sample(set(fem_ids), 4),
+        # "Mais buscados": nunca repete modelo. "Tênis"/"Feminino": podem repetir
+        # cor do mesmo modelo pra completar a contagem — só a ordem re-sorteia.
+        "mais_buscados": _sample({p.id for p in rows}, 12, dedupe_model=True),
+        "tenis": _sample(set(tenis_ids), 8, dedupe_model=False),
+        "feminino": _sample(set(fem_ids), 4, dedupe_model=False),
     }
 
 

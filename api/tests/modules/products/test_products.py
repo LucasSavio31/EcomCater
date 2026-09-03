@@ -195,11 +195,15 @@ async def test_home_sections_one_product_per_model(client, admin_token, auth_hea
     solo = await _mk_product(client, h, cat["id"], name="TENIS 901 Verde", price=9990)
 
     res = await service.home_sections(db, seed=2026090312)
+    # "mais_buscados" nunca repete modelo
     names = [p["name"] for p in res["mais_buscados"]]
     modelos = [n.split()[1] for n in names if n.startswith("TENIS 90")]
     assert modelos.count("900") == 1  # só um dos 3 irmãos
     assert "TENIS 901 Verde" in names
     assert len(names) == len(set(names))
+    # "tenis" PODE repetir modelo (cores do mesmo) pra completar a contagem
+    tnames = [p["name"] for p in res["tenis"]]
+    assert len(tnames) == 4  # 3 cores do 900 + o 901
 
     # endpoint público responde com as três chaves
     res = await client.get("/api/products/home-sections")
