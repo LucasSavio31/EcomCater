@@ -1130,6 +1130,9 @@ export function CheckoutView({
                             <Input
                               label="Validade (MM/AA)"
                               placeholder="MM/AA"
+                              inputMode="numeric"
+                              pattern="[0-9/]*"
+                              autoComplete="cc-exp"
                               value={card.exp}
                               onChange={(e) => {
                                 const d = onlyDigits(e.target.value).slice(0, 4);
@@ -1153,7 +1156,7 @@ export function CheckoutView({
                               <select
                                 value={installments}
                                 onChange={(e) => setInstallments(Number(e.target.value))}
-                                className="min-h-touch w-full rounded-card border border-surface-border bg-surface px-3 text-sm"
+                                className="min-h-touch w-full rounded-card border border-surface-border bg-surface px-3 text-sm max-sm:h-12 max-sm:text-base"
                               >
                                 {installmentOptions.map((n) => (
                                   <option key={n} value={n}>
