@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Card, Input } from '@ecom/ui';
 import { IconTrash } from '@/components/nav-icons';
 import { PageHeader } from '@/components/page-header';
@@ -55,6 +55,12 @@ export default function CartRecoveryPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
+  // troca de página/tamanho/filtro de data → zera a seleção (os ids marcados
+  // podem não estar mais visíveis)
+  useEffect(() => {
+    setSelected(new Set());
+  }, [page, pageSize, dateFrom, dateTo, cartFilter]);
+
   const editing = openId && openId !== 'new' ? openId : null;
   const allCarts = carts.data ?? [];
 
@@ -101,9 +107,9 @@ export default function CartRecoveryPage() {
     const res = await cartRecoveryApi.deleteCarts([...selected]);
     setBusy(false);
     setConfirmCarts(false);
+    setSelected(new Set());
     if (!res.ok) return toast.error(res.error.message);
     toast.success(`${res.data.deleted} carrinho(s) excluído(s).`);
-    setSelected(new Set());
     carts.reload();
     stats.reload();
   }
@@ -160,13 +166,13 @@ export default function CartRecoveryPage() {
     setBusy(true);
     const res = await cartRecoveryApi.sendToCarts([...selected]);
     setBusy(false);
+    setSelected(new Set());
     if (!res.ok) return toast.error(res.error.message);
     const { sent, skipped, reason } = res.data;
     if (reason) return toast.error(reason);
     toast.success(
       `${sent} e-mail(s) enviado(s)` + (skipped ? ` · ${skipped} pulado(s)` : '') + '.',
     );
-    setSelected(new Set());
     carts.reload();
     stats.reload();
   }
@@ -175,6 +181,7 @@ export default function CartRecoveryPage() {
     setBusy(true);
     const res = await cartRecoveryApi.runNow();
     setBusy(false);
+    setSelected(new Set());
     if (!res.ok) return toast.error(res.error.message);
     toast.success(`Processado: ${res.data.sent} e-mail(s) enviado(s).`);
     carts.reload();
