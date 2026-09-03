@@ -16,15 +16,21 @@ interface ProductGalleryProps {
  * - Desktop: coluna de miniaturas À ESQUERDA (com uma seta na selecionada) +
  *   imagem principal. Zoom só NO CLIQUE (hover mostra a lupa); com o zoom, o
  *   mouse "arrasta" a imagem. Clicar de novo / tirar o cursor sai do zoom.
- * - Mobile: quadro fixo, a imagem TROCA no swipe (infinito, sem deslizar a
- *   faixa nem travar — igual ao desktop) + bolinhas de paginação.
+ * - Mobile: quadro fixo, a imagem TROCA no swipe (infinito, fade). Dois toques
+ *   na imagem abrem o zoom (arrasta pra navegar); dois toques nela de novo ou
+ *   um toque fora da imagem fecham. + bolinhas de paginação.
  */
 export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const [index, setIndex] = useState(0);
   const [zoom, setZoom] = useState(false);
   const [origin, setOrigin] = useState('50% 50%');
   const [mobileIndex, setMobileIndex] = useState(0);
-  const touchStartX = useRef<number | null>(null);
+  const [mobileZoom, setMobileZoom] = useState(false);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+
+  const tapRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const lastTapRef = useRef(0);
+  const panStartRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
 
   if (images.length === 0) {
     return (
@@ -39,13 +45,21 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const mainSrc = resolveMediaUrl(current.medium_url) ?? '';
   const zoomSrc = resolveMediaUrl(current.zoom_url) ?? mainSrc;
 
+  const mobileImg = images[mobileIndex] as ProductImage;
+  const mobileZoomSrc =
+    resolveMediaUrl(mobileImg?.zoom_url) ?? resolveMediaUrl(mobileImg?.medium_url) ?? '';
+
   const go = (delta: number) => {
     setZoom(false);
     setIndex((i) => (i + delta + images.length) % images.length);
   };
-
   const goMobile = (delta: number) =>
     setMobileIndex((i) => (i + delta + images.length) % images.length);
+
+  const closeMobileZoom = () => {
+    setMobileZoom(false);
+    setPan({ x: 0, y: 0 });
+  };
 
   const onMove = (event: React.MouseEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -54,15 +68,66 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
     setOrigin(`${x}% ${y}%`);
   };
 
-  const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    touchStartX.current = e.touches[0]?.clientX ?? null;
+  // --- gestos do quadro mobile (não ampliado): swipe troca / 2 toques ampliam
+  const onFrameTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (t) tapRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
   };
-  const onTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (touchStartX.current == null || images.length < 2) return;
-    const dx = (e.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
-    touchStartX.current = null;
-    if (Math.abs(dx) < 40) return;
-    goMobile(dx < 0 ? 1 : -1);
+  const onFrameTouchEnd = (e: React.TouchEvent) => {
+    const start = tapRef.current;
+    tapRef.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    const moved = Math.hypot(dx, dy);
+    const now = Date.now();
+
+    if (moved < 12) {
+      if (now - lastTapRef.current < 300) {
+        lastTapRef.current = 0;
+        setPan({ x: 0, y: 0 });
+        setMobileZoom(true);
+      } else {
+        lastTapRef.current = now;
+      }
+      return;
+    }
+    if (images.length > 1 && Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy)) {
+      goMobile(dx < 0 ? 1 : -1);
+    }
+  };
+
+  // --- gestos com o zoom mobile aberto: arrasta pra navegar / 2 toques fecham
+  const onZoomTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (!t) return;
+    tapRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+    panStartRef.current = { x: t.clientX, y: t.clientY, px: pan.x, py: pan.y };
+  };
+  const onZoomTouchMove = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    const s = panStartRef.current;
+    if (!t || !s) return;
+    setPan({ x: s.px + (t.clientX - s.x), y: s.py + (t.clientY - s.y) });
+  };
+  const onZoomTouchEnd = (e: React.TouchEvent) => {
+    const start = tapRef.current;
+    tapRef.current = null;
+    panStartRef.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    if (!t) return;
+    const moved = Math.hypot(t.clientX - start.x, t.clientY - start.y);
+    if (moved >= 12) return; // foi arrasto (pan), não toque
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      lastTapRef.current = 0;
+      closeMobileZoom();
+    } else {
+      lastTapRef.current = now;
+    }
   };
 
   return (
@@ -165,11 +230,11 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
         </div>
       </div>
 
-      {/* Mobile: quadro fixo; a imagem troca no swipe (infinito, sem travar) */}
+      {/* Mobile: quadro fixo; imagem troca no swipe; 2 toques = zoom */}
       <div
         className="relative h-[min(88vw,58vh)] w-full overflow-hidden rounded-card border border-surface-border bg-bg-subtle md:hidden"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
+        onTouchStart={onFrameTouchStart}
+        onTouchEnd={onFrameTouchEnd}
         role="img"
         aria-label={`${productName} — imagem ${mobileIndex + 1} de ${images.length}`}
       >
@@ -202,6 +267,28 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
               }`}
             />
           ))}
+        </div>
+      )}
+
+      {/* Zoom mobile — overlay: arrasta pra navegar; toque fora / 2 toques na
+          imagem fecham */}
+      {mobileZoom && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/90 md:hidden"
+          onClick={closeMobileZoom}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={mobileZoomSrc}
+            alt=""
+            draggable={false}
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={onZoomTouchStart}
+            onTouchMove={onZoomTouchMove}
+            onTouchEnd={onZoomTouchEnd}
+            className="h-auto w-[185%] max-w-none select-none"
+            style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0)`, touchAction: 'none' }}
+          />
         </div>
       )}
     </div>
