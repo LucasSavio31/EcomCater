@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import type { ProductImage } from '@/modules/catalog/types';
 import { resolveMediaUrl } from '@/lib/media';
@@ -26,18 +26,52 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
   const [origin, setOrigin] = useState('50% 50%');
   const [mobileIndex, setMobileIndex] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
+  const idleRef = useRef<number | undefined>(undefined);
+
+  // Carrossel mobile infinito: renderiza as fotos 3x e, quando o swipe para
+  // perto de uma borda, salta uma "cópia" inteira de volta ao centro.
+  const mobileLoop = images.length >= 2;
+  const mobileSlides = mobileLoop
+    ? [0, 1, 2].flatMap((copy) => images.map((img, i) => ({ img, i, copy })))
+    : images.map((img, i) => ({ img, i, copy: 0 }));
+
+  const normalizeMobile = useCallback(() => {
+    const el = trackRef.current;
+    if (!el || !mobileLoop) return;
+    const block = images.length * (el.clientWidth + 8); // avanço exato de 1 cópia
+    if (block <= 0) return;
+    if (el.scrollLeft < block * 0.5) el.scrollLeft += block;
+    else if (el.scrollLeft > block * 1.5) el.scrollLeft -= block;
+  }, [mobileLoop, images.length]);
 
   const onTrackScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     const per = el.clientWidth + 8; // largura do slide + gap-2
-    setMobileIndex(Math.max(0, Math.min(images.length - 1, Math.round(el.scrollLeft / per))));
+    if (per <= 8) return;
+    const raw = Math.round(el.scrollLeft / per);
+    setMobileIndex(((raw % images.length) + images.length) % images.length);
+    if (mobileLoop) {
+      window.clearTimeout(idleRef.current);
+      idleRef.current = window.setTimeout(normalizeMobile, 120);
+    }
   };
 
   const goToMobile = (i: number) => {
     const el = trackRef.current;
     if (!el) return;
-    el.scrollTo({ left: i * (el.clientWidth + 8), behavior: 'smooth' });
+    const per = el.clientWidth + 8;
+    const base = mobileLoop ? images.length : 0; // cópia central
+    el.scrollTo({ left: (base + i) * per, behavior: 'smooth' });
   };
+
+  // posiciona na cópia central ao montar (quando o carrossel tem largura)
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el || !mobileLoop) return;
+    if (el.clientWidth > 0) el.scrollLeft = images.length * (el.clientWidth + 8);
+    return () => window.clearTimeout(idleRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileLoop, images.length]);
 
   if (images.length === 0) {
     return (
@@ -171,19 +205,20 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
         onScroll={onTrackScroll}
         className="flex snap-x snap-mandatory gap-2 overflow-x-auto rounded-card md:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {images.map((image, i) => {
-          const src = resolveMediaUrl(image.medium_url) ?? '';
+        {mobileSlides.map(({ img, i, copy }) => {
+          const src = resolveMediaUrl(img.medium_url) ?? '';
           return (
             <div
-              key={image.id}
+              key={`${img.id}-${copy}`}
               className="relative h-[min(88vw,58vh)] w-full shrink-0 snap-center overflow-hidden rounded-card border border-surface-border bg-bg-subtle"
+              aria-hidden={mobileLoop && copy !== 1 ? true : undefined}
             >
               <Image
                 src={src}
-                alt={image.alt ?? `${productName} — imagem ${i + 1}`}
+                alt={img.alt ?? `${productName} — imagem ${i + 1}`}
                 fill
                 sizes="100vw"
-                priority={i === 0}
+                priority={i === 0 && copy <= 1}
                 className="object-cover"
               />
             </div>
