@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import type { ColorSibling } from '@/modules/catalog/types';
@@ -11,12 +14,54 @@ interface Props {
 /**
  * Variação de COR = produtos irmãos (mesmo modelo, outra cor).
  * Miniatura = imagem principal de cada produto; clicar navega para ele.
- * "COR: <nome>" como no modelo da referência.
+ * Recolhe acima de 8 cores no desktop / 6 no mobile: mostra `limite-1` + um
+ * card "ver mais cores" (prévia ofuscada da próxima). Ao clicar, carrega o
+ * resto das miniaturas.
  */
 export function ColorSiblings({ currentColorName, siblings }: Props) {
+  const [expanded, setExpanded] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
   if (!siblings || siblings.length < 2) return null;
+  const LIMIT = isDesktop ? 8 : 6;
   const current = siblings.find((s) => s.is_current);
   const label = current?.color_name || currentColorName;
+
+  const swatchCls = (isCurrent: boolean) =>
+    `relative block h-[70px] w-[103px] overflow-hidden rounded-card border-2 bg-white ${
+      isCurrent ? 'border-var-border' : 'border-surface-border hover:border-var-border'
+    }`;
+
+  const swatch = (s: ColorSibling) => {
+    const src = resolveMediaUrl(s.image_url ?? undefined);
+    const inner = src ? (
+      <Image src={src} alt={s.color_name} fill sizes="103px" className="object-contain" />
+    ) : (
+      <span className="flex h-full items-center justify-center px-1 text-xs">{s.color_name}</span>
+    );
+    return s.is_current ? (
+      <span className={swatchCls(true)} aria-current="true" title={s.color_name}>
+        {inner}
+      </span>
+    ) : (
+      <Link href={`/produto/${s.slug}`} className={swatchCls(false)} title={s.color_name}>
+        {inner}
+      </Link>
+    );
+  };
+
+  const collapsed = !expanded && siblings.length > LIMIT;
+  const visible = collapsed ? siblings.slice(0, LIMIT - 1) : siblings;
+  const teaser = collapsed ? siblings[LIMIT - 1] : null;
+  const hiddenCount = siblings.length - (LIMIT - 1);
 
   return (
     <div className="flex flex-col gap-2">
@@ -25,30 +70,35 @@ export function ColorSiblings({ currentColorName, siblings }: Props) {
         {label && <span className="font-normal normal-case text-text-muted">: {label}</span>}
       </span>
       <ul className="flex flex-wrap gap-2">
-        {siblings.map((s) => {
-          const src = resolveMediaUrl(s.image_url ?? undefined);
-          const inner = src ? (
-            <Image src={src} alt={s.color_name} fill sizes="103px" className="object-contain" />
-          ) : (
-            <span className="flex h-full items-center justify-center px-1 text-xs">{s.color_name}</span>
-          );
-          const cls = `relative block h-[70px] w-[103px] overflow-hidden rounded-card border-2 bg-white ${
-            s.is_current ? 'border-var-border' : 'border-surface-border hover:border-var-border'
-          }`;
-          return (
-            <li key={s.id}>
-              {s.is_current ? (
-                <span className={cls} aria-current="true" title={s.color_name}>
-                  {inner}
-                </span>
-              ) : (
-                <Link href={`/produto/${s.slug}`} className={cls} title={s.color_name}>
-                  {inner}
-                </Link>
+        {visible.map((s) => (
+          <li key={s.id}>{swatch(s)}</li>
+        ))}
+        {teaser && (
+          <li>
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              title="Ver mais cores"
+              className="relative block h-[70px] w-[103px] overflow-hidden rounded-card border-2 border-surface-border bg-white hover:border-var-border"
+            >
+              {resolveMediaUrl(teaser.image_url ?? undefined) && (
+                <Image
+                  src={resolveMediaUrl(teaser.image_url ?? undefined) as string}
+                  alt=""
+                  fill
+                  sizes="103px"
+                  className="object-contain opacity-30"
+                />
               )}
-            </li>
-          );
-        })}
+              <span className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-white/55 text-center">
+                <span className="text-[11px] font-bold leading-none">+{hiddenCount}</span>
+                <span className="text-[10px] font-semibold leading-tight text-text-muted">
+                  ver mais cores
+                </span>
+              </span>
+            </button>
+          </li>
+        )}
       </ul>
     </div>
   );
