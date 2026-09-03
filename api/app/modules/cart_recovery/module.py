@@ -347,6 +347,73 @@ async def run_now(db: DbDep, _: EditorDep) -> dict:
     return await _process_due(db)
 
 
+@admin_router.post("/carts/send")
+async def send_to_carts(
+    db: DbDep, _: EditorDep, ids: list[str] = Body(..., embed=True)
+) -> dict:
+    """Envia AGORA um e-mail de recuperação para os carrinhos escolhidos,
+    ignorando o `delay`. Se o carrinho já recebeu todas as mensagens, reenvia
+    a última. Não envia para carrinho já recuperado."""
+    import uuid as _uuid
+
+    from app.modules.newsletter.models import NewsletterSubscriber
+    from app.shared import mailer
+
+    msgs = list(
+        await db.scalars(
+            select(RecoveryMessage)
+            .where(RecoveryMessage.is_active.is_(True))
+            .order_by(RecoveryMessage.position)
+        )
+    )
+    if not msgs:
+        return {"sent": 0, "skipped": 0, "reason": "nenhuma mensagem ativa cadastrada"}
+
+    uids = []
+    for i in ids:
+        try:
+            uids.append(_uuid.UUID(i))
+        except ValueError:
+            continue
+    if not uids:
+        return {"sent": 0, "skipped": 0}
+
+    carts = list(await db.scalars(select(AbandonedCart).where(AbandonedCart.id.in_(uids))))
+    now = datetime.now(UTC)
+    sent = skipped = 0
+    for ac in carts:
+        if ac.recovered_at is not None:
+            skipped += 1
+            continue
+        msg = msgs[min(ac.reminders_sent, len(msgs) - 1)]
+        sub = await db.scalar(
+            select(NewsletterSubscriber).where(NewsletterSubscriber.email == ac.email)
+        )
+        name = (sub.name if sub and sub.name else "") or ""
+        cta_url = f"{settings.public_api_url.rstrip('/')}/api/cart-recovery/r/{ac.id}"
+        body = (msg.body or "").replace("{nome}", name).replace("{link}", cta_url)
+        ok = await mailer.send(
+            db,
+            to=ac.email,
+            template="cart_recovery",
+            context={
+                "subject": (msg.subject or "").replace("{nome}", name),
+                "body": body,
+                "cta_url": cta_url,
+                "total": ac.total_cents,
+            },
+        )
+        ac.last_email_at = now
+        if ac.reminders_sent < len(msgs):
+            ac.reminders_sent += 1
+        if ok:
+            sent += 1
+        else:
+            skipped += 1
+    await db.commit()
+    return {"sent": sent, "skipped": skipped}
+
+
 async def mark_recovered(db: AsyncSession, *, email: str, order_id) -> None:
     rows = await db.scalars(
         select(AbandonedCart).where(

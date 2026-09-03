@@ -155,6 +155,22 @@ export default function CartRecoveryPage() {
     messages.reload();
   }
 
+  async function sendToSelected() {
+    if (selected.size === 0) return;
+    setBusy(true);
+    const res = await cartRecoveryApi.sendToCarts([...selected]);
+    setBusy(false);
+    if (!res.ok) return toast.error(res.error.message);
+    const { sent, skipped, reason } = res.data;
+    if (reason) return toast.error(reason);
+    toast.success(
+      `${sent} e-mail(s) enviado(s)` + (skipped ? ` · ${skipped} pulado(s)` : '') + '.',
+    );
+    setSelected(new Set());
+    carts.reload();
+    stats.reload();
+  }
+
   async function runNow() {
     setBusy(true);
     const res = await cartRecoveryApi.runNow();
@@ -373,14 +389,24 @@ export default function CartRecoveryPage() {
           </Badge>
         )}
         {selected.size > 0 && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-danger"
-            onClick={() => setConfirmCarts(true)}
-          >
-            Excluir selecionados ({selected.size})
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              loading={busy}
+              onClick={() => void sendToSelected()}
+            >
+              Enviar recuperação p/ selecionados ({selected.size})
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-danger"
+              onClick={() => setConfirmCarts(true)}
+            >
+              Excluir selecionados ({selected.size})
+            </Button>
+          </>
         )}
       </div>
 

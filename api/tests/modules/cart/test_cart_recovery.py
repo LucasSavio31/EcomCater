@@ -76,3 +76,39 @@ async def test_process_due_sends_once_per_step(client, admin_token, auth_headers
 
     ac = await db.scalar(select(AbandonedCart).where(AbandonedCart.email == "abandonou@test.example"))
     assert ac.reminders_sent == 2
+
+
+@pytest.mark.asyncio
+async def test_send_to_carts_forces_send_ignoring_delay(client, admin_token, auth_headers, db):
+    h = auth_headers(admin_token)
+    await client.post(
+        "/api/admin/cart-recovery/messages",
+        json={"position": 1, "delay_minutes": 999, "subject": "aviso", "body": "{link}"},
+        headers=h,
+    )
+    db.add(
+        AbandonedCart(
+            email="forcar@test.example",
+            cart_token="tok-force",
+            total_cents=5000,
+            items_count=1,
+            created_at=datetime.now(UTC),  # delay de 999 min -> NÃO estaria vencido
+            reminders_sent=1,               # já "esgotou" a única mensagem
+        )
+    )
+    await db.commit()
+
+    r = await client.post(
+        "/api/admin/cart-recovery/carts/send",
+        json={"ids": [
+            str((await db.scalar(select(AbandonedCart).where(AbandonedCart.email == "forcar@test.example"))).id)
+        ]},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["sent"] == 1  # reenvia a última mesmo com reminders_sent no limite
+
+    logs = (
+        await db.execute(select(EmailLog).where(EmailLog.template == "cart_recovery"))
+    ).scalars().all()
+    assert any(log.to_email == "forcar@test.example" for log in logs)

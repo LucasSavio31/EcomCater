@@ -45,6 +45,11 @@ export const cartRecoveryApi = {
       method: 'POST',
       body: { ids },
     }),
+  sendToCarts: (ids: string[]) =>
+    adminFetch<{ sent: number; skipped: number; reason?: string }>(`${BASE}/carts/send`, {
+      method: 'POST',
+      body: { ids },
+    }),
   listMessages: () => adminFetch<RecoveryMessage[]>(`${BASE}/messages`),
   createMessage: (body: RecoveryMessageInput) =>
     adminFetch<RecoveryMessage>(`${BASE}/messages`, { method: 'POST', body }),
