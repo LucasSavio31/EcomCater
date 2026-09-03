@@ -79,8 +79,10 @@ export function AuthForms({ onDone }: { onDone?: () => void }) {
               setMode(m);
               setError(null);
             }}
-            className={`min-h-touch flex-1 rounded-card border px-3 text-sm font-medium transition ${
-              mode === m ? 'border-primary bg-primary/5' : 'border-surface-border'
+            className={`min-h-touch flex-1 rounded-card border px-3 text-sm font-bold uppercase tracking-wide transition ${
+              mode === m
+                ? 'border-btn bg-btn text-btn-fg'
+                : 'border-surface-border text-text hover:border-btn/60'
             }`}
           >
             {m === 'login' ? 'Entrar' : 'Criar conta'}
