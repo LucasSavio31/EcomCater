@@ -212,6 +212,97 @@ async def test_home_sections_one_product_per_model(client, admin_token, auth_hea
 
 
 @pytest.mark.asyncio
+async def test_related_products_excludes_own_model_and_dedupes(client, admin_token, auth_headers, db):
+    """'Você também pode gostar': nunca repete modelo, nem o do produto na tela."""
+    import uuid as _uuid
+
+    from app.modules.products import service
+    from app.modules.products.models import Product
+
+    h = auth_headers(admin_token)
+    cat = await _mk_category(client, h, "Tênis")
+
+    own_ids = [
+        (await _mk_product(client, h, cat["id"], name=f"TENIS 700 {cor}", price=9990))["id"]
+        for cor in ("Preto", "Branco", "Azul")
+    ]
+    await client.put(
+        f"/api/admin/products/{own_ids[0]}/color-group",
+        json={"color_name": "Preto", "sibling_ids": own_ids[1:]},
+        headers=h,
+    )
+    await _mk_product(client, h, cat["id"], name="TENIS 701 Verde", price=9990)
+    other_ids = [
+        (await _mk_product(client, h, cat["id"], name=f"TENIS 702 {cor}", price=9990))["id"]
+        for cor in ("Cinza", "Bege")
+    ]
+    await client.put(
+        f"/api/admin/products/{other_ids[0]}/color-group",
+        json={"color_name": "Cinza", "sibling_ids": other_ids[1:]},
+        headers=h,
+    )
+
+    product = await db.get(Product, _uuid.UUID(own_ids[0]))
+    related = await service.related_products(db, product, limit=10)
+    names = [r["name"] for r in related]
+
+    assert not any(n.startswith("TENIS 700") for n in names)  # não recomenda o próprio modelo
+    assert "TENIS 701 Verde" in names
+    assert sum(n.startswith("TENIS 702") for n in names) == 1  # 1 das 2 cores do 702
+    assert len(names) == len(set(names))
+
+
+@pytest.mark.asyncio
+async def test_related_products_hourly_stable_and_reshuffles(client, admin_token, auth_headers, db):
+    import uuid as _uuid
+    from datetime import UTC, datetime
+
+    from app.modules.products import service
+    from app.modules.products.models import Product
+
+    h = auth_headers(admin_token)
+    cat = await _mk_category(client, h, "Tênis")
+    for i in range(12):
+        await _mk_product(client, h, cat["id"], name=f"TENIS {800 + i} Cor", price=9990)
+    viewer = await _mk_product(client, h, cat["id"], name="TENIS 999 Base", price=9990)
+    product = await db.get(Product, _uuid.UUID(viewer["id"]))
+
+    hour1 = datetime(2026, 9, 4, 10, tzinfo=UTC)
+    hour2 = datetime(2026, 9, 4, 11, tzinfo=UTC)
+    a = await service.related_products(db, product, limit=10, now=hour1)
+    b = await service.related_products(db, product, limit=10, now=hour1)
+    c = await service.related_products(db, product, limit=10, now=hour2)
+
+    assert len(a) == 10
+    assert [r["id"] for r in a] == [r["id"] for r in b]  # mesma hora -> mesma lista
+    assert [r["id"] for r in a] != [r["id"] for r in c]  # hora seguinte -> re-sorteia
+
+
+@pytest.mark.asyncio
+async def test_related_products_endpoint_on_pdp(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    cat = await _mk_category(client, h, "Tênis")
+    ids = []
+    for cor in ("Preto", "Branco"):
+        p = await _mk_product(client, h, cat["id"], name=f"TENIS 600 {cor}", price=9990)
+        ids.append(p["id"])
+    await client.put(
+        f"/api/admin/products/{ids[0]}/color-group",
+        json={"color_name": "Preto", "sibling_ids": ids[1:]},
+        headers=h,
+    )
+    for i in range(3):
+        await _mk_product(client, h, cat["id"], name=f"TENIS {601 + i} Único", price=9990)
+
+    slug = (await client.get(f"/api/admin/products/{ids[0]}", headers=h)).json()["slug"]
+    detail = (await client.get(f"/api/products/{slug}")).json()
+    related_names = [r["name"] for r in detail["related"]]
+    assert not any(n.startswith("TENIS 600") for n in related_names)
+    assert len(related_names) == len(set(related_names))
+    assert len(related_names) <= 10
+
+
+@pytest.mark.asyncio
 async def test_search_fuzzy(client, admin_token, auth_headers):
     h = auth_headers(admin_token)
     cat = await _mk_category(client, h)

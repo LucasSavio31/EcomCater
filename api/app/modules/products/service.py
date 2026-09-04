@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import re
 import uuid
 from typing import Any
 
@@ -224,37 +225,11 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
     price = _min_variant_price(product)
     color_siblings = await _color_siblings(db, product, include_unpublished=include_unpublished)
 
-    related_ids = [
-        r.related_product_id
-        for r in sorted(
-            await db.scalars(
-                select(ProductRelated).where(ProductRelated.product_id == product.id)
-            ),
-            key=lambda r: r.position,
-        )
-    ]
-    related: list[dict] = []
-    if related_ids:
-        rel = await db.scalars(
-            _detail_loader(select(Product).where(Product.id.in_(related_ids), Product.status == "active"))
-        )
-        by_id = {p.id: p for p in rel}
-        related = [list_item(by_id[i]) for i in related_ids if i in by_id]
-    if not related and product.category_id:
-        # sem relacionados explícitos: completa com produtos da mesma categoria
-        fallback = await db.scalars(
-            _detail_loader(
-                select(Product)
-                .where(
-                    Product.category_id == product.category_id,
-                    Product.id != product.id,
-                    Product.status == "active",
-                )
-                .order_by(Product.is_featured.desc(), Product.published_at.desc().nullslast())
-                .limit(8)
-            )
-        )
-        related = [list_item(p) for p in fallback]
+    # "Você também pode gostar": sorteio de todo o catálogo, sem repetir
+    # modelo, re-sorteado a cada hora (ver `related_products`). Substitui a
+    # curadoria manual (`ProductRelated`) — que hoje só alimenta o card de
+    # "produtos relacionados" do admin, sem efeito na loja.
+    related = await related_products(db, product, limit=10)
 
     def _value_out(v: VariantOptionValue) -> dict:
         img = v.image
@@ -535,6 +510,13 @@ async def featured(db: AsyncSession, limit: int = 12) -> list[dict]:
     return [list_item(p) for p in rows]
 
 
+def _model_key(p: Product) -> object:
+    # "TENIS 2085 CAFE" -> ("m", "2085"); assim 2085 masc e 2085 fem contam
+    # como o mesmo modelo. Sem número no nome: cai no grupo de cor / id.
+    m = re.search(r"\b(\d{3,4})\b", p.name or "")
+    return ("m", m.group(1)) if m else (p.color_group_id or p.id)
+
+
 async def home_sections(db: AsyncSession, *, seed: int) -> dict:
     """Três blocos da home, embaralhados de forma determinística por `seed`
     (o router usa o carimbo ano-mês-dia-hora → tudo re-sorteia a cada hora):
@@ -548,13 +530,6 @@ async def home_sections(db: AsyncSession, *, seed: int) -> dict:
     cor também re-sorteia por hora).
     """
     import random as _random
-    import re as _re
-
-    def _model_key(p: Product) -> object:
-        # "TENIS 2085 CAFE" -> ("m", "2085"); assim 2085 masc e 2085 fem contam
-        # como o mesmo modelo. Sem número no nome: cai no grupo de cor / id.
-        m = _re.search(r"\b(\d{3,4})\b", p.name or "")
-        return ("m", m.group(1)) if m else (p.color_group_id or p.id)
 
     rows = sorted(
         await db.scalars(
@@ -626,6 +601,46 @@ async def home_sections(db: AsyncSession, *, seed: int) -> dict:
         "tenis": _sample(set(tenis_ids), 8, dedupe_model=False),
         "feminino": _sample(set(fem_ids), 4, dedupe_model=False),
     }
+
+
+async def related_products(
+    db: AsyncSession, product: Product, *, limit: int = 10, now=None
+) -> list[dict]:
+    """'Você também pode gostar': sorteio de TODO o catálogo ativo, nunca repete
+    modelo (nem o do próprio produto na tela) e re-sorteia a cada hora — mesmo
+    esquema do `home_sections`. A semente mistura a hora com o produto, então
+    PDPs diferentes não mostram sempre a mesma vitrine.
+
+    `now` (datetime, opcional): hora usada pro sorteio — default = agora (UTC).
+    Só existe pra dar determinismo em teste; produção nunca passa.
+    """
+    import random as _random
+    from datetime import UTC, datetime
+
+    now = now or datetime.now(UTC)
+    rows = await db.scalars(
+        select(Product)
+        .where(Product.status == "active")
+        .options(selectinload(Product.variants), selectinload(Product.images))
+    )
+    groups: dict[object, list[Product]] = {}
+    own_key = _model_key(product)
+    for p in rows:
+        if p.id == product.id:
+            continue
+        key = _model_key(p)
+        if key == own_key:
+            continue  # não recomenda o mesmo modelo que já está na tela
+        groups.setdefault(key, []).append(p)
+
+    bucket = now.strftime("%Y%m%d%H")
+    # `.int` da UUID é estável entre processos/restarts — diferente de `hash()`,
+    # que é salgado por processo e daria listas diferentes por worker.
+    rng = _random.Random(int(bucket) ^ (product.id.int & 0xFFFFFFFF))
+    keys = sorted(groups.keys(), key=str)
+    picked = [rng.choice(groups[k]) for k in keys]
+    rng.shuffle(picked)
+    return [list_item(p) for p in picked[:limit]]
 
 
 async def by_ids(db: AsyncSession, ids: list[str], limit: int = 100) -> list[dict]:
