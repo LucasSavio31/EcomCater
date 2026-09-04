@@ -97,6 +97,11 @@ export function ProductCard({
             Esgotado
           </Badge>
         )}
+        {product.rating_count > 0 && (
+          <span className="absolute bottom-2 left-2 rounded-full bg-bg/90 px-1.5 py-1 shadow-sm">
+            <Stars value={product.rating_avg} hideCount />
+          </span>
+        )}
       </Link>
 
       <div className="flex flex-1 flex-col gap-1 p-3 pl-0">
@@ -105,9 +110,6 @@ export function ProductCard({
             {product.name}
           </Link>
         </h3>
-        {product.rating_count > 0 && (
-          <Stars value={product.rating_avg} count={product.rating_count} />
-        )}
         <PriceBlock
           className="mt-auto pt-0.5"
           priceCents={product.price_cents}
