@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     # ambiente
     api_env: str = "dev"
 
+    # agendadores internos (backup, saúde, recuperação de carrinho, reenvio de
+    # e-mail, rastreio). Rodam no processo da API, com trava de worker único no
+    # Redis. Desligue (`RUN_SCHEDULERS=0`) nos processos que só atendem a loja,
+    # deixando um único processo/serviço responsável por eles.
+    run_schedulers: bool = True
+
     # postgres
     postgres_user: str = "ecom"
     postgres_password: str = "ecom-local-dev"

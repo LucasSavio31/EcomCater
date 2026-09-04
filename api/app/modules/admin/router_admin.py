@@ -238,6 +238,7 @@ async def dashboard(
 ):
     from datetime import UTC, datetime, timedelta
 
+    from app.modules.financial import service as financial_service
     from app.modules.financial.models import FinancialEvent
     from app.modules.orders.models import Order, OrderItem, OrderNumberCounter
 
@@ -313,40 +314,24 @@ async def dashboard(
     )
 
     # --- série temporal: período atual x período anterior (mesma duração) --
-    span = max(win_end - win_start, timedelta(hours=1))
-    if span <= timedelta(days=2):
-        step = timedelta(hours=1)
-    else:
-        days = span.days + 1
-        step = timedelta(days=max(1, days // 31 + (1 if days % 31 else 0)))
-    n_buckets = max(1, min(60, int(span / step) + 1))
+    # Uma query por âncora (o próprio livro-caixa agrega em baldes no banco),
+    # em vez de uma query por barra.
+    step, n_buckets = financial_service.bucketing(win_start, win_end)
 
     async def _series(anchor_start):
+        buckets = await financial_service.series_buckets(db, anchor_start, step, n_buckets)
         pts = []
         for i in range(n_buckets):
             b0 = anchor_start + step * i
-            b1 = b0 + step
+            b = buckets.get(i)
             if metric == "revenue":
-                val = await db.scalar(
-                    select(func.coalesce(func.sum(FinancialEvent.gross_cents), 0)).where(
-                        FinancialEvent.kind == "paid",
-                        FinancialEvent.occurred_at >= b0,
-                        FinancialEvent.occurred_at < b1,
-                    )
-                )
+                cents = b["gross"] if b else 0
+            elif metric == "canceled":
+                cents = b["canceled_count"] if b else 0
             else:
-                fk = "canceled" if metric == "canceled" else "refunded"
-                val = await db.scalar(
-                    select(func.count())
-                    .select_from(FinancialEvent)
-                    .where(
-                        FinancialEvent.kind == fk,
-                        FinancialEvent.occurred_at >= b0,
-                        FinancialEvent.occurred_at < b1,
-                    )
-                )
+                cents = b["refunded_count"] if b else 0
             label = b0.strftime("%d/%m") if step >= timedelta(days=1) else b0.strftime("%d/%m %Hh")
-            pts.append({"label": label, "cents": int(val or 0)})
+            pts.append({"label": label, "cents": int(cents)})
         return pts
 
     series_current = await _series(win_start)

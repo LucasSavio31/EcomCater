@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import Integer, cast, extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.financial.models import FinancialEvent
@@ -58,7 +58,18 @@ async def record(db: AsyncSession, *, kind: str, order, when: datetime | None = 
     )
 
 
-def _bucketing(win_start: datetime, win_end: datetime) -> tuple[timedelta, int]:
+def _sum_of(col, kind: str):
+    """`coalesce(sum(col) filter (where kind = :kind), 0)` — soma por tipo de fato."""
+    return func.coalesce(func.sum(col).filter(FinancialEvent.kind == kind), 0)
+
+
+def _count_of(kind: str):
+    """`count(*) filter (where kind = :kind)` — contagem por tipo de fato."""
+    return func.count().filter(FinancialEvent.kind == kind)
+
+
+def bucketing(win_start: datetime, win_end: datetime) -> tuple[timedelta, int]:
+    """(passo, nº de baldes) para a série temporal de um período."""
     span = max(win_end - win_start, timedelta(hours=1))
     if span <= timedelta(days=2):
         step = timedelta(hours=1)
@@ -69,82 +80,103 @@ def _bucketing(win_start: datetime, win_end: datetime) -> tuple[timedelta, int]:
     return step, n
 
 
+async def series_buckets(
+    db: AsyncSession, anchor_start: datetime, step: timedelta, n: int
+) -> dict[int, dict]:
+    """Agrega o livro-caixa em `n` baldes de largura `step` a partir de
+    `anchor_start`, numa ÚNICA query (índice do balde = floor((t - anchor)/step)).
+
+    Retorna `{i: {...}}` só para os baldes com dados. Chaves por balde:
+    `gross`, `cost`, `refunded_cents`, `canceled_cents`,
+    `placed_count`, `refunded_count`, `canceled_count`.
+    """
+    end = anchor_start + step * n
+    bi = cast(
+        func.floor(
+            extract("epoch", FinancialEvent.occurred_at - anchor_start) / step.total_seconds()
+        ),
+        Integer,
+    ).label("bi")
+    rows = (
+        await db.execute(
+            select(
+                bi,
+                _sum_of(FinancialEvent.gross_cents, "paid"),
+                _sum_of(FinancialEvent.cost_cents, "paid"),
+                _sum_of(FinancialEvent.gross_cents, "refunded"),
+                _sum_of(FinancialEvent.gross_cents, "canceled"),
+                _count_of("placed"),
+                _count_of("refunded"),
+                _count_of("canceled"),
+            )
+            .where(
+                FinancialEvent.occurred_at >= anchor_start,
+                FinancialEvent.occurred_at < end,
+            )
+            .group_by(bi)
+        )
+    ).all()
+    out: dict[int, dict] = {}
+    for r in rows:
+        idx = int(r[0])
+        if 0 <= idx < n:
+            out[idx] = {
+                "gross": int(r[1] or 0),
+                "cost": int(r[2] or 0),
+                "refunded_cents": int(r[3] or 0),
+                "canceled_cents": int(r[4] or 0),
+                "placed_count": int(r[5] or 0),
+                "refunded_count": int(r[6] or 0),
+                "canceled_count": int(r[7] or 0),
+            }
+    return out
+
+
 async def summary(db: AsyncSession, win_start: datetime, win_end: datetime) -> dict:
     """Resumo + série temporal do período. Tudo vem do livro-caixa."""
-
-    def _win(q):
-        return q.where(
-            FinancialEvent.occurred_at >= win_start, FinancialEvent.occurred_at <= win_end
-        )
-
-    async def _sum(kind: str, col):
-        return int(
-            await db.scalar(
-                _win(select(func.coalesce(func.sum(col), 0))).where(FinancialEvent.kind == kind)
+    # agregados do período — uma query só (contadores e somas por `kind`)
+    agg = (
+        await db.execute(
+            select(
+                _count_of("placed"),
+                _sum_of(FinancialEvent.gross_cents, "paid"),
+                _sum_of(FinancialEvent.cost_cents, "paid"),
+                _sum_of(FinancialEvent.gross_cents, "refunded"),
+                _count_of("refunded"),
+                _sum_of(FinancialEvent.gross_cents, "canceled"),
+                _count_of("canceled"),
+            ).where(
+                FinancialEvent.occurred_at >= win_start,
+                FinancialEvent.occurred_at <= win_end,
             )
-            or 0
         )
-
-    async def _count(kind: str):
-        return int(
-            await db.scalar(
-                _win(select(func.count())).select_from(FinancialEvent).where(
-                    FinancialEvent.kind == kind
-                )
-            )
-            or 0
-        )
-
-    orders_total = await _count("placed")
-    gross = await _sum("paid", FinancialEvent.gross_cents)
-    cost = await _sum("paid", FinancialEvent.cost_cents)
+    ).one()
+    orders_total = int(agg[0] or 0)
+    gross = int(agg[1] or 0)
+    cost = int(agg[2] or 0)
     net = gross - cost
-    refunded = await _sum("refunded", FinancialEvent.gross_cents)
-    refunds_count = await _count("refunded")
-    canceled = await _sum("canceled", FinancialEvent.gross_cents)
-    canceled_count = await _count("canceled")
+    refunded = int(agg[3] or 0)
+    refunds_count = int(agg[4] or 0)
+    canceled = int(agg[5] or 0)
+    canceled_count = int(agg[6] or 0)
 
-    step, n = _bucketing(win_start, win_end)
+    step, n = bucketing(win_start, win_end)
+    buckets = await series_buckets(db, win_start, step, n)
     series = []
     for i in range(n):
         b0 = win_start + step * i
-        b1 = b0 + step
-        row = (
-            await db.execute(
-                select(
-                    func.coalesce(
-                        func.sum(FinancialEvent.gross_cents).filter(FinancialEvent.kind == "paid"),
-                        0,
-                    ),
-                    func.coalesce(
-                        func.sum(FinancialEvent.cost_cents).filter(FinancialEvent.kind == "paid"),
-                        0,
-                    ),
-                    func.coalesce(
-                        func.sum(FinancialEvent.gross_cents).filter(
-                            FinancialEvent.kind == "refunded"
-                        ),
-                        0,
-                    ),
-                    func.coalesce(
-                        func.sum(FinancialEvent.gross_cents).filter(
-                            FinancialEvent.kind == "canceled"
-                        ),
-                        0,
-                    ),
-                    func.count().filter(FinancialEvent.kind == "placed"),
-                ).where(FinancialEvent.occurred_at >= b0, FinancialEvent.occurred_at < b1)
-            )
-        ).one()
+        b = buckets.get(i)
+        g = b["gross"] if b else 0
+        c = b["cost"] if b else 0
         label = b0.strftime("%d/%m") if step >= timedelta(days=1) else b0.strftime("%d/%m %Hh")
         series.append(
             {
                 "label": label,
-                "gross_cents": int(row[0] or 0),
-                "net_cents": int((row[0] or 0) - (row[1] or 0)),
-                "refunded_cents": int(row[2] or 0),
-                "canceled_cents": int(row[3] or 0),
-                "orders": int(row[4] or 0),
+                "gross_cents": g,
+                "net_cents": g - c,
+                "refunded_cents": b["refunded_cents"] if b else 0,
+                "canceled_cents": b["canceled_cents"] if b else 0,
+                "orders": b["placed_count"] if b else 0,
             }
         )
 

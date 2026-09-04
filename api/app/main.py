@@ -35,26 +35,33 @@ async def lifespan(_: FastAPI):
     # garante o diretório de mídia local
     if settings.storage_backend == "local":
         Path(settings.storage_local_dir).mkdir(parents=True, exist_ok=True)
-    # agendadores internos (rodam no processo da API, trava de worker único)
-    from app.modules.cart_recovery import scheduler as recovery_scheduler
-    from app.modules.shipping import scheduler as me_tracking_scheduler
-    from app.modules.system import email_retry as email_retry_scheduler
-    from app.modules.system import health_scheduler
-    from app.modules.system import scheduler as backup_scheduler
+    # agendadores internos (rodam no processo da API, trava de worker único).
+    # RUN_SCHEDULERS=0 nos processos que só servem a loja — assim os relatórios
+    # e rotinas de fundo não disputam worker/conexão com a navegação.
+    schedulers: list = []
+    if settings.run_schedulers:
+        from app.modules.cart_recovery import scheduler as recovery_scheduler
+        from app.modules.shipping import scheduler as me_tracking_scheduler
+        from app.modules.system import email_retry as email_retry_scheduler
+        from app.modules.system import health_scheduler
+        from app.modules.system import scheduler as backup_scheduler
 
-    backup_scheduler.start()
-    me_tracking_scheduler.start()
-    health_scheduler.start()
-    recovery_scheduler.start()
-    email_retry_scheduler.start()
+        schedulers = [
+            backup_scheduler,
+            me_tracking_scheduler,
+            health_scheduler,
+            recovery_scheduler,
+            email_retry_scheduler,
+        ]
+        for s in schedulers:
+            s.start()
+    else:
+        logger.info("RUN_SCHEDULERS=0 — agendadores internos desligados neste processo")
     try:
         yield
     finally:
-        await backup_scheduler.stop()
-        await me_tracking_scheduler.stop()
-        await health_scheduler.stop()
-        await recovery_scheduler.stop()
-        await email_retry_scheduler.stop()
+        for s in schedulers:
+            await s.stop()
 
 
 def create_app() -> FastAPI:

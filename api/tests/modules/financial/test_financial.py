@@ -162,6 +162,60 @@ async def test_backfill_seeds_ledger_for_existing_orders(client, variant_with_co
 
 
 @pytest.mark.asyncio
+async def test_series_buckets_group_events_by_window(db):
+    """A série agora é agregada no banco (1 query); baldes vazios = 0 e cada
+    evento cai no balde certo por (t - início)/passo."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.modules.financial import service
+    from app.modules.financial.models import FinancialEvent
+
+    win_start = datetime(2026, 1, 1, tzinfo=UTC)
+    win_end = win_start + timedelta(days=6)  # passo diário
+    step, n = service.bucketing(win_start, win_end)
+    assert step == timedelta(days=1)
+
+    # balde 0: 1 pago (1000) + 1 placed ; balde 2: 1 pago (500) ; balde 4: 1 cancelado
+    db.add_all(
+        [
+            FinancialEvent(
+                occurred_at=win_start + timedelta(hours=2),
+                kind="placed", order_number="A1", gross_cents=1000, cost_cents=200, items_count=1,
+            ),
+            FinancialEvent(
+                occurred_at=win_start + timedelta(hours=3),
+                kind="paid", order_number="A1", gross_cents=1000, cost_cents=200, items_count=1,
+            ),
+            FinancialEvent(
+                occurred_at=win_start + timedelta(days=2, hours=1),
+                kind="paid", order_number="A2", gross_cents=500, cost_cents=100, items_count=1,
+            ),
+            FinancialEvent(
+                occurred_at=win_start + timedelta(days=4, hours=5),
+                kind="canceled", order_number="A3", gross_cents=700, cost_cents=0, items_count=1,
+            ),
+        ]
+    )
+    await db.flush()
+
+    buckets = await service.series_buckets(db, win_start, step, n)
+    assert buckets[0]["gross"] == 1000
+    assert buckets[0]["placed_count"] == 1
+    assert buckets[2]["gross"] == 500
+    assert buckets[4]["canceled_count"] == 1
+    assert 1 not in buckets and 3 not in buckets  # baldes sem evento não aparecem
+
+    s = await service.summary(db, win_start, win_end)
+    assert s["gross_cents"] == 1500
+    assert s["cost_cents"] == 300
+    assert s["net_cents"] == 1200
+    assert s["canceled_count"] == 1
+    assert sum(pt["gross_cents"] for pt in s["series"]) == 1500
+    assert len(s["series"]) == n
+    assert s["series"][1]["gross_cents"] == 0  # balde vazio preenchido com 0
+
+
+@pytest.mark.asyncio
 async def test_dashboard_uses_ledger_numbers(client, variant_with_cost, admin_token, auth_headers):
     """A dash tem que refletir o mesmo faturamento do menu Faturamento."""
     h = auth_headers(admin_token)
