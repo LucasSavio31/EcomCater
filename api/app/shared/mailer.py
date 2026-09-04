@@ -277,24 +277,44 @@ TEMPLATES: dict[str, tuple[str, str]] = {
 STATUS_PT = {"ok": "operacional", "degraded": "instável", "down": "fora do ar"}
 
 
-async def admin_notify_email(db: AsyncSession) -> str:
-    """E-mail que recebe os alertas do lojista (novo pedido, anomalia de saúde).
+async def _smtp_from_email(db: AsyncSession) -> str:
+    row = await db.get(SmtpSettings, 1)
+    return ((row.from_email if row else None) or settings.smtp_from_email or "").strip().lower()
 
-    Preferência: a conta de administrador (super admin) → qualquer admin ativo
-    → remetente do SMTP → ADMIN_EMAIL do .env.
+
+async def admin_notify_email(db: AsyncSession) -> str:
+    """E-mail que recebe os alertas de SISTEMA do lojista (saúde, backup, digest).
+
+    Preferência: conta de administrador ativa → ADMIN_EMAIL do .env.
+    NUNCA devolve o endereço remetente do SMTP (senão o e-mail cai na própria
+    caixa de envio e vira ruído).
     """
     from app.modules.admin.models import AdminUser
 
+    frm = await _smtp_from_email(db)
     admin = await db.scalar(
         select(AdminUser)
         .where(AdminUser.is_active.is_(True))
         .order_by((AdminUser.role == "super_admin").desc(), AdminUser.created_at.asc())
         .limit(1)
     )
-    if admin and admin.email:
+    if admin and admin.email and admin.email.strip().lower() != frm:
         return admin.email
-    conf = await _smtp_conf(db)
-    return conf.get("from_email") or settings.admin_email or settings.smtp_from_email
+    env = (settings.admin_email or "").strip()
+    return env if env.lower() != frm else ""
+
+
+async def order_notify_email(db: AsyncSession) -> str:
+    """Destinatário do aviso de PEDIDO para o lojista.
+
+    Regra do lojista: só a "cópia oculta" configurada (order_bcc) recebe aviso
+    de pedido. Sem ela, cai no admin ativo — nunca no remetente do SMTP.
+    """
+    row = await db.get(SmtpSettings, 1)
+    bcc = ((row.order_bcc or "").strip() if row else "")
+    if bcc:
+        return bcc
+    return await admin_notify_email(db)
 
 
 async def _smtp_conf(db: AsyncSession) -> dict:
@@ -449,6 +469,9 @@ async def send(
 ) -> bool:
     """`attachments`: lista de (filename, data, maintype, subtype), ex.:
     ("fatura.pdf", b"...", "application", "pdf")."""
+    if not (to or "").strip():
+        logger.info("e-mail '%s' ignorado: sem destinatário", template)
+        return False
     conf = await _smtp_conf(db)
     et = await _email_theme(db)
 

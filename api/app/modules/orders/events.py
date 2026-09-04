@@ -181,7 +181,7 @@ async def _on_created(payload: dict) -> None:
             )
 
         async def _admin_email() -> None:
-            admin_to = await mailer.admin_notify_email(db)
+            admin_to = await mailer.order_notify_email(db)
             await mailer.send(
                 db, to=admin_to, template="admin_order_created", order_id=str(order.id),
                 context={
@@ -219,7 +219,7 @@ async def _alert_store_owner(order_id: str, number: str | None, failures: list[s
     """E-mail de erro ao lojista (sessão própria, best-effort)."""
     try:
         async with SessionLocal() as db:
-            admin_to = await mailer.admin_notify_email(db)
+            admin_to = await mailer.order_notify_email(db)
             body = "".join(f"<li>{f}</li>" for f in failures)
             await mailer.send(
                 db,
