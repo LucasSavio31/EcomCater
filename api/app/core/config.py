@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # agendador interno da recuperação de carrinho (roda no processo da API)
     recovery_scheduler_enabled: bool = True
     recovery_scheduler_interval_seconds: int = 300
+    # fila de reenvio de e-mail (SMTP offline não bloqueia a compra)
+    email_retry_enabled: bool = True
+    email_retry_interval_seconds: int = 120
     # token para o cron externo disparar o backup agendado
     system_cron_token: str = "dev-system-token"
 

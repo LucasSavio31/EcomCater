@@ -9,6 +9,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Integer,
+    LargeBinary,
     SmallInteger,
     String,
     Text,
@@ -123,10 +124,16 @@ class EmailLog(UUIDPKMixin, Base):
     to_email: Mapped[str] = mapped_column(String(200), index=True)
     template: Mapped[str] = mapped_column(String(80))
     subject: Mapped[str] = mapped_column(String(300))
-    status: Mapped[str] = mapped_column(String(10))  # sent | failed
+    status: Mapped[str] = mapped_column(String(10))  # sent | queued | failed
     error: Mapped[str | None] = mapped_column(Text)
     order_id: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # fila de reenvio: quando o SMTP está fora, a mensagem fica 'queued' com o
+    # RFC822 cru e um agendador tenta de novo (backoff) até 'sent' ou 'failed'.
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    raw_message: Mapped[bytes | None] = mapped_column(LargeBinary)
 
 
 class PasswordReset(UUIDPKMixin, Base):

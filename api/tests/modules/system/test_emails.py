@@ -151,3 +151,40 @@ async def test_status_change_email_has_summary_and_status(client, product):
         assert f"<b>{label}</b>" in html  # linha de status
         assert "R$ 60.00" in html  # total no resumo
         assert "PAC" in html
+
+
+@pytest.mark.asyncio
+async def test_smtp_offline_queues_and_retry_sends(db, monkeypatch):
+    """SMTP fora do ar: mailer.send enfileira (não levanta) e o retry manda
+    quando o serviço volta."""
+    from datetime import UTC, datetime
+
+    from app.shared import mailer
+
+    # 1) força o "SMTP offline" no envio normal
+    async def _down(conf, msg):  # noqa: ANN001
+        return "Connection refused"
+
+    monkeypatch.setattr(mailer, "_smtp_send", _down)
+    monkeypatch.setattr(mailer.settings, "api_env", "prod")  # sai do bypass de teste
+
+    ok = await mailer.send(db, to="fila@test.example", template="__test__", context={"message": "x"})
+    await db.flush()
+    assert ok is True  # não bloqueia quem chamou
+    row = await db.scalar(
+        select(EmailLog).where(EmailLog.to_email == "fila@test.example").order_by(EmailLog.created_at.desc())
+    )
+    assert row.status == "queued"
+    assert row.raw_message and row.attempts == 1
+
+    # 2) SMTP "volta" -> o retry envia
+    async def _up(conf, msg):  # noqa: ANN001
+        return None
+
+    monkeypatch.setattr(mailer, "_smtp_send", _up)
+    row.next_attempt_at = datetime.now(UTC)  # vence o backoff
+    await db.flush()
+    res = await mailer.retry_queued(db)
+    assert res["sent"] == 1
+    await db.refresh(row)
+    assert row.status == "sent" and row.sent_at is not None

@@ -4,9 +4,10 @@ Registra cada envio em `email_log`. Usado pelos subscribers de eventos de pedido
 """
 from __future__ import annotations
 
+import email.policy
 import logging
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 
 import aiosmtplib
@@ -467,29 +468,17 @@ async def send(
         msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=fname)
 
     status, error = "sent", None
+    now = datetime.now(UTC)
     if settings.api_env == "test":
         # não abre conexão SMTP real na suíte; só registra o EmailLog
         pass
     else:
-        # porta 465 = TLS implícito (use_ssl); 587 = STARTTLS (use_tls).
-        # aiosmtplib recusa os dois juntos, então escolhe um.
-        if conf.get("use_ssl") or conf["port"] == 465:
-            tls_kwargs = {"use_tls": True}
-        else:
-            tls_kwargs = {"start_tls": bool(conf["use_tls"])}
-        try:
-            await aiosmtplib.send(
-                msg,
-                hostname=conf["host"],
-                port=conf["port"],
-                username=conf["username"] or None,
-                password=conf["password"] or None,
-                timeout=15,
-                **tls_kwargs,
-            )
-        except Exception as exc:  # noqa: BLE001
-            status, error = "failed", str(exc)[:400]
-            logger.warning("falha ao enviar e-mail '%s' para %s: %s", template, to, error)
+        error = await _smtp_send(conf, msg)
+        if error:
+            # SMTP fora do ar / recusou: NÃO propaga — a mensagem entra na fila
+            # e um agendador tenta de novo. Nunca trava quem chamou (checkout).
+            status = "queued"
+            logger.warning("e-mail '%s' p/ %s enfileirado (SMTP: %s)", template, to, error)
 
     db.add(
         EmailLog(
@@ -499,10 +488,90 @@ async def send(
             status=status,
             error=error,
             order_id=order_id,
-            created_at=datetime.now(UTC),
+            created_at=now,
+            sent_at=now if status == "sent" else None,
+            attempts=1 if status != "sent" else 0,
+            next_attempt_at=(now + timedelta(seconds=90)) if status == "queued" else None,
+            raw_message=msg.as_bytes() if status == "queued" else None,
         )
     )
-    return status == "sent"
+    return status in ("sent", "queued")
+
+
+async def _smtp_send(conf: dict, msg: EmailMessage) -> str | None:
+    """Envia via SMTP. Devolve None em sucesso ou a mensagem de erro (curta)."""
+    # porta 465 = TLS implícito (use_ssl); 587 = STARTTLS (use_tls).
+    # aiosmtplib recusa os dois juntos, então escolhe um.
+    if conf.get("use_ssl") or conf["port"] == 465:
+        tls_kwargs = {"use_tls": True}
+    else:
+        tls_kwargs = {"start_tls": bool(conf["use_tls"])}
+    try:
+        await aiosmtplib.send(
+            msg,
+            hostname=conf["host"],
+            port=conf["port"],
+            username=conf["username"] or None,
+            password=conf["password"] or None,
+            timeout=10,
+            **tls_kwargs,
+        )
+        return None
+    except Exception as exc:  # noqa: BLE001
+        return str(exc)[:400]
+
+
+async def retry_queued(db: AsyncSession, limit: int = 25) -> dict:
+    """Reprocessa a fila de e-mails (status='queued' e prazo vencido). Chamada
+    pelo agendador `email_retry`. Backoff exponencial até 1h; desiste após 8
+    tentativas (status='failed')."""
+    now = datetime.now(UTC)
+    rows = list(
+        await db.scalars(
+            select(EmailLog)
+            .where(
+                EmailLog.status == "queued",
+                (EmailLog.next_attempt_at.is_(None)) | (EmailLog.next_attempt_at <= now),
+            )
+            .order_by(EmailLog.created_at)
+            .limit(limit)
+        )
+    )
+    if not rows:
+        return {"sent": 0, "still_queued": 0, "failed": 0}
+
+    conf = await _smtp_conf(db)
+    sent = failed = 0
+    for row in rows:
+        if not row.raw_message:
+            row.status, row.error = "failed", "sem corpo para reenviar"
+            failed += 1
+            continue
+        try:
+            msg = email.message_from_bytes(row.raw_message, policy=email.policy.default)
+        except Exception as exc:  # noqa: BLE001
+            row.status, row.error = "failed", f"corpo inválido: {exc}"[:400]
+            failed += 1
+            continue
+        err = await _smtp_send(conf, msg)  # type: ignore[arg-type]
+        row.attempts = (row.attempts or 0) + 1
+        if err is None:
+            row.status, row.error, row.sent_at = "sent", None, now
+            row.next_attempt_at = None
+            sent += 1
+        elif row.attempts >= 8:
+            row.status, row.error = "failed", err
+            failed += 1
+        else:
+            row.error = err
+            row.next_attempt_at = now + timedelta(
+                seconds=min(3600, 60 * (2 ** (row.attempts - 1)))
+            )
+    await db.commit()
+    still = sum(1 for r in rows if r.status == "queued")
+    if sent or failed:
+        logger.info("fila de e-mail: %s enviados, %s desistidos, %s pendentes", sent, failed, still)
+    return {"sent": sent, "still_queued": still, "failed": failed}
 
 
 async def send_test(db: AsyncSession, to: str) -> dict:

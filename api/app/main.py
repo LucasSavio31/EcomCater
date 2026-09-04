@@ -38,6 +38,7 @@ async def lifespan(_: FastAPI):
     # agendadores internos (rodam no processo da API, trava de worker único)
     from app.modules.cart_recovery import scheduler as recovery_scheduler
     from app.modules.shipping import scheduler as me_tracking_scheduler
+    from app.modules.system import email_retry as email_retry_scheduler
     from app.modules.system import health_scheduler
     from app.modules.system import scheduler as backup_scheduler
 
@@ -45,6 +46,7 @@ async def lifespan(_: FastAPI):
     me_tracking_scheduler.start()
     health_scheduler.start()
     recovery_scheduler.start()
+    email_retry_scheduler.start()
     try:
         yield
     finally:
@@ -52,6 +54,7 @@ async def lifespan(_: FastAPI):
         await me_tracking_scheduler.stop()
         await health_scheduler.stop()
         await recovery_scheduler.stop()
+        await email_retry_scheduler.stop()
 
 
 def create_app() -> FastAPI:
