@@ -125,11 +125,14 @@ async def test_card_declined_then_retry(client, catalog):
             },
         },
     )
-    # cobrança criada, mas recusada -> pedido cancelado
-    assert declined.status_code == 200
-    assert declined.json()["status"] in ("failed",)
+    # cobrança recusada -> HTTP != 2xx (senão o front, que só olha `response.ok`,
+    # levaria o cliente pra tela de "obrigado" achando que o pagamento passou)
+    # e o pedido fica cancelado, com o motivo visível em `payment_status`.
+    assert declined.status_code == 402
+    assert declined.json()["error"]["code"] == "payment_error"
     cancelled = (await client.get(f"/api/orders/{order['number']}", params={"email": "joao@test.example"})).json()
     assert cancelled["status"] == "canceled"
+    assert cancelled["payment_status"] == "failed"
 
 
 @pytest.mark.asyncio

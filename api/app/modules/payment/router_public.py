@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -20,13 +20,17 @@ DbDep = Annotated[AsyncSession, Depends(get_db)]
 async def charge(
     body: ChargeIn,
     db: DbDep,
+    background: BackgroundTasks,
     _rl: Annotated[None, Depends(rate_limit("20/minute", scope="pay-charge"))],
 ):
+    # e-mail de confirmação + fatura em PDF rodam DEPOIS da resposta — o cliente
+    # não fica esperando SMTP/PDF pra saber se o cartão foi aprovado.
     payment = await service.create_charge(
         db,
         order_number=body.order_number,
         method=body.method,
         card=body.card.model_dump() if body.card else None,
+        background=background,
     )
     return service.charge_out(payment, body.order_number)
 

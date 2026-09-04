@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,8 +63,10 @@ async def list_payments(db: DbDep, _: AdminDep, order_number: str | None = None)
 
 
 @router.post("/refund/{order_number}")
-async def refund(order_number: str, body: RefundIn, db: DbDep, _: AdminRoleDep) -> dict:
-    return await service.refund(db, order_number, body.amount_cents)
+async def refund(
+    order_number: str, body: RefundIn, db: DbDep, _: AdminRoleDep, background: BackgroundTasks
+) -> dict:
+    return await service.refund(db, order_number, body.amount_cents, background=background)
 
 
 @router.get("/webhook-events")
@@ -86,7 +88,9 @@ async def webhook_events(db: DbDep, _: AdminDep) -> list[dict]:
 
 
 @router.post("/webhook-events/{event_id}/reprocess")
-async def reprocess(event_id: str, db: DbDep, _: AdminRoleDep) -> dict:
+async def reprocess(
+    event_id: str, db: DbDep, _: AdminRoleDep, background: BackgroundTasks
+) -> dict:
     import uuid
 
     evt = await db.get(PaymentWebhookEvent, uuid.UUID(event_id))
@@ -96,4 +100,6 @@ async def reprocess(event_id: str, db: DbDep, _: AdminRoleDep) -> dict:
         raise NotFoundError("Evento não encontrado.")
     evt.processed_at = None
     await db.flush()
-    return await service.handle_webhook(db, evt.provider, {}, b"", evt.payload_json or {})
+    return await service.handle_webhook(
+        db, evt.provider, {}, b"", evt.payload_json or {}, background=background
+    )

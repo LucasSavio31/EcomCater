@@ -51,6 +51,12 @@ const PAYMENT_LABEL: Record<string, { text: string; tone: string }> = {
   failed: { text: 'Pagamento não autorizado', tone: 'text-danger' },
 };
 
+// Estados finais: para de sondar o status e mostra a mensagem definitiva. Sem
+// isto, um pagamento recusado DEPOIS que o cliente já estava na tela de
+// obrigado (webhook assíncrono do cartão/Pix) ficava preso em "Aguardando
+// pagamento" pra sempre — a sondagem só sabia reconhecer "paid".
+const TERMINAL_STATUSES = new Set(['paid', 'failed', 'canceled', 'refunded']);
+
 export function ThankYouView() {
   const params = useSearchParams();
   const number = params.get('pedido') ?? '';
@@ -105,17 +111,19 @@ export function ThankYouView() {
     return () => timers.forEach(window.clearTimeout);
   }, [number, load]);
 
-  // Enquanto pendente, refaz o polling do status por até ~2 min.
+  // Enquanto pendente, refaz o polling do status por até ~2 min — para sozinho
+  // assim que chega a um status final (pago, recusado, cancelado, estornado).
   useEffect(() => {
-    if (!paymentStatus || paymentStatus === 'paid') return;
+    if (!paymentStatus || TERMINAL_STATUSES.has(paymentStatus)) return;
     let ticks = 0;
     const id = window.setInterval(async () => {
       ticks += 1;
       const res = await checkoutApi.paymentStatus(number);
-      if (res.ok) setPaymentStatus(res.data.payment_status);
-      if ((res.ok && res.data.payment_status === 'paid') || ticks >= 24) {
+      const next = res.ok ? res.data.payment_status : null;
+      if (next) setPaymentStatus(next);
+      if ((next && TERMINAL_STATUSES.has(next)) || ticks >= 24) {
         window.clearInterval(id);
-        if (res.ok && res.data.payment_status === 'paid') void load();
+        if (next === 'paid') void load(); // recarrega o pedido pra refletir o pagamento (rastreio etc.)
       }
     }, 5000);
     return () => window.clearInterval(id);
@@ -152,7 +160,10 @@ export function ThankYouView() {
   const boletoUrl = charge.current?.boleto_url ?? null;
   const boletoBarcode = charge.current?.boleto_barcode ?? null;
   const boletoBarcodeImg = charge.current?.boleto_barcode_data_uri ?? null;
-  const isPaid = (paymentStatus ?? order.payment_status) === 'paid';
+  const currentStatus = paymentStatus ?? order.payment_status;
+  const isPaid = currentStatus === 'paid';
+  const isFailed = currentStatus === 'failed' || currentStatus === 'canceled';
+  const isPending = !isPaid && !isFailed && currentStatus !== 'refunded';
 
   function copyPix() {
     if (!pixCode) return;
@@ -193,15 +204,21 @@ export function ThankYouView() {
         <span className="text-sm text-text-muted">Pedido</span>
         <span className="text-2xl font-semibold">#{order.number}</span>
         <span className={`text-sm font-medium ${status.tone}`}>{status.text}</span>
-        {!isPaid && (
+        {isPending && (
           <span className="text-xs text-text-muted">
             Esta página atualiza sozinha quando o pagamento for confirmado.
+          </span>
+        )}
+        {isFailed && (
+          <span className="text-xs text-text-muted">
+            O pagamento não foi aprovado e o pedido foi cancelado — nenhum valor foi cobrado.
+            Para tentar de novo, faça uma nova compra.
           </span>
         )}
       </Card>
 
       {/* Instruções de pagamento */}
-      {!isPaid && pixCode && (
+      {isPending && pixCode && (
         <Card variant="outline" className="flex flex-col items-center gap-3 text-center">
           <h2 className="text-base font-semibold">Pague com PIX</h2>
           <p className="text-sm text-text-muted">
@@ -222,7 +239,7 @@ export function ThankYouView() {
         </Card>
       )}
 
-      {!isPaid && (boletoUrl || boletoBarcode) && (
+      {isPending && (boletoUrl || boletoBarcode) && (
         <Card variant="outline" className="flex flex-col gap-3">
           <h2 className="text-base font-semibold">Boleto bancário</h2>
           {boletoBarcodeImg && (

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, Query
 from fastapi import status as http_status
 from fastapi.responses import Response
 from sqlalchemy import select
@@ -177,11 +177,12 @@ async def delete_order(
 
 @router.post("/{number}/status", response_model=OrderOut)
 async def change_status(
-    number: str, body: StatusChangeIn, db: DbDep, admin: EditorDep
+    number: str, body: StatusChangeIn, db: DbDep, admin: EditorDep, background: BackgroundTasks
 ) -> dict:
     order = await service.get_by_number(db, number)
     order = await service.transition(
-        db, order, body.status, actor_type="admin", actor_id=str(admin.id), message=body.message
+        db, order, body.status, actor_type="admin", actor_id=str(admin.id), message=body.message,
+        background=background,
     )
     return service.to_out(await service._load(db, order.id))
 
@@ -222,7 +223,9 @@ async def melhor_envio_label(
 
 
 @router.post("/bulk-status")
-async def bulk_status(body: BulkStatusIn, db: DbDep, admin: EditorDep) -> dict:
+async def bulk_status(
+    body: BulkStatusIn, db: DbDep, admin: EditorDep, background: BackgroundTasks
+) -> dict:
     """Muda o status de vários pedidos de uma vez. Devolve o resultado por pedido."""
     results: list[dict] = []
     for number in body.numbers:
@@ -230,7 +233,7 @@ async def bulk_status(body: BulkStatusIn, db: DbDep, admin: EditorDep) -> dict:
             order = await service.get_by_number(db, number)
             await service.transition(
                 db, order, body.status, actor_type="admin", actor_id=str(admin.id),
-                message=body.message,
+                message=body.message, background=background,
             )
             results.append({"number": number, "ok": True})
         except Exception as exc:  # noqa: BLE001

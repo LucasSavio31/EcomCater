@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
+from fastapi import BackgroundTasks
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -363,6 +364,7 @@ _ORDER_STATUSES = (
 async def transition(
     db: AsyncSession, order: Order, new_status: str, *, actor_type: str = "admin",
     actor_id: str | None = None, message: str | None = None,
+    background: BackgroundTasks | None = None,
 ) -> Order:
     if new_status not in _ORDER_STATUSES:
         raise ValidationError(f"Status inválido: {new_status}.")
@@ -400,17 +402,26 @@ async def transition(
         message=message, actor_type=actor_type, actor_id=actor_id,
     )
     # commit ANTES de emitir: os subscribers de `order.status_changed` (e-mail
-    # ao cliente com o novo status + resumo + rastreio) abrem a própria sessão
-    # e precisam enxergar o status/rastreio JÁ gravados.
+    # ao cliente com o novo status + resumo + rastreio, fatura em PDF) abrem a
+    # própria sessão e precisam enxergar o status/rastreio JÁ gravados.
     await db.commit()
-    await emit(
-        "order.status_changed",
-        {"order_id": str(order.id), "status": new_status, "from_status": prev},
-    )
+    status_payload = {"order_id": str(order.id), "status": new_status, "from_status": prev}
     # "pago" tem seu próprio evento (e-mail de pagamento confirmado + fatura PDF).
     # Só o `order.paid` manda esse e-mail — `order.status_changed` não duplica.
-    if new_status == "paid" and prev != "paid":
-        await emit("order.paid", {"order_id": str(order.id), "number": order.number})
+    fire_paid = new_status == "paid" and prev != "paid"
+    paid_payload = {"order_id": str(order.id), "number": order.number}
+    # SMTP/PDF não podem prender a resposta de quem chamou (webhook do gateway,
+    # cobrança no checkout, painel do admin) — se veio um BackgroundTasks, os
+    # e-mails saem DEPOIS da resposta; sem ele (chamada interna/scheduler),
+    # dispara na hora como antes.
+    if background is not None:
+        background.add_task(emit, "order.status_changed", status_payload)
+        if fire_paid:
+            background.add_task(emit, "order.paid", paid_payload)
+    else:
+        await emit("order.status_changed", status_payload)
+        if fire_paid:
+            await emit("order.paid", paid_payload)
     return order
 
 
@@ -441,11 +452,16 @@ async def _restore_stock(db: AsyncSession, order: Order) -> None:
                 v.stock_qty += it.quantity
 
 
-async def finalize_paid(db: AsyncSession, order: Order) -> Order:
+async def finalize_paid(
+    db: AsyncSession, order: Order, *, background: BackgroundTasks | None = None
+) -> Order:
     """Chamado pelo webhook de pagamento quando o pagamento confirma."""
     if order.status == "pending_payment":
-        await transition(db, order, "paid", actor_type="system", message="Pagamento confirmado")
-        await transition(db, order, "processing", actor_type="system")
+        await transition(
+            db, order, "paid", actor_type="system", message="Pagamento confirmado",
+            background=background,
+        )
+        await transition(db, order, "processing", actor_type="system", background=background)
     # redime cupom (idempotente)
     if order.coupon_id:
         from app.modules.promotions import service as promo

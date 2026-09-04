@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from fastapi import BackgroundTasks
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -76,7 +78,10 @@ def _gateway(cfg: PaymentConfig) -> PaymentGateway:
     raise DomainError(f"Provedor de pagamento desconhecido: {cfg.active_provider}")
 
 
-async def create_charge(db: AsyncSession, *, order_number: str, method: str, card: dict | None) -> Payment:
+async def create_charge(
+    db: AsyncSession, *, order_number: str, method: str, card: dict | None,
+    background: BackgroundTasks | None = None,
+) -> Payment:
     cfg = await load_config(db)
     if method not in ("credit_card", "pix", "boleto"):
         raise ValidationError("Método de pagamento inválido.")
@@ -116,8 +121,26 @@ async def create_charge(db: AsyncSession, *, order_number: str, method: str, car
         db.add(payment)
     await db.flush()
 
-    await _apply_status(db, order, payment, charge.status, source="charge")
+    await _apply_status(db, order, payment, charge.status, source="charge", background=background)
+    if payment.status == "failed":
+        # o cartão foi recusado NA HORA (resposta síncrona do gateway) — devolve
+        # erro HTTP (o front só nota "pagamento não autorizado" se a chamada
+        # não vier com 2xx; um 200 com status "failed" no corpo passava batido
+        # e o cliente caía na tela de "obrigado" com o pedido cancelado).
+        raise PaymentError(
+            _decline_message(charge) or "Pagamento recusado pela operadora do cartão."
+        )
     return payment
+
+
+def _decline_message(charge) -> str | None:
+    """Melhor mensagem de recusa disponível na resposta do gateway."""
+    raw = charge.raw or {}
+    for key in ("text", "message", "status_text", "reason", "decline_reason"):
+        v = raw.get(key)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return None
 
 
 def _parse_dt(v: str | None):
@@ -129,7 +152,10 @@ def _parse_dt(v: str | None):
         return None
 
 
-async def _apply_status(db: AsyncSession, order: Order, payment: Payment, normalized: str, *, source: str) -> None:
+async def _apply_status(
+    db: AsyncSession, order: Order, payment: Payment, normalized: str, *, source: str,
+    background: BackgroundTasks | None = None,
+) -> None:
     action = _ORDER_ACTION.get(normalized)
     if normalized == "paid":
         if payment.status == "paid" and order.payment_status == "paid":
@@ -138,23 +164,38 @@ async def _apply_status(db: AsyncSession, order: Order, payment: Payment, normal
         if not payment.paid_at:
             payment.paid_at = datetime.now(UTC)
         order.payment_status = "paid"
-        await orders_service.finalize_paid(db, await orders_service._load(db, order.id))
+        await orders_service.finalize_paid(
+            db, await orders_service._load(db, order.id), background=background
+        )
     elif action == "cancel":
         payment.status = "failed"
         if order.status == "pending_payment":
-            await orders_service.transition(db, order, "canceled", actor_type="system", message=f"Pagamento não concluído ({source})")
+            # sem isto, `order.payment_status` ficava para sempre em "pending"
+            # numa recusa assíncrona (webhook) — a página de obrigado nunca via
+            # o pagamento como recusado, só ficava "aguardando" indefinidamente.
+            order.payment_status = "failed"
+            await orders_service.transition(
+                db, order, "canceled", actor_type="system",
+                message=f"Pagamento não concluído ({source})", background=background,
+            )
     elif action == "refund":
         payment.status = "refunded" if normalized == "refunded" else "chargeback"
         order.payment_status = payment.status
         if order.status not in ("refunded", "canceled"):
             try:
-                await orders_service.transition(db, order, "refunded", actor_type="system", message=f"{normalized} ({source})")
+                await orders_service.transition(
+                    db, order, "refunded", actor_type="system",
+                    message=f"{normalized} ({source})", background=background,
+                )
             except ValidationError:
                 order.status = "refunded"
     await db.flush()
 
 
-async def handle_webhook(db: AsyncSession, provider: str, headers: dict, raw_body: bytes, body: dict) -> dict:
+async def handle_webhook(
+    db: AsyncSession, provider: str, headers: dict, raw_body: bytes, body: dict,
+    *, background: BackgroundTasks | None = None,
+) -> dict:
     cfg = await load_config(db)
     gateway = _gateway(cfg)
     if gateway.slug != provider and provider not in _PROVIDERS:
@@ -184,6 +225,27 @@ async def handle_webhook(db: AsyncSession, provider: str, headers: dict, raw_bod
             created_at=datetime.now(UTC),
         )
         db.add(evt)
+        try:
+            await db.flush()
+        except IntegrityError:
+            # concorrência: dois envios do MESMO evento quase simultâneos —
+            # o outro já gravou a linha (constraint `idempotency`). Descarta
+            # esta tentativa e trata como duplicado/já-em-processamento.
+            await db.rollback()
+            dup = await db.scalar(
+                select(PaymentWebhookEvent).where(
+                    PaymentWebhookEvent.provider == provider,
+                    PaymentWebhookEvent.provider_event_id == result.provider_event_id,
+                )
+            )
+            if dup and dup.processed_at is not None:
+                return {"duplicate": True}
+            evt = dup
+            if evt is None:
+                # não deveria acontecer (a constraint garante que a linha existe);
+                # melhor sair sem processar do que estourar com AttributeError.
+                logger.error("webhook %s: colisão de idempotência sem linha encontrada", provider)
+                return {"ignored": True}
     evt.signature_valid = signature_valid
     evt.payload_json = body
     await db.flush()
@@ -219,7 +281,9 @@ async def handle_webhook(db: AsyncSession, provider: str, headers: dict, raw_bod
 
     if result.status:
         payment.provider_payload_json = {**(payment.provider_payload_json or {}), "webhook": body}
-        await _apply_status(db, order, payment, result.status, source="webhook")
+        await _apply_status(
+            db, order, payment, result.status, source="webhook", background=background
+        )
 
     evt.order_id = order.id
     evt.processed_at = datetime.now(UTC)
@@ -242,7 +306,10 @@ async def get_status(db: AsyncSession, order_number: str) -> dict:
     }
 
 
-async def refund(db: AsyncSession, order_number: str, amount_cents: int | None) -> dict:
+async def refund(
+    db: AsyncSession, order_number: str, amount_cents: int | None,
+    *, background: BackgroundTasks | None = None,
+) -> dict:
     cfg = await load_config(db)
     order = await orders_service.get_by_number(db, order_number)
     payment = await db.scalar(
@@ -257,7 +324,10 @@ async def refund(db: AsyncSession, order_number: str, amount_cents: int | None) 
     order.payment_status = "refunded"
     if order.status not in ("refunded", "canceled"):
         try:
-            await orders_service.transition(db, order, "refunded", actor_type="admin", message="Reembolso")
+            await orders_service.transition(
+                db, order, "refunded", actor_type="admin", message="Reembolso",
+                background=background,
+            )
         except ValidationError:
             order.status = "refunded"
     await db.flush()
