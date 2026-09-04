@@ -445,6 +445,7 @@ async def get_smtp(db: DbDep, _: Annotated[AdminUser, Depends(require_role("admi
         "use_ssl": row.use_ssl,
         "from_email": row.from_email,
         "from_name": row.from_name,
+        "order_bcc": row.order_bcc,
         "configured": bool(row.host),
         # nunca devolve a senha; só diz se há uma salva (o painel mostra •••• fixo)
         "password_set": bool(row.password_enc),
@@ -461,9 +462,9 @@ async def update_smtp(payload: dict, db: DbDep, _: Annotated[AdminUser, Depends(
     if not row:
         row = SmtpSettings(id=1)
         db.add(row)
-    for k in ("host", "port", "username", "use_tls", "use_ssl", "from_email", "from_name"):
+    for k in ("host", "port", "username", "use_tls", "use_ssl", "from_email", "from_name", "order_bcc"):
         if k in payload:
-            setattr(row, k, payload[k])
+            setattr(row, k, (payload[k] or None) if k == "order_bcc" else payload[k])
     # o painel manda a senha só quando o usuário realmente digitou outra; o
     # placeholder de bolinhas nunca chega aqui como senha nova.
     pwd = payload.get("password")

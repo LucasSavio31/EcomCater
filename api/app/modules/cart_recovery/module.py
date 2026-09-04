@@ -347,8 +347,16 @@ async def recovery_stats(db: DbDep, _: AdminDep) -> dict:
 
 @admin_router.get("/carts")
 async def list_carts(db: DbDep, _: AdminDep) -> list[dict]:
+    # Não lista compras diretas: carrinho que já foi recuperado SEM nenhum
+    # e-mail de recuperação disparado = o cliente comprou na sequência do
+    # checkout, não é caso de "carrinho abandonado".
     rows = await db.scalars(
-        select(AbandonedCart).order_by(AbandonedCart.created_at.desc()).limit(500)
+        select(AbandonedCart)
+        .where(
+            (AbandonedCart.recovered_at.is_(None)) | (AbandonedCart.reminders_sent > 0)
+        )
+        .order_by(AbandonedCart.created_at.desc())
+        .limit(500)
     )
     return [
         {

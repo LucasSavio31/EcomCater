@@ -299,6 +299,7 @@ async def admin_notify_email(db: AsyncSession) -> str:
 
 async def _smtp_conf(db: AsyncSession) -> dict:
     row = await db.get(SmtpSettings, 1)
+    order_bcc = ((row.order_bcc or "").strip() if row else "") or None
     if row and row.host:
         return {
             "host": row.host,
@@ -309,6 +310,7 @@ async def _smtp_conf(db: AsyncSession) -> dict:
             "use_ssl": row.use_ssl,
             "from_email": row.from_email or settings.smtp_from_email,
             "from_name": row.from_name or settings.smtp_from_name,
+            "order_bcc": order_bcc,
         }
     return {
         "host": settings.smtp_host,
@@ -319,7 +321,26 @@ async def _smtp_conf(db: AsyncSession) -> dict:
         "use_ssl": False,
         "from_email": settings.smtp_from_email,
         "from_name": settings.smtp_from_name,
+        "order_bcc": order_bcc,
     }
+
+
+# e-mails de PEDIDO que o cliente recebe (a cópia oculta é só desses — nunca
+# dos e-mails de conta/acesso nem dos avisos internos do lojista).
+_CUSTOMER_ORDER_TEMPLATES = frozenset(
+    {
+        "order_created",
+        "payment_confirmed",
+        "payment_failed",
+        "order_processing",
+        "order_tracking_available",
+        "order_shipped",
+        "order_in_transit",
+        "order_delivered",
+        "order_canceled",
+        "order_refunded",
+    }
+)
 
 
 _EMAIL_DEFAULTS = {
@@ -456,6 +477,9 @@ async def send(
     msg = EmailMessage()
     msg["From"] = f"{from_name} <{conf['from_email']}>"
     msg["To"] = to
+    # cópia oculta configurável dos e-mails de pedido (não vai nos de conta)
+    if conf.get("order_bcc") and template in _CUSTOMER_ORDER_TEMPLATES:
+        msg["Bcc"] = conf["order_bcc"]
     msg["Subject"] = subject
     # fallback texto puro = versão sem tags do corpo (é o que o Gmail mostra na
     # prévia da lista; nunca "este e-mail requer HTML").

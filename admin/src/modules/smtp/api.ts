@@ -11,6 +11,8 @@ export interface SmtpConfig {
   use_ssl: boolean;
   from_email: string;
   from_name: string;
+  /** cópia oculta (Bcc) que recebe todos os e-mails de PEDIDO do cliente. */
+  order_bcc: string | null;
   /** true quando já há uma senha salva no servidor (a senha em si nunca vem). */
   password_set?: boolean;
 }

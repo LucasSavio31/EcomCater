@@ -93,6 +93,14 @@ export default function SmtpPage() {
               <Input label="Remetente (e-mail)" value={cfg.from_email} onChange={(e) => set('from_email', e.target.value)} />
               <Input label="Remetente (nome)" value={cfg.from_name} onChange={(e) => set('from_name', e.target.value)} />
             </div>
+            <Input
+              label="Cópia oculta dos e-mails de pedido (Bcc)"
+              type="email"
+              placeholder="copia@empresa.com"
+              value={cfg.order_bcc ?? ''}
+              onChange={(e) => set('order_bcc', e.target.value)}
+              hint="Recebe uma cópia de TODOS os e-mails de pedido que o cliente recebe (recebido, pago, em separação, enviado, entregue, cancelado, reembolso). Não recebe os e-mails de conta/acesso. Deixe em branco para desligar."
+            />
             <div className="flex flex-wrap gap-4">
               <Checkbox label="Usar TLS (porta 587 / STARTTLS)" checked={cfg.use_tls} onChange={(v) => set('use_tls', v)} />
               <Checkbox label="Usar SSL (porta 465 / TLS implícito)" checked={cfg.use_ssl} onChange={(v) => set('use_ssl', v)} />

@@ -13,7 +13,7 @@ import {
   PageSizeSelect,
   DEFAULT_PAGE_SIZE,
 } from '@/components/date-range-filter';
-import { IconPrinter, IconTag } from '@/components/nav-icons';
+import { IconPrinter, IconTag, IconTrash } from '@/components/nav-icons';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
@@ -566,29 +566,44 @@ function PedidosPageInner() {
         error={error}
         emptyMessage="Nenhum pedido encontrado."
         onRowClick={(o) => router.push(`/pedidos/${o.number}`)}
-        rowActions={(o) => (
-          <>
-            <Link
-              href={`/pedidos/fatura?id=${o.number}`}
-              target="_blank"
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1.5 rounded-card border border-surface-border px-2.5 py-1.5 text-xs hover:border-primary"
-            >
-              <IconPrinter width={14} height={14} /> Fatura
-            </Link>
-            <Button size="sm" variant="outline" onClick={() => router.push(`/pedidos/${o.number}`)}>
-              Abrir
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-danger"
-              onClick={() => setDeleting([o.number])}
-            >
-              Excluir
-            </Button>
-          </>
-        )}
+        rowActions={(o) => {
+          const chip =
+            'inline-flex items-center gap-1 rounded-card border border-surface-border px-2 py-1 text-xs hover:border-primary';
+          return (
+            <>
+              <Link
+                href={`/pedidos/fatura?id=${o.number}`}
+                target="_blank"
+                onClick={(e) => e.stopPropagation()}
+                className={chip}
+              >
+                <IconPrinter width={13} height={13} /> Fatura
+              </Link>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/pedidos/${o.number}`);
+                }}
+                className={chip}
+              >
+                Abrir
+              </button>
+              <button
+                type="button"
+                aria-label="Excluir pedido"
+                title="Excluir"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleting([o.number]);
+                }}
+                className={`${chip} text-danger hover:border-danger`}
+              >
+                <IconTrash width={14} height={14} />
+              </button>
+            </>
+          );
+        }}
       />
 
       {data && data.total > 0 && (

@@ -124,13 +124,90 @@ async def _check_backup(db: AsyncSession) -> tuple[str, int, str]:
 
 
 async def _check_smtp(db: AsyncSession) -> tuple[str, int, str]:
-    from app.modules.admin.models import SmtpSettings
+    from app.modules.admin.models import EmailLog, SmtpSettings
 
     row = await db.get(SmtpSettings, 1)
     host = (row.host if row else None) or settings.smtp_host
+    queued = int(
+        await db.scalar(
+            select(func.count()).select_from(EmailLog).where(EmailLog.status == "queued")
+        )
+        or 0
+    )
+    suffix = f" · {queued} na fila de reenvio" if queued else ""
     if not host or host in ("mailpit", "localhost"):
-        return "degraded", 0, "usando fallback local (configure em E-mail/SMTP)"
-    return "ok", 0, f"host {host}"
+        return "degraded", 0, f"usando fallback local (configure em E-mail/SMTP){suffix}"
+    if queued > 20:
+        return "degraded", 0, f"host {host} — {queued} e-mail(s) presos na fila"
+    return "ok", 0, f"host {host}{suffix}"
+
+
+async def _check_cart_recovery(db: AsyncSession) -> tuple[str, int, str]:
+    """Agendador de recuperação de carrinho: vivo? enviando? convertendo?"""
+    from app.core.redis import redis_client
+    from app.modules.admin.models import EmailLog
+    from app.modules.cart_recovery.models import AbandonedCart, RecoveryMessage
+
+    now = datetime.now(UTC)
+    msgs = list(
+        await db.scalars(
+            select(RecoveryMessage)
+            .where(RecoveryMessage.is_active.is_(True))
+            .order_by(RecoveryMessage.position)
+        )
+    )
+    if not msgs:
+        return "degraded", 0, "nenhuma mensagem de recuperação ativa"
+
+    ttl = -2
+    try:
+        ttl = await redis_client.ttl("ecom:lock:cart-recovery-tick")
+    except Exception:  # noqa: BLE001
+        ttl = -2
+    alive = ttl is not None and ttl > 0
+
+    sent_24h = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(EmailLog)
+            .where(
+                EmailLog.template == "cart_recovery",
+                EmailLog.status.in_(("sent", "queued")),
+                EmailLog.created_at >= now - timedelta(hours=24),
+            )
+        )
+        or 0
+    )
+    conv = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(AbandonedCart)
+            .where(
+                AbandonedCart.recovered_at.is_not(None),
+                AbandonedCart.reminders_sent > 0,
+            )
+        )
+        or 0
+    )
+
+    pend = list(
+        await db.scalars(select(AbandonedCart).where(AbandonedCart.recovered_at.is_(None)))
+    )
+    overdue = sum(
+        1
+        for c in pend
+        if c.reminders_sent < len(msgs)
+        and c.created_at
+        and now >= c.created_at + timedelta(minutes=msgs[c.reminders_sent].delay_minutes)
+    )
+
+    detail = f"{sent_24h} envio(s)/24h · {overdue} vencido(s) na fila · {conv} conversão(ões) pós-e-mail"
+    if not alive and overdue > 0:
+        return "down", 0, f"agendador SEM SINAL (lock ausente) — {detail}"
+    if overdue > 5:
+        return "degraded", 0, f"fila acumulando — {detail}"
+    prefix = f"ativo (renova em {ttl}s) · " if alive else "sem carrinho pendente · "
+    return "ok", 0, prefix + detail
 
 
 async def _check_melhor_envio(db: AsyncSession) -> tuple[str, int, str]:
@@ -292,6 +369,7 @@ async def run_checks(db: AsyncSession, *, persist: bool = True) -> list[dict]:
     checks.append(("cache", "Cache / Redis", _check_cache()))
     checks.append(("storage", "Armazenamento de mídia", _check_storage()))
     checks.append(("smtp", "E-mail (SMTP)", await _check_smtp(db)))
+    checks.append(("cart_recovery", "Recuperação de carrinho", await _check_cart_recovery(db)))
     checks.append(("backup", "Backup agendado", await _check_backup(db)))
     checks.append(("melhor_envio", "API Melhor Envio", await _check_melhor_envio(db)))
     checks.append(("appmax", "API Appmax (pagamento)", await _check_appmax(db)))

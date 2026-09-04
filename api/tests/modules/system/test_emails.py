@@ -188,3 +188,31 @@ async def test_smtp_offline_queues_and_retry_sends(db, monkeypatch):
     assert res["sent"] == 1
     await db.refresh(row)
     assert row.status == "sent" and row.sent_at is not None
+
+
+@pytest.mark.asyncio
+async def test_order_bcc_only_on_customer_order_emails(db, monkeypatch):
+    from app.modules.admin.models import SmtpSettings
+    from app.shared import mailer
+
+    row = await db.get(SmtpSettings, 1) or SmtpSettings(id=1)
+    row.order_bcc = "copia@loja.example"
+    db.add(row)
+    await db.flush()
+
+    captured: list = []
+
+    async def _grab(conf, msg):  # noqa: ANN001
+        captured.append((msg.get("To"), msg.get("Bcc")))
+        return None
+
+    monkeypatch.setattr(mailer, "_smtp_send", _grab)
+    monkeypatch.setattr(mailer.settings, "api_env", "prod")
+
+    await mailer.send(db, to="cli@x.example", template="order_created", context={"number": "1"})
+    await mailer.send(db, to="adm@x.example", template="admin_order_created", context={"number": "1", "total_cents": 100})
+
+    print("CAPTURED:", captured)
+    by_to = dict(captured)
+    assert by_to["cli@x.example"] == "copia@loja.example"  # e-mail de pedido -> tem Bcc
+    assert by_to["adm@x.example"] is None  # aviso ao lojista -> sem Bcc

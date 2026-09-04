@@ -115,6 +115,9 @@ class SmtpSettings(Base):
     use_ssl: Mapped[bool] = mapped_column(Boolean, default=False)
     from_email: Mapped[str | None] = mapped_column(String(200))
     from_name: Mapped[str | None] = mapped_column(String(160))
+    # cópia oculta (Bcc) que recebe todos os e-mails de pedido do cliente
+    # (não recebe os e-mails de conta/acesso)
+    order_bcc: Mapped[str | None] = mapped_column(String(200))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
