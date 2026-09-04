@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Badge, Button, Card, Input } from '@ecom/ui';
+import { Badge, Button, Card, Input, Tooltip } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { AsyncBoundary } from '@/components/async-boundary';
 import { Select, Textarea } from '@/components/form-controls';
@@ -449,15 +449,16 @@ export default function PedidoDetalhePage() {
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold">Dados de entrega e cliente</h2>
                   {!editMode && (
-                    <button
-                      type="button"
-                      title="Editar dados"
-                      aria-label="Editar dados"
-                      onClick={() => setEditMode(true)}
-                      className="rounded-card border border-surface-border p-2 text-text hover:border-primary"
-                    >
-                      <IconEdit width={16} height={16} />
-                    </button>
+                    <Tooltip label="Editar dados">
+                      <button
+                        type="button"
+                        aria-label="Editar dados"
+                        onClick={() => setEditMode(true)}
+                        className="rounded-card border border-surface-border p-2 text-text hover:border-primary"
+                      >
+                        <IconEdit width={16} height={16} />
+                      </button>
+                    </Tooltip>
                   )}
                 </div>
 

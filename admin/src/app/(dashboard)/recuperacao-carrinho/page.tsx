@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Card, Input } from '@ecom/ui';
+import { Badge, Button, Card, Input, Tooltip } from '@ecom/ui';
 import { IconTrash } from '@/components/nav-icons';
 import { PageHeader } from '@/components/page-header';
 import { Checkbox } from '@/components/form-controls';
@@ -390,15 +390,16 @@ export default function CartRecoveryPage() {
                         {open ? '–' : '+'}
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setDel(m.id)}
-                      aria-label={`Excluir a mensagem "${m.subject}"`}
-                      title="Excluir esta mensagem"
-                      className="shrink-0 rounded-card p-2 text-text-muted hover:bg-danger/10 hover:text-danger"
-                    >
-                      <IconTrash className="h-4 w-4" />
-                    </button>
+                    <Tooltip label="Excluir esta mensagem">
+                      <button
+                        type="button"
+                        onClick={() => setDel(m.id)}
+                        aria-label={`Excluir a mensagem "${m.subject}"`}
+                        className="shrink-0 rounded-card p-2 text-text-muted hover:bg-danger/10 hover:text-danger"
+                      >
+                        <IconTrash className="h-4 w-4" />
+                      </button>
+                    </Tooltip>
                   </div>
                   {open && <div className="px-4 pb-4">{messageForm}</div>}
                 </div>

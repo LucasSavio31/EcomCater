@@ -21,3 +21,6 @@ export type { ModalProps } from './Modal';
 
 export { Accordion } from './Accordion';
 export type { AccordionProps, AccordionItem } from './Accordion';
+
+export { Tooltip } from './Tooltip';
+export type { TooltipProps, TooltipSide } from './Tooltip';

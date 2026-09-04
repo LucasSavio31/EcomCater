@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import { Button, Card, Input } from '@ecom/ui';
+import { Button, Card, Input, Tooltip } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { AsyncBoundary } from '@/components/async-boundary';
 import { Checkbox, Select, Textarea } from '@/components/form-controls';
@@ -204,15 +204,17 @@ export default function CategoriasPage() {
                   style={{ paddingLeft: `${item.depth * 1.25 + 0.5}rem` }}
                 >
                   {item.node.children.length > 0 ? (
-                    <button
-                      type="button"
-                      aria-label={expanded.has(item.node.id) ? 'Colapsar' : 'Expandir'}
-                      aria-expanded={expanded.has(item.node.id)}
-                      className="min-h-touch w-6 shrink-0 text-text-muted"
-                      onClick={() => toggle(item.node.id)}
-                    >
-                      {expanded.has(item.node.id) ? '▾' : '▸'}
-                    </button>
+                    <Tooltip label={expanded.has(item.node.id) ? 'Colapsar' : 'Expandir'}>
+                      <button
+                        type="button"
+                        aria-label={expanded.has(item.node.id) ? 'Colapsar' : 'Expandir'}
+                        aria-expanded={expanded.has(item.node.id)}
+                        className="min-h-touch w-6 shrink-0 text-text-muted"
+                        onClick={() => toggle(item.node.id)}
+                      >
+                        {expanded.has(item.node.id) ? '▾' : '▸'}
+                      </button>
+                    </Tooltip>
                   ) : (
                     <span className="w-6 shrink-0" />
                   )}
@@ -227,40 +229,48 @@ export default function CategoriasPage() {
                   <span className="hidden text-xs text-text-muted sm:inline">
                     {item.node.product_count ?? 0} prod.
                   </span>
-                  <button
-                    type="button"
-                    aria-label="Mover para cima"
-                    disabled={item.index === 0}
-                    className="min-h-touch w-6 text-text-muted disabled:opacity-30"
-                    onClick={() => void reorderSiblings(item, -1)}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Mover para baixo"
-                    disabled={item.index === item.siblings.length - 1}
-                    className="min-h-touch w-6 text-text-muted disabled:opacity-30"
-                    onClick={() => void reorderSiblings(item, 1)}
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Adicionar subcategoria"
-                    className="min-h-touch w-6 text-text-muted"
-                    onClick={() => startNew(item.node.id)}
-                  >
-                    +
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Excluir"
-                    className="min-h-touch w-6 text-text-muted hover:text-danger"
-                    onClick={() => setDeleteTarget(item.node)}
-                  >
-                    ×
-                  </button>
+                  <Tooltip label="Mover para cima">
+                    <button
+                      type="button"
+                      aria-label="Mover para cima"
+                      disabled={item.index === 0}
+                      className="min-h-touch w-6 text-text-muted disabled:opacity-30"
+                      onClick={() => void reorderSiblings(item, -1)}
+                    >
+                      ↑
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="Mover para baixo">
+                    <button
+                      type="button"
+                      aria-label="Mover para baixo"
+                      disabled={item.index === item.siblings.length - 1}
+                      className="min-h-touch w-6 text-text-muted disabled:opacity-30"
+                      onClick={() => void reorderSiblings(item, 1)}
+                    >
+                      ↓
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="Adicionar subcategoria">
+                    <button
+                      type="button"
+                      aria-label="Adicionar subcategoria"
+                      className="min-h-touch w-6 text-text-muted"
+                      onClick={() => startNew(item.node.id)}
+                    >
+                      +
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="Excluir">
+                    <button
+                      type="button"
+                      aria-label="Excluir"
+                      className="min-h-touch w-6 text-text-muted hover:text-danger"
+                      onClick={() => setDeleteTarget(item.node)}
+                    >
+                      ×
+                    </button>
+                  </Tooltip>
                 </li>
               ))}
             </ul>

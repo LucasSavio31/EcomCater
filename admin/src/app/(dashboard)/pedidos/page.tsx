@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Button, Card, Input } from '@ecom/ui';
+import { Button, Card, Input, Tooltip } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { Select } from '@/components/form-controls';
 import { StatusBadge } from '@/components/status-badge';
@@ -589,18 +589,19 @@ function PedidosPageInner() {
               >
                 Abrir
               </button>
-              <button
-                type="button"
-                aria-label="Excluir pedido"
-                title="Excluir"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleting([o.number]);
-                }}
-                className={`${chip} text-danger hover:border-danger`}
-              >
-                <IconTrash width={14} height={14} />
-              </button>
+              <Tooltip label="Excluir pedido">
+                <button
+                  type="button"
+                  aria-label="Excluir pedido"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleting([o.number]);
+                  }}
+                  className={`${chip} text-danger hover:border-danger`}
+                >
+                  <IconTrash width={14} height={14} />
+                </button>
+              </Tooltip>
             </>
           );
         }}
