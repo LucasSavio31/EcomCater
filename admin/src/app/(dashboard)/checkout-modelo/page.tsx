@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { ColorField } from '@/components/color-field';
@@ -47,10 +47,30 @@ export default function CheckoutModeloPage() {
 
   const theme = draft ?? data;
   const dirty = draft !== null;
-  const set = <K extends keyof Theme>(k: K, v: Theme[K]) => {
-    if (!theme) return;
-    setDraft({ ...theme, [k]: v });
-  };
+  // Espelho do estado atual pro `save()` nunca ler um valor defasado (o
+  // ColorField propaga com debounce — ver comentário do `set` abaixo).
+  const themeRef = useRef<Theme | null>(theme);
+  useEffect(() => {
+    themeRef.current = theme;
+  }, [theme]);
+  // `useCallback` com atualização FUNCIONAL (não fecha sobre `theme`): os
+  // campos de cor são memoizados e ignoram um `onChange` novo a cada render
+  // (senão perderiam o foco a cada tecla) — então cada um guarda o `set` de
+  // QUALQUER render passado em que foi tocado por último. Se `set` fechasse
+  // sobre `theme`, esse `set` antigo sobrescrevia o rascunho inteiro com uma
+  // foto velha ao editar um campo, apagando a edição feita nos outros campos
+  // enquanto isso (o campo B "voltava" ao editar o campo A). Com
+  // `setDraft(prev => ...)`, ele sempre parte do estado mais recente de
+  // verdade, não importa de qual render o closure veio.
+  const set = useCallback(
+    <K extends keyof Theme>(k: K, v: Theme[K]): void => {
+      setDraft((prev) => {
+        const base = prev ?? data;
+        return base ? { ...base, [k]: v } : prev;
+      });
+    },
+    [data],
+  );
 
   const [products, setProducts] = useState<{ slug: string; name: string }[]>([]);
   useEffect(() => {
@@ -60,26 +80,30 @@ export default function CheckoutModeloPage() {
   }, []);
 
   async function save() {
-    if (!theme) return;
+    // lê o espelho, não `theme` direto: se o clique em "Salvar" chegou logo
+    // depois de tocar num campo de cor, o blur já disparou o commit mas o
+    // re-render que atualizaria `theme` pode não ter acontecido ainda.
+    const current = themeRef.current ?? theme;
+    if (!current) return;
     setSaving(true);
     const body: Partial<Theme> = {
-      checkout_email_first: theme.checkout_email_first,
-      checkout_require_terms: theme.checkout_require_terms,
-      checkout_container_width_px: theme.checkout_container_width_px,
-      checkout_items_layout: theme.checkout_items_layout,
-      checkout_show_coupon: theme.checkout_show_coupon,
-      checkout_allow_qty_change: theme.checkout_allow_qty_change,
-      checkout_footer_note: theme.checkout_footer_note,
-      checkout_animated_card: theme.checkout_animated_card,
-      checkout_payment_icons_enabled: theme.checkout_payment_icons_enabled,
-      checkout_steps_enabled: theme.checkout_steps_enabled,
-      checkout_show_review: theme.checkout_show_review,
-      checkout_review_position: theme.checkout_review_position,
-      checkout_order_notes_enabled: theme.checkout_order_notes_enabled,
-      checkout_orderbump_enabled: theme.checkout_orderbump_enabled,
-      checkout_orderbump_product_id: theme.checkout_orderbump_product_id ?? '',
-      checkout_orderbump_product_ids: theme.checkout_orderbump_product_ids ?? [],
-      ...Object.fromEntries(COLOR_FIELDS.map((f) => [f.key, theme[f.key]])),
+      checkout_email_first: current.checkout_email_first,
+      checkout_require_terms: current.checkout_require_terms,
+      checkout_container_width_px: current.checkout_container_width_px,
+      checkout_items_layout: current.checkout_items_layout,
+      checkout_show_coupon: current.checkout_show_coupon,
+      checkout_allow_qty_change: current.checkout_allow_qty_change,
+      checkout_footer_note: current.checkout_footer_note,
+      checkout_animated_card: current.checkout_animated_card,
+      checkout_payment_icons_enabled: current.checkout_payment_icons_enabled,
+      checkout_steps_enabled: current.checkout_steps_enabled,
+      checkout_show_review: current.checkout_show_review,
+      checkout_review_position: current.checkout_review_position,
+      checkout_order_notes_enabled: current.checkout_order_notes_enabled,
+      checkout_orderbump_enabled: current.checkout_orderbump_enabled,
+      checkout_orderbump_product_id: current.checkout_orderbump_product_id ?? '',
+      checkout_orderbump_product_ids: current.checkout_orderbump_product_ids ?? [],
+      ...Object.fromEntries(COLOR_FIELDS.map((f) => [f.key, current[f.key]])),
     };
     const res = await appearanceApi.putTheme(body);
     setSaving(false);
