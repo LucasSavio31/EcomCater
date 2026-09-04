@@ -1,6 +1,7 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, useRef, useState } from 'react';
+import { cn } from '@ecom/ui';
 import type { AbcPoint, SeriesPoint } from '@/modules/dashboard/api';
 
 const W = 720;
@@ -47,9 +48,44 @@ export function SeriesChart({
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
   const everyN = Math.ceil(current.length / 8);
 
+  // Resumo ao passar o cursor (ou tocar, no mobile): acha o ponto mais
+  // próximo do X do ponteiro e mostra um cartão com o valor de cada série.
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [hover, setHover] = useState<number | null>(null);
+  const hoverAt = (clientX: number) => {
+    const el = svgRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0) return;
+    const relX = ((clientX - rect.left) / rect.width) * W;
+    const idx = Math.round(((relX - PAD.l) / iw) * (n - 1));
+    setHover(Math.max(0, Math.min(n - 1, idx)));
+  };
+  const curPt = hover !== null ? current[hover] : undefined;
+  const prevPt = hover !== null ? previous[hover] : undefined;
+  const tooltipLeftPct = hover !== null ? (x(hover) / W) * 100 : 0;
+  const tooltipAlign = tooltipLeftPct < 15 ? 'left' : tooltipLeftPct > 85 ? 'right' : 'center';
+
   return (
-    <div className="flex flex-col gap-2">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Gráfico do período">
+    <div className="relative flex flex-col gap-2">
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full cursor-crosshair touch-none"
+        role="img"
+        aria-label="Gráfico do período"
+        onMouseMove={(e) => hoverAt(e.clientX)}
+        onMouseLeave={() => setHover(null)}
+        onTouchStart={(e) => {
+          const t = e.touches[0];
+          if (t) hoverAt(t.clientX);
+        }}
+        onTouchMove={(e) => {
+          const t = e.touches[0];
+          if (t) hoverAt(t.clientX);
+        }}
+        onTouchEnd={() => setHover(null)}
+      >
         <defs>
           <linearGradient id={`cur-${gid}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#2563eb" stopOpacity="0.45" />
@@ -90,7 +126,51 @@ export function SeriesChart({
             </text>
           ) : null,
         )}
+
+        {hover !== null && (curPt || prevPt) && (
+          <g pointerEvents="none">
+            <line
+              x1={x(hover)} y1={PAD.t} x2={x(hover)} y2={PAD.t + ih}
+              stroke="#9ca3af" strokeWidth={1} strokeDasharray="3 3"
+            />
+            {prevPt && (
+              <circle cx={x(hover)} cy={y(prevPt.cents)} r={3.5} fill="#94a3b8" stroke="#fff" strokeWidth={1.5} />
+            )}
+            {curPt && (
+              <circle cx={x(hover)} cy={y(curPt.cents)} r={3.5} fill="#2563eb" stroke="#fff" strokeWidth={1.5} />
+            )}
+          </g>
+        )}
       </svg>
+
+      {hover !== null && (curPt || prevPt) && (
+        <div
+          className={cn(
+            'pointer-events-none absolute top-1 z-10 flex flex-col gap-1 rounded-card border',
+            'border-surface-border bg-surface px-3 py-2 text-xs shadow-lg',
+            tooltipAlign === 'left' && 'left-0',
+            tooltipAlign === 'right' && 'right-0',
+            tooltipAlign === 'center' && 'left-1/2 -translate-x-1/2',
+          )}
+        >
+          <span className="font-semibold text-text">{(curPt ?? prevPt)?.label}</span>
+          {curPt && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2.5 shrink-0 rounded-sm bg-[#2563eb]" />
+              <span className="text-text-muted">{labelCurrent}:</span>
+              <span className="font-medium text-text">{fmt(curPt.cents)}</span>
+            </span>
+          )}
+          {prevPt && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2.5 shrink-0 rounded-sm bg-[#94a3b8]" />
+              <span className="text-text-muted">{labelPrevious}:</span>
+              <span className="font-medium text-text">{fmt(prevPt.cents)}</span>
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-4 text-xs text-text-muted">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-4 rounded-sm bg-[#2563eb]" /> {labelCurrent}
