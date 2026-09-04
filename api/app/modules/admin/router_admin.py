@@ -238,6 +238,7 @@ async def dashboard(
 ):
     from datetime import UTC, datetime, timedelta
 
+    from app.modules.financial.models import FinancialEvent
     from app.modules.orders.models import Order, OrderItem, OrderNumberCounter
 
     now = datetime.now(UTC)
@@ -267,26 +268,31 @@ async def dashboard(
     def _in_window(col):
         return [col >= win_start, col <= win_end]
 
+    # --- métricas cumulativas: vêm do livro-caixa (financial_events), não da
+    # tabela `orders`. Assim faturamento/estorno/cancelamento/total de pedidos
+    # sobrevivem à exclusão de pedidos e batem com o menu Faturamento. ---------
+    def _fe_window(kind: str):
+        return [
+            FinancialEvent.kind == kind,
+            FinancialEvent.occurred_at >= win_start,
+            FinancialEvent.occurred_at <= win_end,
+        ]
+
     orders_period = await db.scalar(
-        select(func.count()).select_from(Order).where(*_in_window(Order.placed_at))
-    )
-    orders_pending = await db.scalar(
-        select(func.count()).select_from(Order).where(Order.status == "pending_payment")
+        select(func.count()).select_from(FinancialEvent).where(*_fe_window("placed"))
     )
     orders_canceled = await db.scalar(
-        select(func.count())
-        .select_from(Order)
-        .where(Order.status == "canceled", *_in_window(Order.created_at))
+        select(func.count()).select_from(FinancialEvent).where(*_fe_window("canceled"))
     )
     orders_refunded = await db.scalar(
-        select(func.count())
-        .select_from(Order)
-        .where(Order.status == "refunded", *_in_window(Order.created_at))
+        select(func.count()).select_from(FinancialEvent).where(*_fe_window("refunded"))
     )
     revenue_period = await db.scalar(
-        select(func.coalesce(func.sum(Order.grand_total_cents), 0)).where(
-            Order.payment_status == "paid", *_in_window(Order.placed_at)
-        )
+        select(func.coalesce(func.sum(FinancialEvent.gross_cents), 0)).where(*_fe_window("paid"))
+    )
+
+    orders_pending = await db.scalar(
+        select(func.count()).select_from(Order).where(Order.status == "pending_payment")
     )
 
     _to_ship_status = ("paid", "processing", "tracking_available")
@@ -322,18 +328,22 @@ async def dashboard(
             b1 = b0 + step
             if metric == "revenue":
                 val = await db.scalar(
-                    select(func.coalesce(func.sum(Order.grand_total_cents), 0)).where(
-                        Order.payment_status == "paid",
-                        Order.placed_at >= b0,
-                        Order.placed_at < b1,
+                    select(func.coalesce(func.sum(FinancialEvent.gross_cents), 0)).where(
+                        FinancialEvent.kind == "paid",
+                        FinancialEvent.occurred_at >= b0,
+                        FinancialEvent.occurred_at < b1,
                     )
                 )
             else:
-                st = "canceled" if metric == "canceled" else "refunded"
+                fk = "canceled" if metric == "canceled" else "refunded"
                 val = await db.scalar(
                     select(func.count())
-                    .select_from(Order)
-                    .where(Order.status == st, Order.created_at >= b0, Order.created_at < b1)
+                    .select_from(FinancialEvent)
+                    .where(
+                        FinancialEvent.kind == fk,
+                        FinancialEvent.occurred_at >= b0,
+                        FinancialEvent.occurred_at < b1,
+                    )
                 )
             label = b0.strftime("%d/%m") if step >= timedelta(days=1) else b0.strftime("%d/%m %Hh")
             pts.append({"label": label, "cents": int(val or 0)})

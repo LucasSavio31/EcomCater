@@ -31,6 +31,7 @@ interface GeneralState {
   is_featured: boolean;
   price: string;
   compare_at_price: string;
+  cost: string;
   pix_discount_pct: string;
   installments_max: string;
   weight_grams: string;
@@ -54,6 +55,7 @@ function toState(p: ProductDetail | null): GeneralState {
     is_featured: p?.is_featured ?? false,
     price: centsToInput(p?.price_cents ?? null),
     compare_at_price: centsToInput(p?.compare_at_price_cents ?? null),
+    cost: centsToInput(p?.cost_cents ?? null),
     pix_discount_pct: p?.pix_discount_pct != null ? String(p.pix_discount_pct) : '',
     installments_max: p?.installments_max != null ? String(p.installments_max) : '',
     weight_grams: p?.weight_grams != null ? String(p.weight_grams) : '0',
@@ -76,6 +78,7 @@ function buildPayload(s: GeneralState, status: ProductStatus): ProductInput {
     status,
     price_cents: inputToCents(s.price) ?? 0,
     compare_at_price_cents: inputToCents(s.compare_at_price),
+    cost_cents: inputToCents(s.cost),
     pix_discount_pct: s.pix_discount_pct ? Number(s.pix_discount_pct) : null,
     installments_max: s.installments_max ? Number(s.installments_max) : null,
     short_description: s.short_description.trim() || null,
@@ -355,6 +358,15 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
                 hint="Vazio = sem desconto."
                 value={state.compare_at_price}
                 onChange={(e) => set('compare_at_price', e.target.value)}
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Custo (R$)"
+                inputMode="decimal"
+                hint="Preço pago pela loja. Opcional — usado no Faturamento para calcular o líquido e a margem."
+                value={state.cost}
+                onChange={(e) => set('cost', e.target.value)}
               />
             </div>
             {(() => {

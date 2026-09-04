@@ -47,7 +47,10 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Visão geral',
-    items: [{ href: '/', label: 'Painel', icon: IconDashboard }],
+    items: [
+      { href: '/', label: 'Painel', icon: IconDashboard },
+      { href: '/faturamento', label: 'Faturamento', icon: IconAnalytics },
+    ],
   },
   {
     title: 'Catálogo',

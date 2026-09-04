@@ -56,6 +56,8 @@ class Product(UUIDPKMixin, TimestampMixin, Base):
 
     price_cents: Mapped[int] = mapped_column(Integer, default=0)
     compare_at_price_cents: Mapped[int | None] = mapped_column(Integer)
+    # custo pago pela loja (opcional) — base do lucro líquido / margem
+    cost_cents: Mapped[int | None] = mapped_column(Integer)
     pix_discount_pct: Mapped[float | None] = mapped_column(Numeric(5, 2))
     installments_max: Mapped[int | None] = mapped_column(Integer)
 

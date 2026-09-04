@@ -143,6 +143,7 @@ class ProductBase(BaseModel):
     is_featured: bool = False
     price_cents: int = 0
     compare_at_price_cents: int | None = None
+    cost_cents: int | None = None  # custo pago pela loja (opcional)
     pix_discount_pct: float | None = None
     installments_max: int | None = None
     weight_grams: int = 300
@@ -171,6 +172,7 @@ class ProductUpdateIn(BaseModel):
     is_featured: bool | None = None
     price_cents: int | None = None
     compare_at_price_cents: int | None = None
+    cost_cents: int | None = None
     pix_discount_pct: float | None = None
     installments_max: int | None = None
     weight_grams: int | None = None
@@ -214,6 +216,7 @@ class ProductDetail(BaseModel):
     is_featured: bool
     price_cents: int
     compare_at_price_cents: int | None
+    cost_cents: int | None = None  # só preenchido no contexto admin
     discount_pct: int | None
     pix_discount_pct: float | None
     installments_max: int | None

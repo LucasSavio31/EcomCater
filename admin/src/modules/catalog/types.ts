@@ -155,6 +155,7 @@ export interface ProductDetail {
   description: string | null;
   price_cents: number;
   compare_at_price_cents: number | null;
+  cost_cents: number | null;
   pix_discount_pct: number | null;
   installments_max: number | null;
   weight_grams: number;
@@ -191,6 +192,7 @@ export interface ProductInput {
   status: ProductStatus;
   price_cents: number;
   compare_at_price_cents?: number | null;
+  cost_cents?: number | null;
   pix_discount_pct?: number | null;
   installments_max?: number | null;
   brand?: string | null;

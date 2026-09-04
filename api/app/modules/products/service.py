@@ -340,8 +340,8 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
         "size_chart": size_chart,
         **({"size_chart_id": str(product.size_chart_id) if product.size_chart_id else None}
            if include_unpublished else {}),
-        # fornecedor + vínculos de categoria: só no contexto admin (nunca na loja)
-        **({"supplier": product.supplier} if include_unpublished else {}),
+        # fornecedor + custo + vínculos de categoria: só no contexto admin (nunca na loja)
+        **({"supplier": product.supplier, "cost_cents": product.cost_cents} if include_unpublished else {}),
         **({
             "category_id": str(product.category_id) if product.category_id else None,
             "extra_category_ids": extra_category_ids,
@@ -813,7 +813,7 @@ async def set_color_group(
 
 _PRODUCT_COPY_FIELDS = (
     "short_description", "description", "brand", "supplier", "category_id",
-    "price_cents", "compare_at_price_cents", "pix_discount_pct", "installments_max",
+    "price_cents", "compare_at_price_cents", "cost_cents", "pix_discount_pct", "installments_max",
     "weight_grams", "length_mm", "width_mm", "height_mm",
     "seo_title", "seo_description",
 )

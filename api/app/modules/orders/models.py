@@ -88,6 +88,8 @@ class OrderItem(UUIDPKMixin, Base):
     supplier: Mapped[str | None] = mapped_column(String(160))  # snapshot p/ PDF/etiqueta
     image_key: Mapped[str | None] = mapped_column(String(300))
     unit_price_cents: Mapped[int] = mapped_column(Integer)
+    # snapshot do custo unitário (Product.cost_cents no momento do pedido)
+    unit_cost_cents: Mapped[int | None] = mapped_column(Integer)
     quantity: Mapped[int] = mapped_column(Integer)
     total_cents: Mapped[int] = mapped_column(Integer)
 

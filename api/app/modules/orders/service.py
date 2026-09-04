@@ -214,6 +214,7 @@ async def create_from_cart(
                 supplier=product.supplier if product else None,
                 image_key=img_key,
                 unit_price_cents=item.unit_price_cents,
+                unit_cost_cents=(product.cost_cents if product else None),
                 quantity=item.quantity,
                 total_cents=item.unit_price_cents * item.quantity,
             )
