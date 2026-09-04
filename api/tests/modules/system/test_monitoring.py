@@ -55,6 +55,60 @@ async def test_daily_digest_email(db, admin_token):
 
 
 @pytest.mark.asyncio
+async def test_health_alert_fires_on_degraded_to_down_transition(db, admin_token):
+    """Antes só alertava se um dos lados fosse "ok" — uma piora de "instável"
+    pra "fora do ar" ficava muda. `admin_token` cria o super admin -> destino
+    do alerta."""
+    from app.modules.system.models import HealthSample
+    from app.modules.system.service_health import _bucket_start, run_checks
+
+    prev_bucket = _bucket_start(datetime.now(UTC) - timedelta(minutes=20))
+    db.add(
+        HealthSample(
+            service_key="backup", status="degraded", latency_ms=0,
+            detail="nenhum backup executado ainda", checked_at=prev_bucket,
+        )
+    )
+    # backup automático FALHOU de verdade agora -> vira "down"
+    db.add(BackupSettings(id=1, auto_enabled=True, frequency="diario", last_status="error"))
+    await db.commit()
+
+    await run_checks(db, persist=True)
+
+    log = (
+        await db.execute(
+            select(EmailLog)
+            .where(EmailLog.template == "health_alert")
+            .order_by(EmailLog.created_at.desc())
+        )
+    ).scalars().first()
+    assert log is not None
+    assert log.to_email == "root@test.example"
+
+
+@pytest.mark.asyncio
+async def test_run_checks_isolates_one_failing_check(db, monkeypatch):
+    """Uma exceção inesperada em UM check não pode derrubar a amostragem (nem
+    o alerta) dos outros — antes, uma falha aqui cancelava `run_checks`
+    inteiro no meio, sem persistir nem alertar nada daquele ciclo."""
+    from app.modules.system import service_health
+
+    async def _boom(_db):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(service_health, "_check_backup", _boom)
+
+    results = await service_health.run_checks(db, persist=False)
+    by_key = {r["key"]: r for r in results}
+
+    assert by_key["backup"]["status"] == "down"
+    assert "kaboom" in by_key["backup"]["detail"]
+    # os outros checks (inclusive os que também tocam o banco) seguiram normais
+    assert by_key["database"]["status"] in ("ok", "degraded")
+    assert by_key["api"]["status"] == "ok"
+
+
+@pytest.mark.asyncio
 async def test_health_alert_template_renders():
     from app.shared.mailer import TEMPLATES, _env
 

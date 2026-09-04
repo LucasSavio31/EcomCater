@@ -2,6 +2,8 @@
 guarda um histórico curto por serviço (para as barrinhas tipo Uptime Kuma)."""
 from __future__ import annotations
 
+import inspect
+import logging
 import os
 import shutil
 import time
@@ -13,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.modules.system.models import HealthSample
+
+logger = logging.getLogger("system.health")
 
 # quantas amostras mostrar em cada barra
 HISTORY_LEN = 40
@@ -332,16 +336,39 @@ def _check_containers() -> list[tuple[str, str, tuple[str, int, str]]]:
     return out
 
 
+async def _safe_check(db: AsyncSession, key: str, fn) -> tuple[str, int, str]:
+    """Isola a falha de UM check: uma exceção inesperada vira "down" em vez de
+    derrubar `run_checks` inteiro — sem isto, um bug/instabilidade em UM
+    serviço cancelava a amostragem (e o ALERTA) de TODOS os outros no mesmo
+    ciclo, inclusive os que já estavam com problema. Também limpa a
+    transação: uma query que falhou deixa o Postgres recusando qualquer outra
+    até o rollback (mesmo cuidado que `_check_migrations` já tinha sozinho)."""
+    try:
+        result = fn()
+        if inspect.isawaitable(result):
+            result = await result
+        return result
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("check de saúde '%s' falhou", key)
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return "down", 0, f"falha ao verificar: {type(exc).__name__}: {exc}"[:280]
+
+
 async def _alert_health_transition(
     db: AsyncSession, key: str, label: str, status: str, detail: str
 ) -> None:
-    """Manda e-mail ao admin quando um serviço entra em problema ou normaliza."""
+    """Manda e-mail ao admin quando um serviço muda de estado (entra em
+    problema, piora/melhora entre instável e fora do ar, ou normaliza)."""
     try:
         from app.shared import mailer
 
-        await mailer.send(
+        to = await mailer.admin_notify_email(db)
+        ok = await mailer.send(
             db,
-            to=await mailer.admin_notify_email(db),
+            to=to,
             template="health_alert",
             context={
                 "bad": status != "ok",
@@ -351,12 +378,13 @@ async def _alert_health_transition(
                 "when": datetime.now(UTC).strftime("%d/%m/%Y %H:%M UTC"),
             },
         )
+        if not ok:
+            logger.warning(
+                "alerta de saúde de '%s' não foi enviado (sem destinatário admin configurado)",
+                key,
+            )
     except Exception:  # noqa: BLE001
-        import logging
-
-        logging.getLogger("system.health").warning(
-            "falha ao enviar alerta de saúde de %s", key, exc_info=True
-        )
+        logger.warning("falha ao enviar alerta de saúde de %s", key, exc_info=True)
 
 
 async def run_checks(db: AsyncSession, *, persist: bool = True) -> list[dict]:
@@ -364,16 +392,40 @@ async def run_checks(db: AsyncSession, *, persist: bool = True) -> list[dict]:
     checks: list[tuple[str, str, tuple[str, int, str]]] = []
 
     checks.append(("api", "API", ("ok", 0, "respondendo")))
-    checks.append(("database", "Banco de dados", await _check_database(db)))
-    checks.append(("migrations", "Migrations", await _check_migrations(db)))
-    checks.append(("cache", "Cache / Redis", _check_cache()))
-    checks.append(("storage", "Armazenamento de mídia", _check_storage()))
-    checks.append(("smtp", "E-mail (SMTP)", await _check_smtp(db)))
-    checks.append(("cart_recovery", "Recuperação de carrinho", await _check_cart_recovery(db)))
-    checks.append(("backup", "Backup agendado", await _check_backup(db)))
-    checks.append(("melhor_envio", "API Melhor Envio", await _check_melhor_envio(db)))
-    checks.append(("appmax", "API Appmax (pagamento)", await _check_appmax(db)))
-    checks.extend(_check_containers())
+    checks.append((
+        "database", "Banco de dados",
+        await _safe_check(db, "database", lambda: _check_database(db)),
+    ))
+    checks.append((
+        "migrations", "Migrations",
+        await _safe_check(db, "migrations", lambda: _check_migrations(db)),
+    ))
+    checks.append(("cache", "Cache / Redis", await _safe_check(db, "cache", _check_cache)))
+    checks.append((
+        "storage", "Armazenamento de mídia",
+        await _safe_check(db, "storage", _check_storage),
+    ))
+    checks.append(("smtp", "E-mail (SMTP)", await _safe_check(db, "smtp", lambda: _check_smtp(db))))
+    checks.append((
+        "cart_recovery", "Recuperação de carrinho",
+        await _safe_check(db, "cart_recovery", lambda: _check_cart_recovery(db)),
+    ))
+    checks.append((
+        "backup", "Backup agendado",
+        await _safe_check(db, "backup", lambda: _check_backup(db)),
+    ))
+    checks.append((
+        "melhor_envio", "API Melhor Envio",
+        await _safe_check(db, "melhor_envio", lambda: _check_melhor_envio(db)),
+    ))
+    checks.append((
+        "appmax", "API Appmax (pagamento)",
+        await _safe_check(db, "appmax", lambda: _check_appmax(db)),
+    ))
+    try:
+        checks.extend(_check_containers())
+    except Exception:  # noqa: BLE001
+        logger.exception("check de containers falhou")
 
     # Escalonamento: 2 leituras "instável" (laranja) seguidas + esta ainda
     # instável e sem voltar ao normal => "fora do ar" (vermelho). Uma vez
@@ -429,10 +481,13 @@ async def run_checks(db: AsyncSession, *, persist: bool = True) -> list[dict]:
                     checked_at=bucket,
                 )
             )
-            # alerta por e-mail na TRANSIÇÃO (ok -> problema, ou problema -> ok).
-            # `last2[key][0]` é o status persistido mais recente.
+            # alerta por e-mail em QUALQUER mudança de estado — ok->problema,
+            # problema->ok, e também degradado<->fora do ar (antes só disparava
+            # se um dos dois lados fosse "ok": uma piora de "instável" pra
+            # "fora do ar" — ou uma melhora de "fora do ar" pra "instável" —
+            # ficava muda). `last2[key][0]` é o status persistido mais recente.
             prev_status = (last2.get(key) or [None])[0]
-            if prev_status and prev_status != status and (prev_status == "ok" or status == "ok"):
+            if prev_status and prev_status != status:
                 await _alert_health_transition(db, key, next(
                     (lb for k, lb, _ in checks if k == key), key), status, detail)
         await db.commit()  # histórico é permanente — nunca podamos
