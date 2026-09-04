@@ -64,6 +64,7 @@ export default async function CheckoutPage() {
             allowQtyChange: theme.checkout_allow_qty_change,
             buttonColor: theme.checkout_button_color,
             buttonTextColor: theme.checkout_button_text_color,
+            buttonBorderColor: theme.checkout_button_border_color,
             stepActiveBg: theme.checkout_step_active_bg_color,
             stepActiveText: theme.checkout_step_active_text_color,
             animatedCard: theme.checkout_animated_card,

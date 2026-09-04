@@ -20,6 +20,9 @@
   --color-btn-bg: var(--color-primary);
   --color-btn-fg: var(--color-primary-fg);
   --color-btn-hover: var(--color-primary);
+  /* Igual ao fundo por padrão -> borda invisível até o tema definir uma cor
+     diferente (loja) ou até aqui mesmo, no admin, que não usa esse tema. */
+  --color-btn-border: var(--color-btn-bg);
 
   /* Caixas de variação (PDP) + botão "calcular frete". */
   --color-var-bg: #fde047;

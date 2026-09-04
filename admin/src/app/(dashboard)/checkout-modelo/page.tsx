@@ -20,8 +20,10 @@ type ColorKey =
   | 'checkout_header_text_color'
   | 'checkout_step_button_color'
   | 'checkout_step_button_text_color'
+  | 'checkout_step_button_border_color'
   | 'checkout_button_color'
   | 'checkout_button_text_color'
+  | 'checkout_button_border_color'
   | 'checkout_step_active_bg_color'
   | 'checkout_step_active_text_color'
   | 'checkout_accent_color';
@@ -32,8 +34,10 @@ const COLOR_FIELDS: { key: ColorKey; label: string }[] = [
   { key: 'checkout_header_text_color', label: 'Texto do cabeçalho' },
   { key: 'checkout_step_button_color', label: 'Fundo dos botões de etapa (Continuar/Calcular)' },
   { key: 'checkout_step_button_text_color', label: 'Texto dos botões de etapa' },
+  { key: 'checkout_step_button_border_color', label: 'Borda dos botões de etapa' },
   { key: 'checkout_button_color', label: 'Fundo do botão finalizar' },
   { key: 'checkout_button_text_color', label: 'Texto do botão finalizar' },
+  { key: 'checkout_button_border_color', label: 'Borda do botão finalizar' },
   { key: 'checkout_step_active_bg_color', label: 'Fundo da etapa ativa (1,2,3,4)' },
   { key: 'checkout_step_active_text_color', label: 'Texto da etapa ativa' },
   { key: 'checkout_accent_color', label: 'Destaque (seleção, links)' },
@@ -285,6 +289,9 @@ export default function CheckoutModeloPage() {
 
             <Card variant="outline" className="flex flex-col gap-4">
               <h2 className="text-lg font-semibold">Cores do checkout</h2>
+              <p className="text-xs text-text-muted">
+                A borda dos botões fica igual ao fundo (invisível) até você escolher uma cor diferente.
+              </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 {COLOR_FIELDS.map((f) => (
                   <ColorField

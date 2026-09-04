@@ -23,6 +23,7 @@ export function CheckoutThemeStyle({ theme }: { theme: ThemeSettings }) {
     '--color-btn-bg': theme.checkout_step_button_color,
     '--color-btn-fg': theme.checkout_step_button_text_color,
     '--color-btn-hover': theme.checkout_step_button_color,
+    '--color-btn-border': theme.checkout_step_button_border_color,
   };
   const css =
     `.checkout-scope{${Object.entries(vars)

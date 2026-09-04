@@ -16,7 +16,7 @@ from app.shared.storage import storage
 
 _THEME_FIELDS = {
     "primary_color", "secondary_color", "accent_color", "text_color", "bg_color",
-    "button_bg_color", "button_text_color", "button_hover_color",
+    "button_bg_color", "button_text_color", "button_hover_color", "button_border_color",
     "variation_bg_color", "variation_text_color", "variation_border_color",
     "header_bg_color", "header_text_color", "header_max_width_px",
     "footer_bg_color", "footer_text_color",
@@ -35,9 +35,11 @@ _THEME_FIELDS = {
     "checkout_email_first", "checkout_require_terms", "checkout_container_width_px", "checkout_items_layout",
     "checkout_show_coupon", "checkout_allow_qty_change", "checkout_footer_note",
     "checkout_bg_color", "checkout_header_bg_color", "checkout_header_text_color",
-    "checkout_button_color", "checkout_button_text_color", "checkout_accent_color",
+    "checkout_button_color", "checkout_button_text_color", "checkout_button_border_color",
+    "checkout_accent_color",
     "checkout_footer_bg_color", "checkout_footer_text_color",
     "checkout_step_button_color", "checkout_step_button_text_color",
+    "checkout_step_button_border_color",
     "checkout_step_active_bg_color", "checkout_step_active_text_color",
     "checkout_animated_card", "checkout_payment_icons_enabled", "checkout_steps_enabled",
     "checkout_show_review", "checkout_review_position", "checkout_order_notes_enabled",

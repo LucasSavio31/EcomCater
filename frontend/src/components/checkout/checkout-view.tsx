@@ -92,6 +92,8 @@ export interface CheckoutSettings {
   allowQtyChange: boolean;
   buttonColor: string;
   buttonTextColor: string;
+  /** Borda do botão finalizar — igual ao fundo por padrão (some visualmente). */
+  buttonBorderColor: string;
   /** Bolinha da etapa ativa (1,2,3,4) na linha do tempo. */
   stepActiveBg: string;
   stepActiveText: string;
@@ -122,6 +124,7 @@ const DEFAULT_SETTINGS: CheckoutSettings = {
   allowQtyChange: true,
   buttonColor: '#111111',
   buttonTextColor: '#FFFFFF',
+  buttonBorderColor: '#111111',
   stepActiveBg: '#111111',
   stepActiveText: '#FFFFFF',
   animatedCard: true,
@@ -728,7 +731,11 @@ export function CheckoutView({
               type="submit"
               size="lg"
               className="uppercase tracking-wide sm:w-40"
-              style={{ background: settings.buttonColor, color: settings.buttonTextColor }}
+              style={{
+                background: settings.buttonColor,
+                color: settings.buttonTextColor,
+                borderColor: settings.buttonBorderColor,
+              }}
             >
               Continuar
             </Button>
@@ -1274,7 +1281,11 @@ export function CheckoutView({
             block
             loading={submitting}
             onClick={() => void submit()}
-            style={{ background: settings.buttonColor, color: settings.buttonTextColor }}
+            style={{
+              background: settings.buttonColor,
+              color: settings.buttonTextColor,
+              borderColor: settings.buttonBorderColor,
+            }}
           >
             {method === 'pix'
               ? 'Gerar PIX'

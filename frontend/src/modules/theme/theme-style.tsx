@@ -12,6 +12,7 @@ export function themeToCssVars(theme: ThemeSettings): Record<string, string> {
     '--color-btn-bg': theme.button_bg_color,
     '--color-btn-fg': theme.button_text_color,
     '--color-btn-hover': theme.button_hover_color,
+    '--color-btn-border': theme.button_border_color,
     '--color-var-bg': theme.variation_bg_color,
     '--color-var-fg': theme.variation_text_color,
     '--color-var-border': theme.variation_border_color,

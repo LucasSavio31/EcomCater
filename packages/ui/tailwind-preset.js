@@ -38,6 +38,7 @@ module.exports = {
           DEFAULT: 'var(--color-btn-bg)',
           fg: 'var(--color-btn-fg)',
           hover: 'var(--color-btn-hover)',
+          border: 'var(--color-btn-border)',
         },
         var: {
           DEFAULT: 'var(--color-var-bg)',

@@ -17,6 +17,7 @@ const BUTTONS: ColorFieldDef[] = [
   { key: 'button_bg_color', label: 'Fundo do botão' },
   { key: 'button_text_color', label: 'Texto do botão' },
   { key: 'button_hover_color', label: 'Botão (hover)' },
+  { key: 'button_border_color', label: 'Borda do botão' },
 ];
 const HEADER: ColorFieldDef[] = [
   { key: 'header_bg_color', label: 'Fundo do menu superior' },
@@ -43,7 +44,10 @@ export function ColorsTab() {
             />
           </SectionCard>
 
-          <SectionCard title="Botões (geral)" hint="Vale para os botões da loja inteira.">
+          <SectionCard
+            title="Botões (geral)"
+            hint="Vale para os botões da loja inteira, incluindo o Comprar da página do produto. A borda fica igual ao fundo (invisível) até você escolher uma cor diferente."
+          >
             <Input
               label="Raio das bordas (px)"
               inputMode="numeric"

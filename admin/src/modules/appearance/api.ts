@@ -15,6 +15,7 @@ export interface Theme {
   button_bg_color: string;
   button_text_color: string;
   button_hover_color: string;
+  button_border_color: string;
   /** Caixas de variação (PDP) + botão "calcular frete" */
   variation_bg_color: string;
   variation_text_color: string;
@@ -88,11 +89,13 @@ export interface Theme {
   checkout_header_text_color: string;
   checkout_button_color: string;
   checkout_button_text_color: string;
+  checkout_button_border_color: string;
   checkout_accent_color: string;
   checkout_footer_bg_color: string;
   checkout_footer_text_color: string;
   checkout_step_button_color: string;
   checkout_step_button_text_color: string;
+  checkout_step_button_border_color: string;
   checkout_step_active_bg_color: string;
   checkout_step_active_text_color: string;
   /** Newsletter (menu "Newsletter") */

@@ -37,6 +37,11 @@ class ThemeSettings(Base):
     button_bg_color: Mapped[str] = mapped_column(String(9), default="#111111")
     button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF")
     button_hover_color: Mapped[str] = mapped_column(String(9), default="#DC2626")
+    # borda do botão "Comprar" — igual ao fundo por padrão (some visualmente);
+    # some visualmente até o lojista escolher uma cor diferente do fundo.
+    button_border_color: Mapped[str] = mapped_column(
+        String(9), default="#111111", server_default="#111111", nullable=False
+    )
 
     # caixas de variação (numeração/cor na PDP) + botão "calcular frete"
     variation_bg_color: Mapped[str] = mapped_column(String(9), default="#FDE047", server_default="#FDE047", nullable=False)
@@ -187,12 +192,20 @@ class ThemeSettings(Base):
     checkout_header_text_color: Mapped[str] = mapped_column(String(9), default="#111827", server_default="#111827", nullable=False)
     checkout_button_color: Mapped[str] = mapped_column(String(9), default="#FFC400", server_default="#111111", nullable=False)
     checkout_button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    # borda do botão "Finalizar" — igual ao fundo por padrão (some visualmente)
+    checkout_button_border_color: Mapped[str] = mapped_column(
+        String(9), default="#FFC400", server_default="#FFC400", nullable=False
+    )
     checkout_accent_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
     checkout_footer_bg_color: Mapped[str] = mapped_column(String(9), default="#111827", server_default="#111827", nullable=False)
     checkout_footer_text_color: Mapped[str] = mapped_column(String(9), default="#E5E7EB", server_default="#E5E7EB", nullable=False)
     # botões "Avançar"/"Calcular frete" das etapas
     checkout_step_button_color: Mapped[str] = mapped_column(String(9), default="#FFC400", server_default="#111111", nullable=False)
     checkout_step_button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    # borda dos botões de etapa — igual ao fundo por padrão (some visualmente)
+    checkout_step_button_border_color: Mapped[str] = mapped_column(
+        String(9), default="#FFC400", server_default="#FFC400", nullable=False
+    )
     # bolinha da etapa ativa (1,2,3,4) na linha do tempo
     checkout_step_active_bg_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
     checkout_step_active_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
