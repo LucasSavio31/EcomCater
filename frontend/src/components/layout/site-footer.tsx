@@ -3,6 +3,7 @@ import Image from 'next/image';
 import type { ThemeSettings } from '@/modules/theme';
 import type { Menu } from '@/modules/menus/types';
 import { resolveMediaUrl } from '@/lib/media';
+import { resolveCopyright } from '@/lib/copyright';
 import { FooterSealsBar } from './footer-seals';
 import { SocialIcons, type SocialLink } from './social-icons';
 
@@ -24,12 +25,6 @@ const FALLBACK_LINKS: { label: string; url: string }[] = [
   { label: 'Fale conosco', url: '/pagina/fale-conosco' },
 ];
 
-function formatCnpj(raw?: string | null): string {
-  const d = (raw ?? '').replace(/\D/g, '');
-  if (d.length !== 14) return (raw ?? '').trim();
-  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
-}
-
 /** Renderiza o texto e transforma "Fale conosco" num link para a página. */
 function renderNote(text: string) {
   return text.split(/(Fale conosco)/i).map((part, i) =>
@@ -45,15 +40,7 @@ function renderNote(text: string) {
 
 export function SiteFooter({ theme, menu, storeName, socialLinks = [] }: SiteFooterProps) {
   const logo = resolveMediaUrl(theme.logo_url);
-  const legalName = theme.legal_name || theme.store_name || storeName;
-  const cnpj = formatCnpj(theme.cnpj);
-  const copyright = (theme.footer_copyright_text || '')
-    .replace(/\{ano\}/g, String(new Date().getFullYear()))
-    .replace(/\{loja\}/g, legalName)
-    .replace(/\{cnpj\}/g, cnpj || '—')
-    // limpa "CNPJ —." quando não há CNPJ cadastrado
-    .replace(/\s*[—-]?\s*CNPJ\s*—\.?/i, '.')
-    .trim();
+  const copyright = resolveCopyright(theme, storeName);
   const columns = (
     menu && menu.items.length > 0
       ? menu.items

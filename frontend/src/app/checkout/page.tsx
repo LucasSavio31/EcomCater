@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { getTheme } from '@/modules/theme';
 import { getProduct } from '@/modules/catalog/api';
 import { CheckoutView, type OrderBumpProduct } from '@/components/checkout/checkout-view';
-import { CheckoutHeader } from '@/components/checkout/checkout-chrome';
+import { CheckoutFooter, CheckoutHeader } from '@/components/checkout/checkout-chrome';
 import { CheckoutThemeStyle } from '@/components/checkout/checkout-theme-style';
 import { buildMetadata, SITE_NAME } from '@/lib/seo';
 
@@ -45,12 +45,12 @@ export default async function CheckoutPage() {
   );
 
   return (
-    <div className="checkout-scope min-h-dvh bg-bg">
+    <div className="checkout-scope flex min-h-dvh flex-col bg-bg">
       <CheckoutThemeStyle theme={theme} />
       <CheckoutHeader theme={theme} storeName={theme.store_name ?? SITE_NAME} />
       <main
         id="conteudo"
-        className="mx-auto w-full px-4 py-6 sm:py-8"
+        className="mx-auto w-full flex-1 px-4 py-6 sm:py-8"
         style={{ maxWidth: `${theme.checkout_container_width_px}px` }}
       >
         <h1 className="mb-4 text-xl font-semibold sm:text-2xl">Finalizar Compra</h1>
@@ -75,6 +75,7 @@ export default async function CheckoutPage() {
           }}
         />
       </main>
+      <CheckoutFooter theme={theme} storeName={theme.store_name ?? SITE_NAME} />
     </div>
   );
 }

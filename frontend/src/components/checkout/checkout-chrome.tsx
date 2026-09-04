@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { resolveMediaUrl } from '@/lib/media';
+import { resolveCopyright } from '@/lib/copyright';
 import type { ThemeSettings } from '@/modules/theme';
 import { FooterSealsBar } from '@/components/layout/footer-seals';
 
@@ -37,12 +38,14 @@ export function CheckoutHeader({ theme, storeName }: { theme: ThemeSettings; sto
 }
 
 /**
- * Rodapé do checkout: por decisão de projeto, aparece **somente os selos**
- * (Formas de Pagamento / Entrega / Loja Segura). Nada de menu ou copyright.
+ * Rodapé do checkout: por decisão de projeto, sem menu de páginas — só os
+ * selos (Formas de Pagamento / Entrega / Loja Segura), a nota opcional e o
+ * copyright (mesmo texto/dados do rodapé da loja).
  */
-export function CheckoutFooter({ theme }: { theme: ThemeSettings }) {
+export function CheckoutFooter({ theme, storeName }: { theme: ThemeSettings; storeName?: string }) {
   const note = theme.checkout_footer_note?.trim();
-  if (!theme.footer_seals_enabled && !note) return null;
+  const copyright = resolveCopyright(theme, storeName);
+  if (!theme.footer_seals_enabled && !note && !copyright) return null;
   return (
     <footer className="mt-10 border-t border-surface-border bg-footer text-footer-fg">
       <div
@@ -51,6 +54,7 @@ export function CheckoutFooter({ theme }: { theme: ThemeSettings }) {
       >
         {theme.footer_seals_enabled && <FooterSealsBar seals={theme.footer_seals_json} />}
         {note && <p className="mt-4 text-center text-xs text-footer-fg/70">{note}</p>}
+        {copyright && <p className="mt-4 text-center text-xs text-footer-fg/70">{copyright}</p>}
       </div>
     </footer>
   );
