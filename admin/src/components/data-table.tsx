@@ -78,7 +78,10 @@ export function DataTable<T>({
           <li key={rowKey(row)}>
             <Card
               variant="outline"
-              className={cn('flex flex-col gap-2', onRowClick && 'cursor-pointer hover:bg-bg-subtle')}
+              className={cn(
+                'group flex flex-col gap-2',
+                onRowClick && 'cursor-pointer hover:bg-bg-subtle',
+              )}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
               {columns.map((col) => (
@@ -92,7 +95,15 @@ export function DataTable<T>({
                       {col.mobileLabel ?? (typeof col.header === 'string' ? col.header : '')}
                     </span>
                   )}
-                  <span className={cn('text-sm', col.primary && 'font-semibold')}>{col.cell(row)}</span>
+                  <span
+                    className={cn(
+                      'text-sm',
+                      col.primary && 'font-semibold',
+                      col.primary && onRowClick && 'group-hover:underline',
+                    )}
+                  >
+                    {col.cell(row)}
+                  </span>
                 </div>
               ))}
               {rowActions && <div className="flex flex-wrap gap-2 pt-1">{rowActions(row)}</div>}
@@ -119,7 +130,7 @@ export function DataTable<T>({
               <tr
                 key={rowKey(row)}
                 className={cn(
-                  'border-b border-surface-border last:border-0',
+                  'group border-b border-surface-border last:border-0',
                   onRowClick && 'cursor-pointer hover:bg-bg-subtle',
                 )}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -130,7 +141,11 @@ export function DataTable<T>({
                     className={cn('px-3 py-2 align-middle', col.className)}
                     onClick={col.stopRowClick ? (e) => e.stopPropagation() : undefined}
                   >
-                    {col.cell(row)}
+                    {col.primary && onRowClick ? (
+                      <span className="group-hover:underline">{col.cell(row)}</span>
+                    ) : (
+                      col.cell(row)
+                    )}
                   </td>
                 ))}
                 {rowActions && (
