@@ -2,7 +2,6 @@ import Image from 'next/image';
 import { resolveMediaUrl } from '@/lib/media';
 import { resolveCopyright } from '@/lib/copyright';
 import type { ThemeSettings } from '@/modules/theme';
-import { FooterSealsBar } from '@/components/layout/footer-seals';
 
 /** Cabeçalho mínimo do checkout: logo + selo "Compra segura". */
 export function CheckoutHeader({ theme, storeName }: { theme: ThemeSettings; storeName: string }) {
@@ -38,24 +37,16 @@ export function CheckoutHeader({ theme, storeName }: { theme: ThemeSettings; sto
 }
 
 /**
- * Rodapé do checkout: por decisão de projeto, sem menu de páginas — só os
- * selos (Formas de Pagamento / Entrega / Loja Segura), a nota opcional e o
- * copyright (mesmo texto/dados do rodapé da loja).
+ * Rodapé do checkout: por decisão de projeto, SEM os selos/menu do rodapé da
+ * loja (aqui é só o fluxo de pagamento) — só o texto puro do copyright,
+ * puxado dos mesmos dados/template da loja.
  */
 export function CheckoutFooter({ theme, storeName }: { theme: ThemeSettings; storeName?: string }) {
-  const note = theme.checkout_footer_note?.trim();
   const copyright = resolveCopyright(theme, storeName);
-  if (!theme.footer_seals_enabled && !note && !copyright) return null;
+  if (!copyright) return null;
   return (
-    <footer className="mt-10 border-t border-surface-border bg-footer text-footer-fg">
-      <div
-        className="mx-auto px-4 py-6"
-        style={{ maxWidth: `${theme.checkout_container_width_px}px` }}
-      >
-        {theme.footer_seals_enabled && <FooterSealsBar seals={theme.footer_seals_json} />}
-        {note && <p className="mt-4 text-center text-xs text-footer-fg/70">{note}</p>}
-        {copyright && <p className="mt-4 text-center text-xs text-footer-fg/70">{copyright}</p>}
-      </div>
+    <footer className="mt-10 px-4 py-6 text-center text-xs text-text-muted">
+      {copyright}
     </footer>
   );
 }
