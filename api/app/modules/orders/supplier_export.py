@@ -138,16 +138,18 @@ def build_supplier_xlsx(
 
         for num, grp in groupby(entries, key=lambda e: e[0]["number"]):
             grp_list = list(grp)
-            if len(pedidos_distintos) > 1:
-                sep = ws.max_row + 1
-                ws.append([f"Pedido {num}"])
-                ws.merge_cells(start_row=sep, start_column=1, end_row=sep, end_column=len(HEADERS))
-                ws[f"A{sep}"].font = order_font
-                ws[f"A{sep}"].fill = order_fill
+            # cabeçalho do pedido (única linha que carrega o número)
+            sep = ws.max_row + 1
+            ws.append([f"Pedido {num}"])
+            ws.merge_cells(start_row=sep, start_column=1, end_row=sep, end_column=len(HEADERS))
+            ws[f"A{sep}"].font = order_font
+            ws[f"A{sep}"].fill = order_fill
             for _o, it in grp_list:
                 cor, numero = _cor_numero(it)
                 obs = "Pedido com mais de um item" if multi_item[num] else ""
-                ws.append([num, int(it.get("quantity") or 0), it.get("name", ""), numero, cor, obs])
+                # coluna "Pedido" fica vazia nos itens — o número já está no
+                # cabeçalho "Pedido NNNN" acima (não repete).
+                ws.append(["", int(it.get("quantity") or 0), it.get("name", ""), numero, cor, obs])
                 for c in ws[ws.max_row]:
                     c.border = border
                     c.alignment = wrap
