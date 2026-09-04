@@ -10,6 +10,77 @@ from app.modules.admin.models import EmailLog
 from app.modules.system.models import BackupSettings
 
 
+def _local(y, m, d, h, minute=0):
+    from zoneinfo import ZoneInfo
+
+    return datetime(y, m, d, h, minute, tzinfo=ZoneInfo("America/Sao_Paulo"))
+
+
+def test_is_due_first_run_only_at_target_hour():
+    from app.modules.system.service_backup import is_due
+    from app.modules.system.models import BackupSettings
+
+    cfg = BackupSettings(auto_enabled=True, hour=3, frequency="diario", last_run_at=None)
+    assert is_due(cfg, now=_local(2026, 9, 4, 3, 5)) is True
+    assert is_due(cfg, now=_local(2026, 9, 4, 15, 0)) is False
+
+
+def test_is_due_manual_run_at_odd_hour_does_not_push_schedule_a_day(db):
+    """Bug real: um backup manual às 15h fazia o agendador esperar 20h
+    corridas a partir DAÍ — como isso nunca cai dentro da janela (hora 3), o
+    automático perdia o dia inteiro. Agora é por DATA local: rodou hoje (a
+    qualquer hora) -> já não roda de novo hoje, mas amanhã na janela roda."""
+    from app.modules.system.service_backup import is_due
+    from app.modules.system.models import BackupSettings
+
+    cfg = BackupSettings(
+        auto_enabled=True, hour=3, frequency="diario",
+        last_run_at=_local(2026, 9, 3, 15, 24).astimezone(UTC),
+    )
+    # mesmo dia do backup manual, na janela normal: já rodou hoje -> não repete
+    assert is_due(cfg, now=_local(2026, 9, 3, 3, 5)) is False
+    # dia seguinte, na janela: roda normalmente (não ficou "atrasado" a mais)
+    assert is_due(cfg, now=_local(2026, 9, 4, 3, 5)) is True
+    # dia seguinte, fora da janela: ainda não
+    assert is_due(cfg, now=_local(2026, 9, 4, 15, 0)) is False
+
+
+def test_is_due_catches_up_when_window_is_missed():
+    """Se o processo ficou fora do ar durante a janela (ex.: redeploy), o
+    agendador não fica esperando o dia seguinte de novo — roda no próximo
+    tick, fora da hora, assim que ficar bem atrasado."""
+    from app.modules.system.service_backup import is_due
+    from app.modules.system.models import BackupSettings
+
+    cfg = BackupSettings(
+        auto_enabled=True, hour=3, frequency="diario",
+        last_run_at=_local(2026, 9, 2, 3, 5).astimezone(UTC),
+    )
+    # só 1 dia atrasado, fora da janela: ainda espera
+    assert is_due(cfg, now=_local(2026, 9, 3, 20, 0)) is False
+    # 2 dias corridos sem rodar: roda AGORA, mesmo fora da hora 3
+    assert is_due(cfg, now=_local(2026, 9, 4, 20, 0)) is True
+
+
+def test_is_due_weekly_monthly_thresholds():
+    from app.modules.system.service_backup import is_due
+    from app.modules.system.models import BackupSettings
+
+    weekly = BackupSettings(
+        auto_enabled=True, hour=3, frequency="semanal",
+        last_run_at=_local(2026, 9, 1, 3, 5).astimezone(UTC),
+    )
+    assert is_due(weekly, now=_local(2026, 9, 4, 3, 5)) is False  # só 3 dias
+    assert is_due(weekly, now=_local(2026, 9, 7, 3, 5)) is True  # 6 dias
+
+    monthly = BackupSettings(
+        auto_enabled=True, hour=3, frequency="mensal",
+        last_run_at=_local(2026, 8, 1, 3, 5).astimezone(UTC),
+    )
+    assert is_due(monthly, now=_local(2026, 8, 15, 3, 5)) is False  # 14 dias
+    assert is_due(monthly, now=_local(2026, 8, 28, 3, 5)) is True  # 27 dias
+
+
 @pytest.mark.asyncio
 async def test_check_backup_states(db):
     from app.modules.system.service_health import _check_backup

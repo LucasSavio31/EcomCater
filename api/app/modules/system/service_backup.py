@@ -19,7 +19,7 @@ import subprocess
 import tarfile
 import tempfile
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -457,19 +457,28 @@ def _store_now() -> datetime:
 
 
 def is_due(cfg: BackupSettings, now: datetime | None = None) -> bool:
+    """Roda 1x por período (diário/semanal/mensal) na hora local configurada
+    (`cfg.hour`). Compara por DATA local, não por horas corridas desde
+    `last_run_at` — um backup MANUAL feito fora da janela (ex.: 15h) não pode
+    empurrar o próximo automático pro dia seguinte só porque ainda não fez 20h
+    corridas. Se ficar muito atrasado (o processo esteve fora do ar durante a
+    janela inteira, por um redeploy por exemplo), roda no próximo tick mesmo
+    fora da hora — não fica esperando o dia seguinte de novo."""
     if not cfg.auto_enabled:
         return False
     local = now or _store_now()
+    if not cfg.last_run_at:
+        return local.hour == cfg.hour
+    last_local = cfg.last_run_at.astimezone(local.tzinfo)
+    days_since = (local.date() - last_local.date()).days
+    normal_days, catchup_days = {"semanal": (6, 9), "mensal": (27, 33)}.get(
+        cfg.frequency, (1, 2)  # diário
+    )
+    if days_since >= catchup_days:
+        return True  # muito atrasado: não espera a janela de novo
     if local.hour != cfg.hour:
         return False
-    if not cfg.last_run_at:
-        return True
-    elapsed = datetime.now(UTC) - cfg.last_run_at
-    if cfg.frequency == "semanal":
-        return elapsed >= timedelta(days=6)
-    if cfg.frequency == "mensal":
-        return elapsed >= timedelta(days=27)
-    return elapsed >= timedelta(hours=20)  # diário
+    return days_since >= normal_days
 
 
 async def run_scheduled(db: AsyncSession) -> dict:
