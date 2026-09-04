@@ -60,7 +60,10 @@ export function OrderSummary({
                   <div className="h-full w-full overflow-hidden rounded-card bg-bg-subtle">
                     {img && <Image src={img} alt="" fill sizes="56px" className="object-cover" />}
                   </div>
-                  <span className="pointer-events-none absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-btn px-1 text-[10px] font-bold text-btn-fg shadow">
+                  <span
+                    className="pointer-events-none absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-[10px] font-bold shadow"
+                    style={{ background: 'var(--color-step-active-bg)', color: 'var(--color-step-active-fg)' }}
+                  >
                     {i.quantity}
                   </span>
                 </div>

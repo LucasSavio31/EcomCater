@@ -24,6 +24,10 @@ export function CheckoutThemeStyle({ theme }: { theme: ThemeSettings }) {
     '--color-btn-fg': theme.checkout_step_button_text_color,
     '--color-btn-hover': theme.checkout_step_button_color,
     '--color-btn-border': theme.checkout_step_button_border_color,
+    // mesma cor da bolinha (1,2,3,4) da linha do tempo — usada também nos
+    // círculos numerados de cada seção e no selo de quantidade do resumo.
+    '--color-step-active-bg': theme.checkout_step_active_bg_color,
+    '--color-step-active-fg': theme.checkout_step_active_text_color,
   };
   const css =
     `.checkout-scope{${Object.entries(vars)

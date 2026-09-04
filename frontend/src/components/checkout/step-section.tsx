@@ -37,8 +37,13 @@ export function StepSection({
         <h2 className="flex items-center gap-2 text-base font-semibold">
           <span
             className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-              state === 'done' ? 'bg-success text-white' : 'bg-btn text-btn-fg'
+              state === 'done' ? 'bg-success text-white' : ''
             }`}
+            style={
+              state === 'done'
+                ? undefined
+                : { background: 'var(--color-step-active-bg)', color: 'var(--color-step-active-fg)' }
+            }
           >
             {state === 'done' ? '✓' : number}
           </span>
