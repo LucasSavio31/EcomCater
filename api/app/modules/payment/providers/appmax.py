@@ -201,8 +201,15 @@ class AppmaxGateway(PaymentGateway):
         )
 
     def verify_webhook(self, headers: dict[str, str], raw_body: bytes) -> bool:
+        # Sem segredo configurado: RECUSA (falha fechada). Confiar em qualquer
+        # webhook sem verificação permitiria marcar pedido como pago sem
+        # pagamento real -- é dinheiro de verdade, não pode confiar por padrão.
         if not self.webhook_secret:
-            return True
+            logger.warning(
+                "webhook Appmax recusado: nenhum appmax_webhook_secret configurado "
+                "(menu Pagamento) -- confirmações de pagamento não vão funcionar até configurar"
+            )
+            return False
         return headers.get("x-appmax-token") == self.webhook_secret or (
             self.webhook_secret in raw_body.decode("utf-8", "ignore")
         )
