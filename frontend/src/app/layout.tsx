@@ -8,6 +8,7 @@ import { AnalyticsHeadScripts, AnalyticsBodyNoScript } from '@/modules/analytics
 import { AnalyticsRouteTracker } from '@/modules/analytics/route-tracker';
 import { AnalyticsIdentity } from '@/components/analytics/analytics-identity';
 import { ServiceWorker } from '@/components/service-worker';
+import { PresenceBeacon } from '@/components/presence-beacon';
 import { ScrollToTop } from '@/components/scroll-to-top';
 import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
@@ -92,6 +93,7 @@ export default async function RootLayout({
         </Suspense>
         <AnalyticsIdentity />
         <ScrollToTop />
+        <PresenceBeacon />
 
         {/* CSS vars do tema — antes do primeiro paint (sem FOUC). */}
         <ThemeStyle theme={theme} />

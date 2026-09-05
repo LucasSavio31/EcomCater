@@ -9,6 +9,7 @@ import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { formatBRL, formatNumber } from '@/lib/format';
 import { SeriesChart, AbcCurve } from '@/components/dashboard-charts';
+import { LiveVisitorsMap } from '@/components/live-visitors-map';
 import { dashboardApi, type DashboardMetric } from '@/modules/dashboard/api';
 import { productsApi } from '@/modules/catalog/api';
 import type { ProductListItem } from '@/modules/catalog/types';
@@ -195,6 +196,8 @@ export default function DashboardPage() {
               );
             })}
           </div>
+
+          <LiveVisitorsMap />
 
           {/* Série temporal: período atual x anterior */}
           <Card variant="outline" className="flex flex-col gap-3">
