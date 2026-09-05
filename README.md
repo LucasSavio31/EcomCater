@@ -5,7 +5,9 @@ PostgreSQL + Redis, orquestrado por Docker Compose. Arquitetura modular
 (`api/app/modules/*`), smart checkout, PWA mobile-first.
 
 > Proposta de arquitetura: [`PROPOSTA-FASE-0.md`](PROPOSTA-FASE-0.md) ·
-> Plano de execução: [`docs/PLANO-EXECUCAO.md`](docs/PLANO-EXECUCAO.md)
+> Plano de execução: [`docs/PLANO-EXECUCAO.md`](docs/PLANO-EXECUCAO.md) ·
+> Rodar localmente: [`RODAR-LOCAL.md`](RODAR-LOCAL.md) ·
+> Checklist pra apontar o domínio real em produção: [`docs/DOMINIO-PRODUCAO.md`](docs/DOMINIO-PRODUCAO.md)
 
 ## Requisitos
 
