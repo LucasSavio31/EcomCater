@@ -177,7 +177,7 @@ export function DataTable<T>({
       {/* Desktop: tabela */}
       <div className="hidden overflow-x-auto rounded-card border border-surface-border sm:block">
         <table
-          className={cn('border-collapse text-sm', !hasCustomWidths && 'w-full')}
+          className={cn('border-collapse text-xs', !hasCustomWidths && 'w-full')}
           style={hasCustomWidths ? { tableLayout: 'fixed', width: 'max-content', minWidth: '100%' } : undefined}
         >
           {hasCustomWidths && (
