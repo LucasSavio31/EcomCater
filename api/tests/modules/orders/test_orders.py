@@ -169,3 +169,10 @@ async def test_supplier_xlsx_export(client, variant, admin_token, auth_headers):
     rows = [tuple(c for c in row) for row in ws.iter_rows(values_only=True)]
     assert any(row and str(row[0]).startswith("Fornecedor:") for row in rows)
     assert ("Pedido", "Quantidade", "Item", "Número", "Cor", "Obs") in rows
+
+    # número do pedido e o item na MESMA linha (nunca um separador "Pedido
+    # NNNN" numa linha e o item na de baixo).
+    item_rows = [row for row in rows if row[0] in (o1["number"], o2["number"])]
+    assert len(item_rows) == 2
+    for row in item_rows:
+        assert row[2]  # nome do item preenchido na mesma linha do número

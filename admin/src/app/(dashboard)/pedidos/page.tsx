@@ -347,6 +347,7 @@ function PedidosPageInner() {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setSelected(new Set());
     } catch {
       toast.error('Falha de rede ao baixar a planilha.');
     } finally {

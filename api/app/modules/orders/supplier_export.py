@@ -3,8 +3,9 @@
 Estrutura de cada aba:
   - título: "Fornecedor: X — De DD/MM/AAAA a DD/MM/AAAA — pedidos selecionados"
   - cabeçalho: Pedido | Quantidade | Item | Número | Cor | Obs
-  - linhas agrupadas por pedido (com um separador "Pedido NNNN" quando o
-    fornecedor tem mais de um pedido)
+  - uma linha por item, com o número do pedido na mesma linha (repete a cada
+    item quando o pedido tem mais de um) — nada de pedido numa linha e item
+    na linha de baixo
   - Obs = "Pedido com mais de um item" quando o pedido tem +1 linha de item
 """
 from __future__ import annotations
@@ -136,25 +137,27 @@ def build_supplier_xlsx(
             c.border = border
             c.alignment = center
 
+        shade = False
         for num, grp in groupby(entries, key=lambda e: e[0]["number"]):
-            grp_list = list(grp)
-            # cabeçalho do pedido (única linha que carrega o número)
-            sep = ws.max_row + 1
-            ws.append([f"Pedido {num}"])
-            ws.merge_cells(start_row=sep, start_column=1, end_row=sep, end_column=len(HEADERS))
-            ws[f"A{sep}"].font = order_font
-            ws[f"A{sep}"].fill = order_fill
-            for _o, it in grp_list:
+            # sombreado alternado por pedido — só pra continuar dando pra
+            # distinguir onde um pedido termina e o outro começa, já que o
+            # número agora repete linha a linha (sem separador).
+            shade = not shade
+            for _o, it in grp:
                 cor, numero = _cor_numero(it)
                 obs = "Pedido com mais de um item" if multi_item[num] else ""
-                # coluna "Pedido" fica vazia nos itens — o número já está no
-                # cabeçalho "Pedido NNNN" acima (não repete).
-                ws.append(["", int(it.get("quantity") or 0), it.get("name", ""), numero, cor, obs])
-                for c in ws[ws.max_row]:
+                # número do pedido na MESMA linha do item (repete a cada item
+                # do mesmo pedido) — nada de linha separada só com o número.
+                ws.append([num, int(it.get("quantity") or 0), it.get("name", ""), numero, cor, obs])
+                row = ws.max_row
+                for c in ws[row]:
                     c.border = border
                     c.alignment = wrap
-                ws[f"B{ws.max_row}"].alignment = center
-                ws[f"D{ws.max_row}"].alignment = center
+                    if shade:
+                        c.fill = order_fill
+                ws[f"A{row}"].font = order_font
+                ws[f"B{row}"].alignment = center
+                ws[f"D{row}"].alignment = center
 
         for i, w in enumerate(_WIDTHS, 1):
             ws.column_dimensions[get_column_letter(i)].width = w
