@@ -124,12 +124,24 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           </p>
           {group.items.map((item) => {
             const active = isActive(pathname, item.href);
+            // só a rota EXATA (não uma sub-rota, ex.: /pedidos/2026-000001)
+            // conta como "já estou aqui" — senão clicar em "Pedidos" a partir
+            // do detalhe de um pedido só recarregaria o detalhe, sem voltar
+            // pra lista.
+            const exact = pathname === item.href;
             const Icon = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={onNavigate}
+                onClick={(e) => {
+                  if (exact) {
+                    e.preventDefault();
+                    window.location.reload();
+                    return;
+                  }
+                  onNavigate?.();
+                }}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'flex min-h-touch items-center gap-2.5 rounded-card px-3 text-sm font-medium transition',

@@ -190,32 +190,36 @@ export function DataTable<T>({
           )}
           <thead>
             <tr className="border-b border-surface-border bg-bg-subtle text-left">
-              {columns.map((col, i) => (
-                <th
-                  key={col.key}
-                  className={cn(
-                    'relative px-3 py-2 font-medium text-text-muted',
-                    col.className,
-                  )}
-                >
-                  <span className="block truncate">{col.header}</span>
-                  {i < columns.length - 1 + (rowActions ? 1 : 0) && (
-                    <span
-                      role="separator"
-                      aria-orientation="vertical"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        startResize(col.key, e.currentTarget.parentElement as HTMLElement, e.clientX);
-                      }}
-                      className={cn(
-                        'absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize select-none',
-                        'hover:bg-primary/40',
-                        resizingKey === col.key && 'bg-primary/60',
-                      )}
-                    />
-                  )}
-                </th>
-              ))}
+              {columns.map((col, i) => {
+                const hasDivider = i < columns.length - 1 || Boolean(rowActions);
+                return (
+                  <th
+                    key={col.key}
+                    className={cn(
+                      'relative px-3 py-2 font-medium text-text-muted',
+                      hasDivider && 'border-r border-surface-border',
+                      col.className,
+                    )}
+                  >
+                    <span className="block truncate">{col.header}</span>
+                    {hasDivider && (
+                      <span
+                        role="separator"
+                        aria-orientation="vertical"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          startResize(col.key, e.currentTarget.parentElement as HTMLElement, e.clientX);
+                        }}
+                        className={cn(
+                          'absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize select-none',
+                          'hover:bg-primary/40',
+                          resizingKey === col.key && 'bg-primary/60',
+                        )}
+                      />
+                    )}
+                  </th>
+                );
+              })}
               {rowActions && <th className="px-3 py-2" />}
             </tr>
           </thead>
