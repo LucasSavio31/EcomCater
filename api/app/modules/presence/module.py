@@ -54,7 +54,7 @@ async def heartbeat(
     ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (
         request.client.host if request.client else None
     )
-    await service.record(vid, ip, (body.path or "/")[:200])
+    await service.record(vid, ip, (body.path or "/")[:200], request.headers.get("user-agent"))
     return {"ok": True}
 
 

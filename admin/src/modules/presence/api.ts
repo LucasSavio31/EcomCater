@@ -11,6 +11,8 @@ export interface LiveVisitor {
   lon: number | null;
   path: string;
   page_label: string;
+  ip: string | null;
+  device: string | null;
   since_seconds: number;
 }
 

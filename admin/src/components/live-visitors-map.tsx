@@ -1,34 +1,85 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '@ecom/ui';
-import { presenceApi, type LiveVisitorsData } from '@/modules/presence/api';
+import { presenceApi, type LiveVisitor, type LiveVisitorsData } from '@/modules/presence/api';
+import { BRAZIL_STATES, BRAZIL_VIEWBOX } from './brazil-states';
 
 const POLL_MS = 5_000;
-const W = 1000;
-const H = 500;
 
-// Elipses estilizadas (fidelidade "ambiente", não cartográfica) — mesmo
-// espírito 100%-sem-lib do resto do dashboard (dashboard-charts.tsx).
-const CONTINENTS = [
-  { cx: 260, cy: 165, rx: 150, ry: 95 }, // América do Norte
-  { cx: 300, cy: 260, rx: 35, ry: 30 }, // América Central
-  { cx: 330, cy: 350, rx: 75, ry: 110 }, // América do Sul
-  { cx: 500, cy: 195, rx: 60, ry: 50 }, // Europa
-  { cx: 530, cy: 300, rx: 90, ry: 125 }, // África
-  { cx: 700, cy: 190, rx: 200, ry: 105 }, // Ásia
-  { cx: 760, cy: 320, rx: 45, ry: 30 }, // Sudeste asiático
-  { cx: 850, cy: 380, rx: 60, ry: 40 }, // Oceania
-];
+// Nome (como o serviço de geoip devolve, sem acento/minúsculo) -> sigla do estado.
+const STATE_NAME_TO_UF: Record<string, string> = {
+  acre: 'ac',
+  alagoas: 'al',
+  amapa: 'ap',
+  amazonas: 'am',
+  bahia: 'ba',
+  ceara: 'ce',
+  'distrito federal': 'df',
+  'espirito santo': 'es',
+  goias: 'go',
+  maranhao: 'ma',
+  'mato grosso': 'mt',
+  'mato grosso do sul': 'ms',
+  'minas gerais': 'mg',
+  para: 'pa',
+  paraiba: 'pb',
+  parana: 'pr',
+  pernambuco: 'pe',
+  piaui: 'pi',
+  'rio de janeiro': 'rj',
+  'rio grande do norte': 'rn',
+  'rio grande do sul': 'rs',
+  rondonia: 'ro',
+  roraima: 'rr',
+  'santa catarina': 'sc',
+  'sao paulo': 'sp',
+  sergipe: 'se',
+  tocantins: 'to',
+};
 
-function project(lon: number, lat: number): { x: number; y: number } {
-  return { x: ((lon + 180) / 360) * W, y: ((90 - lat) / 180) * H };
+function normalize(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function ufFor(region: string | null): string | null {
+  if (!region) return null;
+  return STATE_NAME_TO_UF[normalize(region)] ?? null;
+}
+
+// Espalha visitantes do mesmo estado ao redor do centroide, sem sobrepor
+// perfeitamente (determinístico — não "pula" a cada poll).
+function jitter(seed: number): { dx: number; dy: number } {
+  const a = (seed * 12.9898) % 1;
+  const b = (seed * 78.233) % 1;
+  const r = 2200;
+  return { dx: (a - 0.5) * r, dy: (b - 0.5) * r };
 }
 
 function fmtAgo(seconds: number): string {
   if (seconds < 60) return `há ${seconds}s`;
   const m = Math.floor(seconds / 60);
   return `há ${m} min`;
+}
+
+function deviceIcon(device: string | null): string {
+  switch (device) {
+    case 'iPhone':
+    case 'Android':
+      return '📱';
+    case 'iPad':
+      return '📱';
+    case 'Mac':
+    case 'PC':
+    case 'Linux':
+      return '💻';
+    default:
+      return '🖥️';
+  }
 }
 
 export function LiveVisitorsMap() {
@@ -57,9 +108,21 @@ export function LiveVisitorsMap() {
     };
   }, []);
 
-  if (hidden || !data) return null;
+  const dots = useMemo(() => {
+    if (!data) return [];
+    return data.visitors
+      .map((v: LiveVisitor, i: number) => {
+        const uf = ufFor(v.region);
+        if (!uf) return null;
+        const geo = BRAZIL_STATES[uf];
+        if (!geo) return null;
+        const { dx, dy } = jitter(i + 1);
+        return { key: i, x: geo.cx + dx, y: geo.cy + dy };
+      })
+      .filter((d): d is { key: number; x: number; y: number } => d !== null);
+  }, [data]);
 
-  const dots = data.visitors.filter((v) => v.lat != null && v.lon != null);
+  if (hidden || !data) return null;
 
   return (
     <Card variant="outline" className="flex flex-col gap-4">
@@ -73,7 +136,7 @@ export function LiveVisitorsMap() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="overflow-hidden rounded-card lg:col-span-2" style={{ background: '#0b2545' }}>
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Mapa de visitantes ao vivo">
+          <svg viewBox={BRAZIL_VIEWBOX} className="w-full" role="img" aria-label="Mapa de visitantes ao vivo por estado">
             <style>{`
               @keyframes presence-ping {
                 0% { transform: scale(1); opacity: 0.6; }
@@ -81,18 +144,15 @@ export function LiveVisitorsMap() {
               }
               .presence-ring { transform-box: fill-box; transform-origin: center; animation: presence-ping 1.8s ease-out infinite; }
             `}</style>
-            {CONTINENTS.map((c, i) => (
-              <ellipse key={i} cx={c.cx} cy={c.cy} rx={c.rx} ry={c.ry} fill="#173d6b" />
+            {Object.entries(BRAZIL_STATES).map(([uf, s]) => (
+              <path key={uf} d={s.d} fill="#173d6b" stroke="#0b2545" strokeWidth={400} />
             ))}
-            {dots.map((v, i) => {
-              const { x, y } = project(v.lon as number, v.lat as number);
-              return (
-                <g key={i}>
-                  <circle cx={x} cy={y} r={5} fill="#38bdf8" className="presence-ring" />
-                  <circle cx={x} cy={y} r={3} fill="#e0f2fe" />
-                </g>
-              );
-            })}
+            {dots.map((d) => (
+              <g key={d.key}>
+                <circle cx={d.x} cy={d.y} r={2600} fill="#38bdf8" className="presence-ring" />
+                <circle cx={d.x} cy={d.y} r={1500} fill="#e0f2fe" />
+              </g>
+            ))}
           </svg>
         </div>
 
@@ -109,6 +169,11 @@ export function LiveVisitorsMap() {
                 </span>
                 <span className="truncate text-xs text-text-muted">
                   {v.page_label} · {fmtAgo(v.since_seconds)}
+                </span>
+                <span className="flex items-center gap-1 truncate text-xs text-text-muted">
+                  <span aria-hidden>{deviceIcon(v.device)}</span>
+                  {v.device || 'Dispositivo desconhecido'}
+                  {v.ip ? ` · ${v.ip}` : ''}
                 </span>
               </div>
             ))

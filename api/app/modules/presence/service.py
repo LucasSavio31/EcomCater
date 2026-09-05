@@ -25,9 +25,34 @@ _FRIENDLY_PATHS = {
 }
 
 
-async def record(visitor_id: str, ip: str | None, path: str) -> None:
+def _device_from_ua(ua: str | None) -> str:
+    """Classificação simples de dispositivo a partir do User-Agent — só o
+    suficiente pra mostrar um rótulo útil na lista de visitantes."""
+    u = (ua or "").lower()
+    if "ipad" in u:
+        return "iPad"
+    if "iphone" in u:
+        return "iPhone"
+    if "android" in u:
+        return "Android"
+    if "macintosh" in u or "mac os" in u:
+        return "Mac"
+    if "windows" in u:
+        return "PC"
+    if "linux" in u:
+        return "Linux"
+    return "Outro"
+
+
+async def record(visitor_id: str, ip: str | None, path: str, user_agent: str | None = None) -> None:
     geo = await geoip.lookup(ip) or {}
-    data = {**geo, "path": path, "last_seen": time.time()}
+    data = {
+        **geo,
+        "path": path,
+        "ip": ip,
+        "device": _device_from_ua(user_agent),
+        "last_seen": time.time(),
+    }
     await redis_client.set(f"{_PREFIX}{visitor_id}", json.dumps(data), ex=PRESENCE_TTL)
 
 
@@ -67,6 +92,8 @@ async def list_active(db: AsyncSession) -> dict:
                 "lon": v.get("lon"),
                 "path": path,
                 "page_label": labels.get(path) or _FRIENDLY_PATHS.get(path) or path,
+                "ip": v.get("ip"),
+                "device": v.get("device"),
                 "since_seconds": max(0, int(now - (v.get("last_seen") or now))),
             }
         )

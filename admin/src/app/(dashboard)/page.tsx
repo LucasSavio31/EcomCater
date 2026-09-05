@@ -197,8 +197,6 @@ export default function DashboardPage() {
             })}
           </div>
 
-          <LiveVisitorsMap />
-
           {/* Série temporal: período atual x anterior */}
           <Card variant="outline" className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -253,6 +251,8 @@ export default function DashboardPage() {
 
             <QuickPromo onDone={() => toast.success('Preços atualizados.')} />
           </div>
+
+          <LiveVisitorsMap />
         </>
       )}
     </div>
