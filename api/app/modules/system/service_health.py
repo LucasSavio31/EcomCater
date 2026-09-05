@@ -481,13 +481,18 @@ async def run_checks(db: AsyncSession, *, persist: bool = True) -> list[dict]:
                     checked_at=bucket,
                 )
             )
-            # alerta por e-mail em QUALQUER mudança de estado — ok->problema,
-            # problema->ok, e também degradado<->fora do ar (antes só disparava
-            # se um dos dois lados fosse "ok": uma piora de "instável" pra
-            # "fora do ar" — ou uma melhora de "fora do ar" pra "instável" —
-            # ficava muda). `last2[key][0]` é o status persistido mais recente.
+            # alerta por e-mail só quando a transição de fato ENVOLVE queda
+            # real ("down"/fora do ar) — entrando (ok/degraded -> down) ou
+            # saindo dela (down -> ok/degraded). Oscilação pura ok<->degraded
+            # (serviço só lento, nunca chegou a cair) NÃO envia e-mail — era
+            # ruído: lentidão pontual não é o mesmo que serviço fora do ar.
+            # `last2[key][0]` é o status persistido mais recente.
             prev_status = (last2.get(key) or [None])[0]
-            if prev_status and prev_status != status:
+            if (
+                prev_status
+                and prev_status != status
+                and "down" in (prev_status, status)
+            ):
                 await _alert_health_transition(db, key, next(
                     (lb for k, lb, _ in checks if k == key), key), status, detail)
         await db.commit()  # histórico é permanente — nunca podamos

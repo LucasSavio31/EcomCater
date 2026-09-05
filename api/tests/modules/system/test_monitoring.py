@@ -158,6 +158,35 @@ async def test_health_alert_fires_on_degraded_to_down_transition(db, admin_token
 
 
 @pytest.mark.asyncio
+async def test_health_alert_silent_on_ok_to_degraded_transition(db, admin_token):
+    """Serviço só ficou lento/instável (nunca chegou a "fora do ar") não deve
+    gerar e-mail — antes disparava em QUALQUER mudança de estado, inclusive
+    esse ruído de "instável" pontual. `admin_token` cria o super admin."""
+    from app.modules.system.models import HealthSample
+    from app.modules.system.service_health import _bucket_start, run_checks
+
+    prev_bucket = _bucket_start(datetime.now(UTC) - timedelta(minutes=20))
+    db.add(
+        HealthSample(
+            service_key="backup", status="ok", latency_ms=0,
+            detail="último há 1h (diario)", checked_at=prev_bucket,
+        )
+    )
+    # backup automático desligado agora -> vira "degraded" (nunca "down")
+    db.add(BackupSettings(id=1, auto_enabled=False, frequency="diario"))
+    await db.commit()
+
+    await run_checks(db, persist=True)
+
+    log = (
+        await db.execute(
+            select(EmailLog).where(EmailLog.template == "health_alert")
+        )
+    ).scalars().first()
+    assert log is None
+
+
+@pytest.mark.asyncio
 async def test_run_checks_isolates_one_failing_check(db, monkeypatch):
     """Uma exceção inesperada em UM check não pode derrubar a amostragem (nem
     o alerta) dos outros — antes, uma falha aqui cancelava `run_checks`
