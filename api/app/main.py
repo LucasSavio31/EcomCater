@@ -65,10 +65,15 @@ async def lifespan(_: FastAPI):
 
 
 def create_app() -> FastAPI:
+    # Em prod: schema/UI de docs desligados — expor todas as rotas/modelos
+    # publicamente é reconhecimento de graça pra quem for atacar a API.
     app = FastAPI(
         title="E-commerce API",
         version="0.1.0",
         lifespan=lifespan,
+        docs_url=None if settings.is_prod else "/docs",
+        redoc_url=None if settings.is_prod else "/redoc",
+        openapi_url=None if settings.is_prod else "/openapi.json",
     )
 
     # Só em dev: libera localhost e qualquer IP de LAN privada (192.168/10/172.16-31)
