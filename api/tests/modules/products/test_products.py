@@ -79,6 +79,29 @@ async def test_variants_and_size_option(client, admin_token, auth_headers):
 
 
 @pytest.mark.asyncio
+async def test_new_variant_stock_qty_null_stays_unlimited(client, admin_token, auth_headers):
+    """Bug real: `default=0` na coluna fazia o SQLAlchemy aplicar o default no
+    INSERT sempre que o valor era None (mesmo setado explicitamente) — uma
+    variação NOVA criada com stock_qty=null (estoque ilimitado) virava 0
+    (estoque zerado) em vez de ficar NULL."""
+    h = auth_headers(admin_token)
+    cat = await _mk_category(client, h)
+    p = await _mk_product(client, h, cat["id"])
+
+    v = await client.post(
+        f"/api/admin/products/{p['id']}/variants",
+        json={"sku": "VLF-UNL", "option_value_ids": [], "stock_qty": None},
+        headers=h,
+    )
+    assert v.status_code == 201
+
+    detail = await client.get(f"/api/admin/products/{p['id']}", headers=h)
+    variant = next(x for x in detail.json()["variants"] if x["sku"] == "VLF-UNL")
+    assert variant["stock_qty"] is None
+    assert variant["in_stock"] is True
+
+
+@pytest.mark.asyncio
 async def test_duplicate_sku_rejected(client, admin_token, auth_headers):
     h = auth_headers(admin_token)
     cat = await _mk_category(client, h)

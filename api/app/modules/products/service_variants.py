@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -189,10 +190,18 @@ async def upsert_variant(db: AsyncSession, product_id: str, data: dict, variant_
     for f in ("sku", "price_cents", "compare_at_price_cents", "weight_grams", "barcode", "is_active", "position"):
         if f in data and data[f] is not None:
             setattr(variant, f, data[f])
-    # stock_qty: aceita None de propósito (== estoque ilimitado)
-    if "stock_qty" in data:
-        variant.stock_qty = data["stock_qty"]
     await db.flush()
+
+    # stock_qty: aceita None de propósito (== estoque ilimitado). Via UPDATE
+    # direto (não por atributo do ORM): a coluna tem `default=0` e o
+    # SQLAlchemy aplica esse default no INSERT sempre que o valor é None —
+    # mesmo setado explicitamente — então uma variação nova criada "sem
+    # estoque definido" virava 0 (limitado) em vez de NULL (ilimitado).
+    if "stock_qty" in data:
+        await db.execute(
+            sa_update(ProductVariant).where(ProductVariant.id == variant.id).values(stock_qty=data["stock_qty"])
+        )
+        db.expire(variant, ["stock_qty"])
 
     # sincroniza opções da variação
     for link in await db.scalars(
