@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Card, Spinner, cn } from '@ecom/ui';
 
 export interface Column<T> {
@@ -30,10 +30,37 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
   /** Ações renderizadas por linha (aparecem à direita no desktop, no rodapé do card no mobile). */
   rowActions?: (row: T) => ReactNode;
+  /** Chave única da tabela — quando informada, a largura das colunas ajustada
+   * pelo usuário (arrastando a divisória, estilo Excel) é lembrada entre
+   * visitas (localStorage). Sem isso, o ajuste ainda funciona, só não persiste. */
+  tableId?: string;
+}
+
+const MIN_COL_WIDTH = 60;
+
+function loadWidths(tableId?: string): Record<string, number> {
+  if (!tableId) return {};
+  try {
+    const raw = localStorage.getItem(`admin:col-widths:${tableId}`);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveWidths(tableId: string | undefined, widths: Record<string, number>): void {
+  if (!tableId) return;
+  try {
+    localStorage.setItem(`admin:col-widths:${tableId}`, JSON.stringify(widths));
+  } catch {
+    /* privado/bloqueado: só não persiste */
+  }
 }
 
 /**
  * Tabela responsiva: vira lista de cards no mobile (< sm) e tabela no desktop.
+ * No desktop, a divisória entre colunas pode ser arrastada pra redimensionar
+ * (estilo planilha) — segura o mouse na beirada direita do cabeçalho.
  * Estados de carregando / erro / vazio embutidos.
  */
 export function DataTable<T>({
@@ -45,7 +72,40 @@ export function DataTable<T>({
   emptyMessage = 'Nada por aqui ainda.',
   onRowClick,
   rowActions,
+  tableId,
 }: DataTableProps<T>) {
+  const [widths, setWidths] = useState<Record<string, number>>({});
+  const [resizingKey, setResizingKey] = useState<string | null>(null);
+  const drag = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    setWidths(loadWidths(tableId));
+  }, [tableId]);
+
+  function startResize(key: string, thEl: HTMLElement, clientX: number) {
+    const startWidth = widths[key] ?? thEl.getBoundingClientRect().width;
+    drag.current = { key, startX: clientX, startWidth };
+    setResizingKey(key);
+
+    const onMove = (ev: MouseEvent) => {
+      if (!drag.current) return;
+      const w = Math.max(MIN_COL_WIDTH, Math.round(drag.current.startWidth + (ev.clientX - drag.current.startX)));
+      setWidths((prev) => ({ ...prev, [drag.current!.key]: w }));
+    };
+    const onUp = () => {
+      drag.current = null;
+      setResizingKey(null);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      setWidths((prev) => {
+        saveWidths(tableId, prev);
+        return prev;
+      });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -69,6 +129,8 @@ export function DataTable<T>({
       </Card>
     );
   }
+
+  const hasCustomWidths = Object.keys(widths).length > 0;
 
   return (
     <>
@@ -114,12 +176,44 @@ export function DataTable<T>({
 
       {/* Desktop: tabela */}
       <div className="hidden overflow-x-auto rounded-card border border-surface-border sm:block">
-        <table className="w-full border-collapse text-sm">
+        <table
+          className={cn('border-collapse text-sm', !hasCustomWidths && 'w-full')}
+          style={hasCustomWidths ? { tableLayout: 'fixed', width: 'max-content', minWidth: '100%' } : undefined}
+        >
+          {hasCustomWidths && (
+            <colgroup>
+              {columns.map((col) => (
+                <col key={col.key} style={widths[col.key] ? { width: widths[col.key] } : undefined} />
+              ))}
+              {rowActions && <col />}
+            </colgroup>
+          )}
           <thead>
             <tr className="border-b border-surface-border bg-bg-subtle text-left">
-              {columns.map((col) => (
-                <th key={col.key} className={cn('px-3 py-2 font-medium text-text-muted', col.className)}>
-                  {col.header}
+              {columns.map((col, i) => (
+                <th
+                  key={col.key}
+                  className={cn(
+                    'relative px-3 py-2 font-medium text-text-muted',
+                    col.className,
+                  )}
+                >
+                  <span className="block truncate">{col.header}</span>
+                  {i < columns.length - 1 + (rowActions ? 1 : 0) && (
+                    <span
+                      role="separator"
+                      aria-orientation="vertical"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        startResize(col.key, e.currentTarget.parentElement as HTMLElement, e.clientX);
+                      }}
+                      className={cn(
+                        'absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize select-none',
+                        'hover:bg-primary/40',
+                        resizingKey === col.key && 'bg-primary/60',
+                      )}
+                    />
+                  )}
                 </th>
               ))}
               {rowActions && <th className="px-3 py-2" />}
@@ -138,7 +232,7 @@ export function DataTable<T>({
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={cn('px-3 py-2 align-middle', col.className)}
+                    className={cn('overflow-hidden px-3 py-2 align-middle', col.className)}
                     onClick={col.stopRowClick ? (e) => e.stopPropagation() : undefined}
                   >
                     {col.primary && onRowClick ? (

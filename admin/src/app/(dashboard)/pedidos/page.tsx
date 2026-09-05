@@ -559,6 +559,7 @@ function PedidosPageInner() {
       )}
 
       <DataTable
+        tableId="pedidos"
         columns={columns}
         rows={rows}
         rowKey={(o) => o.number}
