@@ -327,6 +327,22 @@ async def _on_status(payload: dict) -> None:
         await mailer.send(
             db, to=order.email, template=template, order_id=str(order.id), context=ctx
         )
+
+        if status == "returned":
+            # avisa o lojista que a devolução chegou fisicamente na loja --
+            # mesmo destinatário/padrão do aviso de pedido novo.
+            from app.modules.orders.service import _customer_name
+
+            admin_to = await mailer.order_notify_email(db)
+            await mailer.send(
+                db, to=admin_to, template="admin_order_returned", order_id=str(order.id),
+                context={
+                    **ctx,
+                    "customer_name": _customer_name(order),
+                    "admin_url": f"{settings.admin_url.rstrip('/')}/pedidos/{order.number}",
+                },
+            )
+
         await db.commit()
 
 

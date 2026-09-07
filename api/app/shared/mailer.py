@@ -267,6 +267,17 @@ TEMPLATES: dict[str, tuple[str, str]] = {
             "<p style='margin-top:14px'><a href='{{ admin_url }}' class='btn' style='{{ btn_style }}'>Abrir no painel</a></p>",
         ),
     ),
+    "admin_order_returned": (
+        "[Loja] Devolução recebida — pedido {{ number }}",
+        _order_email(
+            "<h2>Devolução recebida na loja 📬</h2>"
+            "<p>O cliente <b>{{ customer_name }}</b> ({{ email }}) devolveu o pedido "
+            "<b>{{ number }}</b> e o produto acabou de ser marcado como recebido.</p>"
+            "<p>Confira o produto e, quando processar o estorno no gateway de "
+            "pagamento, o status muda sozinho para \"Devolução finalizada\".</p>",
+            "<p style='margin-top:14px'><a href='{{ admin_url }}' class='btn' style='{{ btn_style }}'>Abrir no painel</a></p>",
+        ),
+    ),
     "admin_order_error": (
         "[Loja] Falha ao finalizar o pedido {{ number }}",
         "<h2 style='color:#b00020'>Erro na finalização do pedido {{ number }}</h2>"
