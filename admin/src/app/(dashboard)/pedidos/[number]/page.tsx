@@ -149,6 +149,7 @@ const EVENT_LABEL: Record<string, string> = {
   payment_confirmed: 'Pagamento confirmado',
   reverse_label_generated: 'Logística reversa gerada',
   reverse_label_cart: 'Logística reversa — carrinho do Melhor Envio',
+  reverse_tracking_added: 'Rastreio da devolução adicionado',
 };
 
 function Timeline({ events }: { events: OrderDetail['events'] }) {

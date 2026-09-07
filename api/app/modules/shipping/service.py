@@ -1263,10 +1263,11 @@ async def generate_reverse_label(db: AsyncSession, number: str) -> dict:
     svc["reverse_label_key"] = key
     order.reverse_shipping_json = dict(svc)
 
-    await record_event(
-        db, order, type="reverse_label_generated", actor_type="admin",
-        message="Etiqueta de logística reversa gerada — PDF enviado ao cliente por e-mail.",
-    )
+    tracking_code = svc.get("tracking_code")
+    msg = "Etiqueta de logística reversa gerada — PDF enviado ao cliente por e-mail."
+    if tracking_code:
+        msg += f" Código de rastreio: {tracking_code}."
+    await record_event(db, order, type="reverse_label_generated", actor_type="admin", message=msg)
     await transition(db, order, "returning", actor_type="system", message="Logística reversa gerada.")
     await emit("order.reverse_label_ready", {"order_id": str(order.id)})
 
@@ -1458,6 +1459,7 @@ async def sync_reverse_tracking(db: AsyncSession) -> dict:
     do pedido (returning -> returned é sempre manual, quando você recebe o
     produto de volta) — só atualiza o rastreio em si."""
     from app.modules.orders.models import Order
+    from app.modules.orders.service import record_event
 
     cfg = await load_config(db)
     cfg = await _maybe_refresh_me_token(db, cfg)
@@ -1503,6 +1505,10 @@ async def sync_reverse_tracking(db: AsyncSession) -> dict:
             if code and svc.get("tracking_code") != code:
                 svc["tracking_code"] = code
                 order.reverse_shipping_json = svc
+                await record_event(
+                    db, order, type="reverse_tracking_added", actor_type="system",
+                    message=f"Código de rastreio da devolução: {code}",
+                )
                 updated += 1
 
     await db.flush()
