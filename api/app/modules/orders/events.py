@@ -279,6 +279,11 @@ _STATUS_TEMPLATE = {
     "delivered": "order_delivered",
     "canceled": "order_canceled",
     "refunded": "order_refunded",
+    # "returning" NÃO está aqui de propósito: o e-mail dela é o dedicado
+    # (com o PDF da etiqueta anexado), disparado por `order.reverse_label_ready`
+    # — não duplica com um genérico aqui.
+    "returned": "order_returned",
+    "return_completed": "order_return_completed",
 }
 
 # rótulo humano do status, mostrado em TODO e-mail de pedido
@@ -292,6 +297,9 @@ _STATUS_LABELS = {
     "delivered": "Entregue",
     "canceled": "Cancelado",
     "refunded": "Reembolsado",
+    "returning": "Em Devolução",
+    "returned": "Devolvido",
+    "return_completed": "Devolução finalizada",
 }
 
 
@@ -315,5 +323,39 @@ async def _on_status(payload: dict) -> None:
         )
         await mailer.send(
             db, to=order.email, template=template, order_id=str(order.id), context=ctx
+        )
+        await db.commit()
+
+
+@on("order.reverse_label_ready")
+async def _on_reverse_label_ready(payload: dict) -> None:
+    """Etiqueta de logística reversa gerada — manda o PDF anexado pro
+    cliente postar. Best-effort: se o anexo falhar, ainda avisa sem ele."""
+    async with SessionLocal() as db:
+        order = await _order(db, payload["order_id"])
+        if not order:
+            return
+        svc = order.reverse_shipping_json or {}
+        ctx = _order_ctx(order, await _latest_payment(db, order))
+        ctx.update(
+            tracking_code=svc.get("tracking_code"),
+            store_name=await _store_name(db),
+            account_url=f"{settings.site_url.rstrip('/')}/minha-conta/pedidos",
+        )
+
+        attachments = None
+        key = svc.get("reverse_label_key")
+        if key:
+            try:
+                from app.shared.storage import private_storage
+
+                pdf = private_storage.read(key)
+                attachments = [(f"devolucao-{order.number}.pdf", pdf, "application", "pdf")]
+            except Exception:  # noqa: BLE001
+                logger.exception("falha ao anexar o PDF de devolução do pedido %s", order.number)
+
+        await mailer.send(
+            db, to=order.email, template="reverse_label_ready",
+            order_id=str(order.id), context=ctx, attachments=attachments,
         )
         await db.commit()

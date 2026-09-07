@@ -161,6 +161,38 @@ TEMPLATES: dict[str, tuple[str, str]] = {
             "O prazo de estorno depende do meio de pagamento.</p>"
         ),
     ),
+    "reverse_label_ready": (
+        "Etiqueta de devolução — pedido {{ number }}",
+        _order_email(
+            "<h2>Sua etiqueta de devolução está pronta 📦</h2>"
+            "<p>Geramos a etiqueta de devolução do pedido <b>{{ number }}</b> — "
+            "ela está anexada a este e-mail em PDF."
+            "{% if tracking_code %} Código de rastreio: <b>{{ tracking_code }}</b>{% endif %}</p>"
+            "<p><b>Como postar:</b> imprima a etiqueta anexa, cole na embalagem "
+            "e leve até uma agência dos Correios (ou ponto de postagem indicado "
+            "na etiqueta).</p>"
+            "<p>Você também pode baixar essa etiqueta de novo a qualquer momento "
+            "em Minha conta.</p>",
+            "<p style='margin:12px 0'><a href='{{ account_url }}' class='btn' style='{{ btn_style }}'>Ver meu pedido</a></p>",
+        ),
+    ),
+    "order_returned": (
+        "Recebemos sua devolução — pedido {{ number }}",
+        _order_email(
+            "<h2>Devolução recebida ✅</h2>"
+            "<p>Recebemos o produto devolvido do pedido <b>{{ number }}</b>. "
+            "Em breve seu reembolso será processado.</p>"
+        ),
+    ),
+    "order_return_completed": (
+        "Devolução finalizada — pedido {{ number }}",
+        _order_email(
+            "<h2>Devolução finalizada</h2>"
+            "<p>A devolução do pedido <b>{{ number }}</b> foi finalizada e o "
+            "reembolso foi processado. O prazo de estorno depende do meio de "
+            "pagamento.</p>"
+        ),
+    ),
     "cart_recovery": (
         "{{ subject }}",
         "<h2 style='margin:0 0 12px;font-size:18px;text-transform:uppercase;letter-spacing:.5px'>{{ subject }}</h2>"
@@ -359,6 +391,9 @@ _CUSTOMER_ORDER_TEMPLATES = frozenset(
         "order_delivered",
         "order_canceled",
         "order_refunded",
+        "reverse_label_ready",
+        "order_returned",
+        "order_return_completed",
     }
 )
 

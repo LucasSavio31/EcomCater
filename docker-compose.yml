@@ -55,6 +55,7 @@ services:
     volumes:
       - media:/data/media
       - backups:/data/backups
+      - private_media:/data/private
     networks: [internal]
 
   frontend:
@@ -88,6 +89,7 @@ volumes:
   redisdata:
   media:
   backups:
+  private_media:
 
 networks:
   internal:

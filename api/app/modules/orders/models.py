@@ -46,6 +46,9 @@ class Order(UUIDPKMixin, TimestampMixin, Base):
 
     shipping_method: Mapped[str | None] = mapped_column(String(120))
     shipping_service_json: Mapped[dict | None] = mapped_column(JSONB)
+    # Logística reversa (devolução): mesmo formato do shipping_service_json,
+    # mas do envio cliente -> loja. Nunca mistura com o de ida.
+    reverse_shipping_json: Mapped[dict | None] = mapped_column(JSONB)
     shipping_address_json: Mapped[dict] = mapped_column(JSONB, default=dict)
     billing_address_json: Mapped[dict | None] = mapped_column(JSONB)
 

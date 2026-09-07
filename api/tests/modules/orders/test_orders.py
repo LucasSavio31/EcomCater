@@ -118,6 +118,33 @@ async def test_cancel_restores_stock(client, variant, admin_token, auth_headers)
 
 
 @pytest.mark.asyncio
+async def test_return_flow_and_refund_redirects_to_completed(client, variant, admin_token, auth_headers):
+    """delivered -> returning -> returned -> (estorno) vira return_completed,
+    nao "refunded" generico -- e restaura estoque, igual cancelamento."""
+    h = auth_headers(admin_token)
+    order = await _order(client, variant, qty=2)  # estoque 5 -> 3
+    num = order["number"]
+
+    await client.post(f"/api/admin/orders/{num}/status", json={"status": "delivered"}, headers=h)
+    await client.post(f"/api/admin/orders/{num}/status", json={"status": "returning"}, headers=h)
+    await client.post(f"/api/admin/orders/{num}/status", json={"status": "returned"}, headers=h)
+
+    resp = await client.post(f"/api/admin/orders/{num}/status", json={"status": "refunded"}, headers=h)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "return_completed"
+
+    detail = (await client.get(f"/api/admin/orders/{num}", headers=h)).json()
+    assert detail["status"] == "return_completed"
+    assert detail["payment_status"] == "refunded"
+    # a timeline registra a transição real (return_completed), não "refunded"
+    assert any(e["to_status"] == "return_completed" for e in detail["events"])
+    assert not any(e["to_status"] == "refunded" for e in detail["events"])
+
+    slug = (await client.get("/api/products?category=c")).json()["items"][0]["slug"]
+    assert (await client.get(f"/api/products/{slug}")).json()["variants"][0]["stock_qty"] == 5
+
+
+@pytest.mark.asyncio
 async def test_checkout_records_processing_error_on_failed_step(client, variant, monkeypatch):
     """Se um passo pós-pedido falha, o pedido é criado igual e o motivo fica em
     `processing_error` (visível na conta / pulse)."""

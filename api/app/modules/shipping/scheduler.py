@@ -95,11 +95,15 @@ async def _resolve_interval() -> int:
 
 
 async def _tick_once() -> None:
-    from app.modules.shipping.service import poll_melhor_envio_tracking
+    from app.modules.shipping.service import poll_melhor_envio_tracking, sync_reverse_tracking
 
     async with SessionLocal() as db:
         try:
             result = await poll_melhor_envio_tracking(db)
+            try:
+                await sync_reverse_tracking(db)
+            except Exception:  # noqa: BLE001
+                logger.exception("sync de rastreio da logística reversa falhou")
             await db.commit()  # SessionLocal não faz commit no fim do `async with`
         except Exception:
             await db.rollback()

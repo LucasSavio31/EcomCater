@@ -124,6 +124,7 @@ async def sync_melhor_envio_tracking(db: DbDep, _: AdminRoleDep) -> dict:
     from app.modules.shipping import scheduler
 
     result = await service.poll_melhor_envio_tracking(db)
+    await service.sync_reverse_tracking(db)
     scheduler.note_run(result, source="manual")
     return result
 

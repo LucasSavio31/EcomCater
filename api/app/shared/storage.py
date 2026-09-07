@@ -86,4 +86,14 @@ def get_storage() -> Storage:
     raise NotImplementedError(f"storage backend '{settings.storage_backend}' não implementado")
 
 
+def get_private_storage() -> Storage:
+    """Storage separado, NUNCA montado como estático público (ex.: PDF de
+    etiqueta de devolução — tem nome/endereço do cliente). Só `save`/`read`;
+    `.url()` não deve ser usado (não existe rota pública pra essa raiz)."""
+    if settings.storage_backend == "local":
+        return LocalStorage(settings.private_storage_dir, base_url="")
+    raise NotImplementedError(f"storage backend '{settings.storage_backend}' não implementado")
+
+
 storage = get_storage()
+private_storage = get_private_storage()

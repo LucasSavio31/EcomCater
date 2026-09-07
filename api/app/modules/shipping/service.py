@@ -1060,6 +1060,219 @@ async def melhor_envio_labels_pdf(db: AsyncSession, order_numbers: list[str]) ->
     return pdf
 
 
+async def generate_reverse_label(db: AsyncSession, number: str) -> dict:
+    """Logística reversa (devolução): gera uma etiqueta no Melhor Envio com
+    remetente = CLIENTE e destinatário = LOJA — mesma sequência de chamadas
+    (carrinho -> checkout -> generate -> imprimir) do envio normal, só com
+    os endereços invertidos. Nunca mexe em `shipping_service_json` (o envio
+    de ida); tudo fica em `reverse_shipping_json`, um campo separado.
+
+    Com saldo no Melhor Envio: compra, gera e já salva o PDF (Storage
+    privado, nunca `/media` público) e o pedido avança pra "returning". Sem
+    saldo: fica no carrinho do ME (`me_status=awaiting_me_payment`), igual o
+    envio normal, e o pedido não muda de status ainda.
+    """
+    from sqlalchemy.orm import selectinload
+
+    from app.core.events import emit
+    from app.modules.orders.models import Order
+    from app.modules.orders.service import record_event, transition
+    from app.shared.storage import private_storage
+
+    order = await db.scalar(
+        select(Order).where(Order.number == number).options(selectinload(Order.items))
+    )
+    if not order:
+        raise DomainError("Pedido não encontrado.", code="order_not_found")
+    if order.reverse_shipping_json:
+        raise DomainError(
+            "Esse pedido já tem uma logística reversa gerada.", code="reverse_already_exists"
+        )
+
+    addr = order.shipping_address_json or {}
+    _req = ("street", "number", "district", "city", "state", "zip")
+    _missing = [k for k in _req if not str(addr.get(k) or "").strip()]
+    if _missing:
+        raise DomainError(
+            f"Endereço do cliente incompleto para a logística reversa (falta: {', '.join(_missing)}).",
+            code="reverse_missing_address",
+        )
+    cpf = _digits(order.cpf or addr.get("cpf") or "")
+    if len(cpf) != 11:
+        raise DomainError(
+            "CPF do cliente ausente/inválido — não é possível gerar a logística reversa.",
+            code="reverse_missing_cpf",
+        )
+
+    cfg = await load_config(db)
+    cfg = await _maybe_refresh_me_token(db, cfg)
+    token = cfg.melhor_envio_token or settings.melhor_envio_token
+    if not token:
+        raise DomainError("Configure o token do Melhor Envio no menu Frete.", code="me_no_token")
+    base = _me_base(cfg)
+    store_zip = cfg.origin_zip or settings.shipping_origin_zip
+    pkg = cfg.default_package
+    customer_zip = _digits(addr.get("zip", ""))
+
+    # cotação: origem = cliente, destino = loja — pega a tarifa mais barata
+    # entre os serviços permitidos (mesma regra do frete normal da loja).
+    provider = MelhorEnvioProvider(token=token, base_url=base)
+    rate_objs = await provider.quote(
+        origin_zip=customer_zip,
+        dest_zip=store_zip,
+        packages=[Package(pkg.weight_grams, pkg.length_mm, pkg.width_mm, pkg.height_mm)],
+    )
+    allowed = {s.strip().lower() for s in (cfg.allowed_services or []) if s.strip()}
+    rates = [r.as_dict() for r in rate_objs]
+    eligible = [r for r in rates if _service_allowed(r, allowed)] or rates
+    if not eligible:
+        raise DomainError(
+            "Melhor Envio não retornou nenhuma tarifa para o CEP do cliente.", code="reverse_no_rate"
+        )
+    rate = min(eligible, key=lambda r: r["price_cents"])
+    service_id = rate["id"]
+
+    from_block = {
+        "name": addr.get("recipient_name") or order.email,
+        "phone": _digits(addr.get("phone", "")),
+        "email": order.email,
+        "document": cpf,
+        "address": addr.get("street", ""),
+        "number": str(addr.get("number", "")),
+        "complement": addr.get("complement") or "",
+        "district": addr.get("district", ""),
+        "city": addr.get("city", ""),
+        "state_abbr": (addr.get("state") or "").upper()[:2],
+        "country_id": "BR",
+        "postal_code": customer_zip,
+    }
+    # destinatário = a loja — reaproveita a MESMA função do envio normal,
+    # sem alterá-la.
+    to_block = await _me_from_block(db, cfg, store_zip)
+
+    total_qty = sum(i.quantity for i in order.items) or 1
+    svc: dict = {"created_at": datetime.now(UTC).isoformat()}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": settings.melhor_envio_user_agent,
+    }
+    label_url: str | None = None
+
+    async with httpx.AsyncClient(timeout=40, headers=headers) as c:
+        cart_payload = {
+            "service": int(service_id) if str(service_id).isdigit() else service_id,
+            "from": from_block,
+            "to": to_block,
+            "products": [
+                {
+                    "name": (it.name or "Item")[:120],
+                    "quantity": it.quantity,
+                    "unitary_value": round(it.unit_price_cents / 100, 2),
+                }
+                for it in order.items
+            ],
+            "volumes": [
+                {
+                    "height": max(1, round(pkg.height_mm / 10)),
+                    "width": max(1, round(pkg.width_mm / 10)),
+                    "length": max(1, round(pkg.length_mm / 10)),
+                    "weight": round(max(1, pkg.weight_grams) * total_qty / 1000, 3),
+                }
+            ],
+            "options": {
+                "insurance_value": round(order.grand_total_cents / 100, 2),
+                "receipt": False,
+                "own_hand": False,
+                "reminder": f"Devolução pedido {number}",
+                "platform": "Loja - logística reversa",
+                "tags": [{"tag": f"devolucao-{number}", "url": None}],
+            },
+        }
+        r = await c.post(f"{base}/api/v2/me/cart", json=cart_payload)
+        if r.status_code >= 300:
+            raise DomainError(_me_err("carrinho (devolução)", r), code="reverse_cart_failed")
+        shipment_id = str((r.json() or {}).get("id") or "")
+        if not shipment_id:
+            raise DomainError(
+                "Melhor Envio não retornou o id do envio de devolução.", code="reverse_cart_failed"
+            )
+        svc["shipment_id"] = shipment_id
+        svc["me_status"] = "cart"
+
+        r = await c.post(f"{base}/api/v2/me/shipment/checkout", json={"orders": [shipment_id]})
+        if r.status_code >= 300:
+            if _me_is_no_balance(r):
+                svc["me_status"] = "awaiting_me_payment"
+                order.reverse_shipping_json = dict(svc)
+                await record_event(
+                    db, order, type="reverse_label_cart", actor_type="admin",
+                    message=(
+                        "Logística reversa criada no carrinho do Melhor Envio — "
+                        "sem saldo, aguardando pagamento no painel do ME."
+                    ),
+                )
+                return {"ok": True, "awaiting_payment": True, **svc}
+            raise DomainError(_me_err("compra (devolução)", r), code="reverse_checkout_failed")
+
+        checkout: dict = {}
+        try:
+            checkout = r.json()
+        except Exception:  # noqa: BLE001
+            pass
+        po = _me_pick_order(checkout, shipment_id)
+        protocol = ((checkout.get("purchase") or {}).get("protocol")) or po.get("protocol")
+        if protocol:
+            svc["protocol"] = protocol
+        svc["me_status"] = "purchased"
+        order.reverse_shipping_json = dict(svc)
+        await db.flush()
+
+        await c.post(f"{base}/api/v2/me/shipment/generate", json={"orders": [shipment_id]})
+
+        r = await c.post(f"{base}/api/v2/me/shipment/print", json={"mode": "public", "orders": [shipment_id]})
+        if r.status_code < 300:
+            try:
+                label_url = (r.json() or {}).get("url")
+            except Exception:  # noqa: BLE001
+                pass
+
+        r = await c.post(f"{base}/api/v2/me/shipment/tracking", json={"orders": [shipment_id]})
+        if r.status_code < 300:
+            try:
+                info = (r.json() or {}).get(shipment_id) or {}
+                if info.get("tracking"):
+                    svc["tracking_code"] = info["tracking"]
+            except Exception:  # noqa: BLE001
+                pass
+
+    if not label_url:
+        # comprada, mas o link de impressão falhou — não trava a compra, só
+        # não tem PDF ainda. Fica visível pro admin tentar de novo depois.
+        order.reverse_shipping_json = dict(svc)
+        await record_event(
+            db, order, type="reverse_label_generated", actor_type="admin",
+            message="Logística reversa comprada, mas o PDF ainda não pôde ser gerado.",
+        )
+        return {"ok": True, "label_pdf": False, **svc}
+
+    pdf = await _render_url_to_pdf(label_url, postal_card=True, want_declaration=False)
+    key = f"orders/{number}/reverse-label.pdf"
+    private_storage.save(key, pdf, "application/pdf")
+    svc["reverse_label_key"] = key
+    order.reverse_shipping_json = dict(svc)
+
+    await record_event(
+        db, order, type="reverse_label_generated", actor_type="admin",
+        message="Etiqueta de logística reversa gerada — PDF enviado ao cliente por e-mail.",
+    )
+    await transition(db, order, "returning", actor_type="system", message="Logística reversa gerada.")
+    await emit("order.reverse_label_ready", {"order_id": str(order.id)})
+
+    return {"ok": True, "label_pdf": True, **svc}
+
+
 async def send_orders_to_melhor_envio(
     db: AsyncSession, order_numbers: list[str], *, buy: bool = True
 ) -> dict:
@@ -1235,3 +1448,62 @@ async def poll_melhor_envio_tracking(db: AsyncSession) -> dict:
 
     await db.flush()
     return {"ran": True, "checked": len(ids), "updated": updated, "errors": errors}
+
+
+async def sync_reverse_tracking(db: AsyncSession) -> dict:
+    """Preenche o rastreio dos envios de logística reversa (devolução) que
+    ainda não saiu na hora em que a etiqueta foi gerada — a geração no
+    Melhor Envio é assíncrona (visto na prática testando o Sandbox), então
+    às vezes o código só fica disponível minutos depois. NUNCA muda o status
+    do pedido (returning -> returned é sempre manual, quando você recebe o
+    produto de volta) — só atualiza o rastreio em si."""
+    from app.modules.orders.models import Order
+
+    cfg = await load_config(db)
+    cfg = await _maybe_refresh_me_token(db, cfg)
+    token = cfg.melhor_envio_token or settings.melhor_envio_token
+    if not token:
+        return {"ran": False, "reason": "sem token do Melhor Envio"}
+
+    rows = list(
+        await db.scalars(
+            select(Order).where(
+                Order.status == "returning",
+                Order.reverse_shipping_json["shipment_id"].astext.isnot(None),
+                Order.reverse_shipping_json["tracking_code"].astext.is_(None),
+            )
+        )
+    )
+    if not rows:
+        return {"ran": True, "checked": 0, "updated": 0}
+
+    base = _me_base(cfg)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": settings.melhor_envio_user_agent,
+    }
+    updated = 0
+    async with httpx.AsyncClient(timeout=40, headers=headers) as c:
+        for order in rows:
+            svc = dict(order.reverse_shipping_json or {})
+            sid = svc.get("shipment_id")
+            if not sid:
+                continue
+            try:
+                r = await c.post(f"{base}/api/v2/me/shipment/tracking", json={"orders": [sid]})
+                if r.status_code >= 300:
+                    continue
+                info = (r.json() or {}).get(sid) or {}
+                code = info.get("tracking") or info.get("melhorenvio_tracking")
+            except Exception:  # noqa: BLE001
+                logger.exception("sync reversa: falha ao consultar envio %s", sid)
+                continue
+            if code and svc.get("tracking_code") != code:
+                svc["tracking_code"] = code
+                order.reverse_shipping_json = svc
+                updated += 1
+
+    await db.flush()
+    return {"ran": True, "checked": len(rows), "updated": updated}

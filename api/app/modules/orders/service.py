@@ -44,8 +44,11 @@ _TRANSITIONS: dict[str, set[str]] = {
     "paid": {"processing", "tracking_available", "canceled", "refunded"},
     "processing": {"tracking_available", "shipped", "canceled", "refunded"},
     "tracking_available": {"shipped", "delivered", "canceled", "refunded"},
-    "shipped": {"delivered", "refunded"},
-    "delivered": {"refunded"},
+    "shipped": {"delivered", "refunded", "returning"},
+    "delivered": {"refunded", "returning"},
+    "returning": {"returned"},
+    "returned": {"return_completed", "refunded"},
+    "return_completed": set(),
     "canceled": set(),
     "refunded": set(),
 }
@@ -358,6 +361,7 @@ async def order_pulse(
 _ORDER_STATUSES = (
     "pending_payment", "paid", "processing", "tracking_available", "shipped",
     "delivered", "canceled", "refunded",
+    "returning", "returned", "return_completed",
 )
 
 
@@ -377,6 +381,12 @@ async def transition(
         if new_status not in allowed:
             raise ValidationError(f"Transição inválida: {order.status} → {new_status}.")
     prev = order.status
+    # estorno de um pedido já devolvido fisicamente (recebemos o produto de
+    # volta) fecha o ciclo de devolução, em vez de virar um "reembolsado"
+    # genérico -- é o gatilho pedido: "estornei no gateway" -> "Devolução
+    # finalizada", sem precisar de endpoint de estorno separado.
+    if new_status == "refunded" and prev == "returned":
+        new_status = "return_completed"
     order.status = new_status
 
     if new_status == "paid":
@@ -390,10 +400,12 @@ async def transition(
         order.fulfillment_status = "fulfilled" if order.fulfillment_status == "fulfilled" else "partial"
     elif new_status == "delivered":
         order.fulfillment_status = "fulfilled"
-    elif new_status in ("canceled", "refunded"):
-        if prev not in ("canceled", "refunded"):
+    elif new_status in ("canceled", "refunded", "return_completed"):
+        # devolução finalizada = produto físico voltou pro estoque, igual
+        # cancelamento/reembolso comuns.
+        if prev not in ("canceled", "refunded", "return_completed"):
             await _restore_stock(db, order)
-        if new_status == "refunded":
+        if new_status in ("refunded", "return_completed"):
             order.payment_status = "refunded"
             await _sync_payment_record(db, order, "refunded")
 
@@ -533,6 +545,7 @@ def to_out(order: Order) -> dict:
         "coupon_code": order.coupon_code,
         "shipping_method": order.shipping_method,
         "shipping_service": order.shipping_service_json,
+        "reverse_shipping": order.reverse_shipping_json,
         "shipping_address": order.shipping_address_json,
         "customer_note": order.customer_note,
         "placed_at": order.placed_at,

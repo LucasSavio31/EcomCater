@@ -222,6 +222,32 @@ async def melhor_envio_label(
     return _pdf_response(pdf, f"etiqueta-{number}.pdf")
 
 
+@router.post("/{number}/reverse-logistics")
+async def generate_reverse_logistics(number: str, db: DbDep, _: AdminDep) -> dict:
+    """Gera a logística reversa (devolução) do pedido no Melhor Envio —
+    remetente = cliente, destinatário = loja."""
+    from app.modules.shipping import service as shipping
+
+    return await shipping.generate_reverse_label(db, number)
+
+
+@router.get("/{number}/reverse-label")
+async def admin_reverse_label(
+    number: str,
+    db: DbDep,
+    _: Annotated[AdminUser, Depends(get_current_admin_downloadable)],
+) -> Response:
+    """PDF da etiqueta de devolução já gerada (lido do Storage privado)."""
+    from app.core.errors import NotFoundError
+    from app.shared.storage import private_storage
+
+    order = await service.get_by_number(db, number)
+    key = (order.reverse_shipping_json or {}).get("reverse_label_key")
+    if not key:
+        raise NotFoundError("Etiqueta de devolução não encontrada.")
+    return _pdf_response(private_storage.read(key), f"devolucao-{number}.pdf")
+
+
 @router.post("/bulk-status")
 async def bulk_status(
     body: BulkStatusIn, db: DbDep, admin: EditorDep, background: BackgroundTasks

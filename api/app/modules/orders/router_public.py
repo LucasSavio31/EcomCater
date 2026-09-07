@@ -176,3 +176,36 @@ async def get_order(
     # convidado/não-dono: exige e-mail correspondente (impede enumeração por número)
     order = await service.get_by_number(db, number, email=email, require_email=True)
     return {**service.to_out(order), "payment": await service.payment_for_order(db, order.id)}
+
+
+@router.get("/{number}/reverse-label")
+async def get_reverse_label(
+    number: str,
+    db: DbDep,
+    user: UserDep,
+    email: str | None = Query(None),
+) -> Response:
+    """PDF da etiqueta de logística reversa (devolução) — mesmo controle de
+    dono/convidado+e-mail de `GET /{number}`. Serve o PDF salvo no Storage
+    privado (não re-renderiza, não expõe URL pública)."""
+    from app.core.errors import NotFoundError
+    from app.shared.storage import private_storage
+
+    if user:
+        order = await service.get_by_number(db, number)
+        if order.user_id and str(order.user_id) == str(user.id):
+            key = (order.reverse_shipping_json or {}).get("reverse_label_key")
+            if not key:
+                raise NotFoundError("Etiqueta de devolução não encontrada.")
+            return Response(
+                content=private_storage.read(key), media_type="application/pdf",
+                headers={"Content-Disposition": f'inline; filename="devolucao-{number}.pdf"'},
+            )
+    order = await service.get_by_number(db, number, email=email, require_email=True)
+    key = (order.reverse_shipping_json or {}).get("reverse_label_key")
+    if not key:
+        raise NotFoundError("Etiqueta de devolução não encontrada.")
+    return Response(
+        content=private_storage.read(key), media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="devolucao-{number}.pdf"'},
+    )

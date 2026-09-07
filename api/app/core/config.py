@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     storage_backend: str = "local"
     storage_local_dir: str = "/data/media"
     media_base_url: str = "http://localhost:8000/media"
+    # arquivos privados (ex.: PDF de etiqueta de logística reversa) — NUNCA
+    # dentro de storage_local_dir, que é servido publicamente em /media.
+    private_storage_dir: str = "/data/private"
 
     # imagem
     image_webp_quality: int = 82
