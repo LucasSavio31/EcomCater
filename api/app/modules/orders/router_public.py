@@ -209,3 +209,31 @@ async def get_reverse_label(
         content=private_storage.read(key), media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="devolucao-{number}.pdf"'},
     )
+
+
+@router.get("/{number}/invoice")
+async def get_invoice(
+    number: str,
+    db: DbDep,
+    user: UserDep,
+    email: str | None = Query(None),
+) -> Response:
+    """PDF da fatura do pedido — mesmo controle de dono/convidado+e-mail de
+    `GET /{number}`. Gerada na hora (HTML+CSS -> PDF via WeasyPrint, rápido,
+    sem navegador) — não precisa estar salva em lugar nenhum."""
+    from app.modules.orders.invoice import build_invoice_pdf
+
+    if user:
+        order = await service.get_by_number(db, number)
+        if order.user_id and str(order.user_id) == str(user.id):
+            pdf = await build_invoice_pdf(db, order)
+            return Response(
+                content=pdf, media_type="application/pdf",
+                headers={"Content-Disposition": f'inline; filename="fatura-{number}.pdf"'},
+            )
+    order = await service.get_by_number(db, number, email=email, require_email=True)
+    pdf = await build_invoice_pdf(db, order)
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="fatura-{number}.pdf"'},
+    )

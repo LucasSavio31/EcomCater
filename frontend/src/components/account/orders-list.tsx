@@ -16,10 +16,10 @@ const RETURN_STATUS_LABEL: Record<string, string> = {
   return_completed: 'Devolução finalizada',
 };
 
-async function downloadReverseLabel(number: string): Promise<void> {
+async function downloadOrderPdf(path: string): Promise<void> {
   const token = getCustomerSession()?.accessToken ?? '';
   try {
-    const r = await fetch(`${API_BASE_URL}/api/orders/${number}/reverse-label`, {
+    const r = await fetch(`${API_BASE_URL}${path}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     if (!r.ok) return;
@@ -28,9 +28,14 @@ async function downloadReverseLabel(number: string): Promise<void> {
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   } catch {
-    /* falha silenciosa — o cliente já recebeu o PDF por e-mail */
+    /* falha silenciosa */
   }
 }
+
+const downloadReverseLabel = (number: string) =>
+  downloadOrderPdf(`/api/orders/${number}/reverse-label`);
+
+const downloadInvoice = (number: string) => downloadOrderPdf(`/api/orders/${number}/invoice`);
 
 const ORDER_STATUS_PT: Record<string, string> = {
   pending_payment: 'Aguardando pagamento',
@@ -114,7 +119,7 @@ function correiosTrackingUrl(code: string): string {
 }
 
 /** Mesmo visual da linha do tempo do painel: bolinha + fio + rótulo do status. */
-function Timeline({ events }: { events: OrderEvent[] }) {
+function Timeline({ events, number }: { events: OrderEvent[]; number: string }) {
   if (!events || events.length === 0) {
     return <p className="text-sm text-text-muted">Sem eventos.</p>;
   }
@@ -144,6 +149,15 @@ function Timeline({ events }: { events: OrderEvent[] }) {
               {fmtDateTime(ev.created_at)}
               {ev.actor_type ? ` · ${ACTOR_PT[ev.actor_type] ?? ev.actor_type}` : ''}
             </span>
+            {ev.to_status === 'paid' && (
+              <button
+                type="button"
+                onClick={() => void downloadInvoice(number)}
+                className="mt-1 self-start text-xs text-primary underline"
+              >
+                Baixar fatura (PDF)
+              </button>
+            )}
           </div>
         </li>
       ))}
@@ -400,7 +414,7 @@ export function OrdersList() {
 
                   <div className="flex flex-col gap-2">
                     <h3 className="text-sm font-semibold">Linha do tempo</h3>
-                    <Timeline events={o.events} />
+                    <Timeline events={o.events} number={o.number} />
                   </div>
                 </div>
               )}
