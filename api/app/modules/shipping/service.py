@@ -1020,6 +1020,26 @@ def _labels_a4_4up(pdf: bytes) -> bytes:
         return pdf
 
 
+async def _mark_labels_printed(db: AsyncSession, order_numbers: list[str]) -> None:
+    """Registra a 1ª vez que a etiqueta de cada pedido foi baixada/impressa
+    pelo painel — usado só pra exibição (coluna Etiqueta), não muda status."""
+    from app.modules.orders.models import Order
+    from app.modules.orders.service import record_event
+
+    rows = list(await db.scalars(select(Order).where(Order.number.in_(order_numbers))))
+    now = datetime.now(UTC).isoformat()
+    for order in rows:
+        svc = dict(order.shipping_service_json or {})
+        if svc.get("label_printed_at"):
+            continue
+        svc["label_printed_at"] = now
+        order.shipping_service_json = svc
+        await record_event(
+            db, order, type="label_printed", actor_type="admin",
+            message="Etiqueta baixada/impressa pelo painel.",
+        )
+
+
 async def melhor_envio_labels_pdf(db: AsyncSession, order_numbers: list[str]) -> bytes:
     """PDF das etiquetas dos pedidos, pronto para baixar no painel da loja
     (sem abrir o site do Melhor Envio). Respeita o formato e a opção de
@@ -1034,6 +1054,7 @@ async def melhor_envio_labels_pdf(db: AsyncSession, order_numbers: list[str]) ->
     )
     if fmt == "a4_4up":
         pdf = _labels_a4_4up(pdf)
+    await _mark_labels_printed(db, order_numbers)
     return pdf
 
 

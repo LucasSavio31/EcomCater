@@ -674,6 +674,7 @@ def list_item_out(order: Order) -> dict:
         "items_count": total_qty,
         "suppliers": sorted({i.supplier for i in items if i.supplier}),
         "me_label": me_label,
+        "label_printed": bool(svc.get("label_printed_at")),
     }
 
 

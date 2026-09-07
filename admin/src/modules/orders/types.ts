@@ -30,6 +30,8 @@ export interface OrderListItem {
    *  - 'none'      = sem etiqueta
    */
   me_label?: 'ready' | 'waiting' | 'purchased' | 'no_balance' | 'none';
+  /** true depois que o PDF da etiqueta foi baixado/impresso com sucesso ao menos 1x. */
+  label_printed?: boolean;
 }
 
 export interface OrderPayment {

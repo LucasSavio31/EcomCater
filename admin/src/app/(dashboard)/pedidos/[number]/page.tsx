@@ -141,6 +141,7 @@ const EVENT_LABEL: Record<string, string> = {
   note: 'Nota interna',
   tracking_added: 'Rastreio adicionado',
   tracking_update: 'Atualização de rastreio',
+  label_printed: 'Etiqueta impressa',
   edited: 'Pedido editado',
   payment_confirmed: 'Pagamento confirmado',
 };

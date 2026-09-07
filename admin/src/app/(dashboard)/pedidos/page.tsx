@@ -218,8 +218,12 @@ function PedidosPageInner() {
             ● Entregue
           </span>
         ) : o.status === 'shipped' ? (
-          <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+          <span className="rounded-full bg-blue-600/10 px-2 py-0.5 text-xs font-medium text-blue-600">
             ● Em trânsito
+          </span>
+        ) : o.status === 'tracking_available' && o.label_printed ? (
+          <span className="rounded-full bg-neutral-500/10 px-2 py-0.5 text-xs font-medium text-neutral-500">
+            ● Impressa
           </span>
         ) : o.status === 'tracking_available' ? (
           <span className="rounded-full bg-blue-600/10 px-2 py-0.5 text-xs font-medium text-blue-600">
