@@ -395,6 +395,7 @@ function PedidosPageInner() {
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
       setSelected(new Set());
+      reload(); // atualiza a coluna Etiqueta (pode ter virado "Impressa" agora)
     } catch {
       toast.error('Falha de rede ao baixar as etiquetas.');
     } finally {
