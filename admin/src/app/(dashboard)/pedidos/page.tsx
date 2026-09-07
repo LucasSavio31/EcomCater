@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Button, Card, Input, Tooltip } from '@ecom/ui';
+import { Badge, Button, Card, Input, Tooltip } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { Select } from '@/components/form-controls';
 import { StatusBadge } from '@/components/status-badge';
@@ -214,9 +214,7 @@ function PedidosPageInner() {
       header: 'Etiqueta',
       cell: (o) =>
         o.status === 'delivered' ? (
-          <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
-            ● Entregue
-          </span>
+          <Badge tone="success">● Entregue</Badge>
         ) : o.status === 'shipped' ? (
           <span className="rounded-full bg-blue-600/10 px-2 py-0.5 text-xs font-medium text-blue-600">
             ● Em trânsito
