@@ -214,7 +214,7 @@ function PedidosPageInner() {
       header: 'Etiqueta',
       cell: (o) =>
         o.status === 'delivered' ? (
-          <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+          <span className="rounded-full bg-green-600/10 px-2 py-0.5 text-xs font-medium text-green-600">
             ● Entregue
           </span>
         ) : o.status === 'shipped' ? (
