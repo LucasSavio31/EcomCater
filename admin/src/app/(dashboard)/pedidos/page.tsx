@@ -213,9 +213,17 @@ function PedidosPageInner() {
       key: 'me_label',
       header: 'Etiqueta',
       cell: (o) =>
-        o.me_label === 'ready' ? (
+        o.status === 'delivered' ? (
           <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
-            ● liberada
+            ● Entregue
+          </span>
+        ) : o.status === 'shipped' ? (
+          <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+            ● Em trânsito
+          </span>
+        ) : o.status === 'tracking_available' ? (
+          <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+            ● A Imprimir
           </span>
         ) : o.me_label === 'waiting' ? (
           <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
