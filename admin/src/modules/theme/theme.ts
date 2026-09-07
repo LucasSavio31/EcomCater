@@ -21,7 +21,12 @@ export const NEUTRAL_ADMIN_THEME: AdminTheme = {
   store_name: 'Loja',
 };
 
+// Server-only: dentro do container, chama a API pela rede interna do Docker
+// (http, sem TLS) em vez da URL pública HTTPS com certificado autoassinado
+// — evita depender do Node confiar nesse certificado (NODE_EXTRA_CA_CERTS
+// nem sempre é respeitado pelo fetch()/undici).
 const API_URL =
+  process.env.API_INTERNAL_URL ??
   process.env.NEXT_PUBLIC_ADMIN_API_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
   'http://localhost:8000';
