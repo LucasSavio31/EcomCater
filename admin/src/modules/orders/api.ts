@@ -94,6 +94,17 @@ export const ordersApi = {
       method: 'POST',
       body: { order_numbers: numbers, buy },
     }),
+  /** Logística reversa: etiqueta com remetente = cliente, destinatário = loja. */
+  generateReverseLogistics: (number: string) =>
+    adminFetch<{
+      ok: boolean;
+      awaiting_payment?: boolean;
+      label_pdf?: boolean;
+      shipment_id?: string;
+      protocol?: string;
+      tracking_code?: string;
+      me_status?: string;
+    }>(`/api/admin/orders/${number}/reverse-logistics`, { method: 'POST' }),
   /** Força agora a sincronização de rastreio/status com o Melhor Envio. */
   syncMelhorEnvioTracking: () =>
     adminFetch<{ ran: boolean; checked?: number; updated?: number; reason?: string }>(

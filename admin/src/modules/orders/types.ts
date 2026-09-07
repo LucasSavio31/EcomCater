@@ -6,7 +6,10 @@ export type OrderStatus =
   | 'shipped'
   | 'delivered'
   | 'canceled'
-  | 'refunded';
+  | 'refunded'
+  | 'returning'
+  | 'returned'
+  | 'return_completed';
 
 export interface OrderListItem {
   id: string;
@@ -100,6 +103,15 @@ export interface ShippingServiceInfo {
   me_reminder?: string;
 }
 
+export interface ReverseShippingInfo {
+  shipment_id?: string;
+  protocol?: string;
+  tracking_code?: string;
+  me_status?: string;
+  reverse_label_key?: string;
+  created_at?: string;
+}
+
 export interface OrderDetail {
   number: string;
   status: OrderStatus;
@@ -116,6 +128,7 @@ export interface OrderDetail {
   coupon_code: string | null;
   shipping_method: string | null;
   shipping_service: ShippingServiceInfo | null;
+  reverse_shipping: ReverseShippingInfo | null;
   shipping_address: OrderAddress | null;
   customer_note: string | null;
   placed_at: string;
@@ -131,8 +144,11 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   paid: ['processing', 'tracking_available', 'canceled', 'refunded'],
   processing: ['tracking_available', 'shipped', 'canceled', 'refunded'],
   tracking_available: ['shipped', 'delivered', 'canceled', 'refunded'],
-  shipped: ['delivered', 'refunded'],
-  delivered: ['refunded'],
+  shipped: ['delivered', 'refunded', 'returning'],
+  delivered: ['refunded', 'returning'],
+  returning: ['returned'],
+  returned: ['return_completed', 'refunded'],
+  return_completed: [],
   canceled: [],
   refunded: [],
 };

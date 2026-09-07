@@ -10,6 +10,9 @@ const ORDER_STATUS: Record<string, { label: string; tone: BadgeTone }> = {
   delivered: { label: 'Entregue', tone: 'success' },
   canceled: { label: 'Cancelado', tone: 'danger' },
   refunded: { label: 'Reembolsado', tone: 'danger' },
+  returning: { label: 'Em Devolução', tone: 'warning' },
+  returned: { label: 'Devolvido', tone: 'yellow' },
+  return_completed: { label: 'Devolução finalizada', tone: 'neutral' },
 };
 
 const PAYMENT_STATUS: Record<string, { label: string; tone: BadgeTone }> = {

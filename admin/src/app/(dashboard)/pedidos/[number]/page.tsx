@@ -28,6 +28,9 @@ const ALL_STATUSES: OrderStatus[] = [
   'delivered',
   'canceled',
   'refunded',
+  'returning',
+  'returned',
+  'return_completed',
 ];
 
 const ADDR_FIELDS: { key: keyof NonNullable<OrderEditPayload['shipping_address']>; label: string }[] = [
@@ -144,6 +147,8 @@ const EVENT_LABEL: Record<string, string> = {
   label_printed: 'Etiqueta impressa',
   edited: 'Pedido editado',
   payment_confirmed: 'Pagamento confirmado',
+  reverse_label_generated: 'Logística reversa gerada',
+  reverse_label_cart: 'Logística reversa — carrinho do Melhor Envio',
 };
 
 function Timeline({ events }: { events: OrderDetail['events'] }) {
@@ -326,6 +331,45 @@ export default function PedidoDetalhePage() {
     if (r?.ok) toast.success(r.message);
     else toast.error(r?.message ?? 'Falha ao gerar a etiqueta.');
     reload();
+  }
+
+  const [reverseBusy, setReverseBusy] = useState(false);
+  const [reversePrintBusy, setReversePrintBusy] = useState(false);
+  async function generateReverseLabel(): Promise<void> {
+    setReverseBusy(true);
+    const res = await ordersApi.generateReverseLogistics(number);
+    setReverseBusy(false);
+    if (!res.ok) return toast.error(res.error.message);
+    if (res.data.awaiting_payment) {
+      toast.success('Envio de devolução criado no carrinho do Melhor Envio — sem saldo, aguardando pagamento no painel do ME.');
+    } else if (res.data.label_pdf) {
+      toast.success('Logística reversa gerada — PDF enviado ao cliente por e-mail.');
+    } else {
+      toast.success('Logística reversa comprada, mas o PDF ainda não pôde ser gerado.');
+    }
+    reload();
+  }
+  async function downloadReverseLabel(): Promise<void> {
+    setReversePrintBusy(true);
+    const t = getSession()?.accessToken ?? '';
+    try {
+      const r = await fetch(
+        `${ADMIN_API_BASE_URL}/api/admin/orders/${number}/reverse-label`,
+        { headers: { Authorization: `Bearer ${t}` } },
+      );
+      if (!r.ok) {
+        toast.error('Não foi possível baixar a etiqueta de devolução.');
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      toast.error('Falha de rede ao baixar a etiqueta de devolução.');
+    } finally {
+      setReversePrintBusy(false);
+    }
   }
 
   const setAddr = (k: string, v: string) =>
@@ -648,6 +692,82 @@ export default function PedidoDetalhePage() {
                   </p>
                 </div>
               </Card>
+
+              {(data.status === 'shipped' ||
+                data.status === 'delivered' ||
+                data.reverse_shipping) && (
+                <Card variant="outline" className="flex flex-col gap-3">
+                  <h2 className="text-lg font-semibold">Logística reversa (devolução)</h2>
+                  {!data.reverse_shipping ? (
+                    <>
+                      <p className="text-sm text-text-muted">
+                        Gera uma etiqueta no Melhor Envio com remetente = cliente e
+                        destinatário = loja. O PDF é enviado ao cliente por e-mail
+                        automaticamente.
+                      </p>
+                      <Button
+                        size="sm"
+                        loading={reverseBusy}
+                        onClick={() => void generateReverseLabel()}
+                      >
+                        Gerar logística reversa
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">Etiqueta de devolução</span>
+                        {data.reverse_shipping.reverse_label_key ? (
+                          <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+                            ● gerada
+                          </span>
+                        ) : data.reverse_shipping.me_status === 'awaiting_me_payment' ? (
+                          <span
+                            title="Sem saldo no Melhor Envio — o envio está no carrinho do ME."
+                            className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning"
+                          >
+                            aguardando pagamento no Melhor Envio
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+                            comprada (gerando…)
+                          </span>
+                        )}
+                      </div>
+                      {data.reverse_shipping.protocol && (
+                        <p className="text-xs text-text-muted">
+                          Protocolo:{' '}
+                          <span className="font-mono">{data.reverse_shipping.protocol}</span>
+                        </p>
+                      )}
+                      {data.reverse_shipping.tracking_code && (
+                        <p className="text-xs text-text-muted">
+                          Rastreio:{' '}
+                          <a
+                            href={correiosTrackingUrl(data.reverse_shipping.tracking_code)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-primary underline"
+                          >
+                            {data.reverse_shipping.tracking_code}
+                          </a>
+                        </p>
+                      )}
+                      {data.reverse_shipping.reverse_label_key && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          loading={reversePrintBusy}
+                          onClick={() => void downloadReverseLabel()}
+                          className="self-start"
+                        >
+                          <IconTag width={16} height={16} /> Baixar etiqueta de devolução (PDF)
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </Card>
+              )}
 
               <Card variant="outline" className="flex flex-col gap-3">
                 <h2 className="text-lg font-semibold">Linha do tempo</h2>

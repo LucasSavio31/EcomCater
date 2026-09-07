@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from 'react';
 import { cn } from '../lib/cn';
 
-export type BadgeTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
+export type BadgeTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'yellow';
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: BadgeTone;
@@ -14,6 +14,9 @@ const TONES: Record<BadgeTone, string> = {
   warning: 'bg-warning text-white',
   danger: 'bg-danger text-white',
   info: 'bg-blue-600 text-white',
+  // cor Tailwind padrão (não CSS var custom) -- amarelo de verdade, não o
+  // âmbar de "warning" (--color-warning é laranja).
+  yellow: 'bg-yellow-500 text-yellow-950',
 };
 
 export function Badge({ tone = 'neutral', className, ...rest }: BadgeProps) {
