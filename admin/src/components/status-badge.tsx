@@ -11,7 +11,8 @@ const ORDER_STATUS: Record<string, { label: string; tone: BadgeTone }> = {
   canceled: { label: 'Cancelado', tone: 'danger' },
   refunded: { label: 'Reembolsado', tone: 'danger' },
   returning: { label: 'Em Devolução', tone: 'warning' },
-  returned: { label: 'Devolvido', tone: 'yellow' },
+  return_posted: { label: 'Devolução Postada', tone: 'warning' },
+  returned: { label: 'Devolução Entregue', tone: 'yellow' },
   return_completed: { label: 'Devolução finalizada', tone: 'neutral' },
 };
 

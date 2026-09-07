@@ -198,3 +198,45 @@ async def test_reverse_label_guards(client, db, variant, monkeypatch):
     await db.flush()
     with pytest.raises(DomainError):
         await shipping_service.generate_reverse_label(db, order.number)
+
+
+@pytest.mark.asyncio
+async def test_sync_reverse_tracking_advances_status_automatically(client, db, variant, monkeypatch):
+    """returning -> return_posted -> returned, tudo automático via rastreio
+    dos Correios (mockado) -- nunca precisa de confirmação manual."""
+    order = await _delivered_order(client, db, variant)
+    order.status = "returning"
+    order.reverse_shipping_json = {"shipment_id": "SHIP-SYNC-1"}
+    await db.flush()
+    await _setup_config(db)
+
+    async def fake_post(self, url, json=None, **kwargs):
+        if url.endswith("/api/v2/me/shipment/tracking"):
+            return httpx.Response(200, json={"SHIP-SYNC-1": {}})
+        raise AssertionError(f"POST inesperado: {url}")
+
+    async def fake_get(self, url, **kwargs):
+        if url.endswith("/api/v2/me/orders/SHIP-SYNC-1"):
+            return httpx.Response(200, json={"status": "posted", "posted_at": "2026-01-01 10:00:00"})
+        raise AssertionError(f"GET inesperado: {url}")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    result = await shipping_service.sync_reverse_tracking(db)
+    assert result["ran"] is True
+    await db.refresh(order)
+    assert order.status == "return_posted"
+
+    # segunda rodada: Correios confirmam entrega -> vira "returned" direto
+    async def fake_get_delivered(self, url, **kwargs):
+        return httpx.Response(
+            200, json={"status": "delivered", "delivered_at": "2026-01-02 09:00:00"}
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get_delivered)
+
+    result2 = await shipping_service.sync_reverse_tracking(db)
+    assert result2["ran"] is True
+    await db.refresh(order)
+    assert order.status == "returned"

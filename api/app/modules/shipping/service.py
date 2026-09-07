@@ -1461,14 +1461,16 @@ async def poll_melhor_envio_tracking(db: AsyncSession) -> dict:
 
 
 async def sync_reverse_tracking(db: AsyncSession) -> dict:
-    """Preenche o rastreio dos envios de logística reversa (devolução) que
-    ainda não saiu na hora em que a etiqueta foi gerada — a geração no
-    Melhor Envio é assíncrona (visto na prática testando o Sandbox), então
-    às vezes o código só fica disponível minutos depois. NUNCA muda o status
-    do pedido (returning -> returned é sempre manual, quando você recebe o
-    produto de volta) — só atualiza o rastreio em si."""
+    """Acompanha os envios de logística reversa (devolução) em andamento:
+    preenche o rastreio (a geração no ME é assíncrona, visto na prática
+    testando o Sandbox — o código pode só sair minutos depois) e avança o
+    status sozinho conforme os Correios confirmam:
+      returning -> return_posted   (Correios confirma que foi postado)
+      * -> returned                (Correios confirma entrega na loja)
+    `returned` aqui já significa "devolução entregue" — não precisa mais de
+    confirmação manual do lojista."""
     from app.modules.orders.models import Order
-    from app.modules.orders.service import record_event
+    from app.modules.orders.service import record_event, transition
 
     cfg = await load_config(db)
     cfg = await _maybe_refresh_me_token(db, cfg)
@@ -1479,9 +1481,8 @@ async def sync_reverse_tracking(db: AsyncSession) -> dict:
     rows = list(
         await db.scalars(
             select(Order).where(
-                Order.status == "returning",
+                Order.status.in_(("returning", "return_posted")),
                 Order.reverse_shipping_json["shipment_id"].astext.isnot(None),
-                Order.reverse_shipping_json["tracking_code"].astext.is_(None),
             )
         )
     )
@@ -1502,21 +1503,50 @@ async def sync_reverse_tracking(db: AsyncSession) -> dict:
             sid = svc.get("shipment_id")
             if not sid:
                 continue
+            info: dict = {}
             try:
                 r = await c.post(f"{base}/api/v2/me/shipment/tracking", json={"orders": [sid]})
-                if r.status_code >= 300:
-                    continue
-                info = (r.json() or {}).get(sid) or {}
-                code = info.get("tracking") or info.get("melhorenvio_tracking")
+                if r.status_code < 300 and r.content:
+                    info.update((r.json() or {}).get(sid) or {})
+            except Exception:  # noqa: BLE001
+                logger.exception("sync reversa: falha no rastreio do envio %s", sid)
+            try:
+                r = await c.get(f"{base}/api/v2/me/orders/{sid}")
+                if r.status_code < 300 and r.content:
+                    od = r.json()
+                    if isinstance(od, dict):
+                        info.update({k: v for k, v in od.items() if v is not None})
             except Exception:  # noqa: BLE001
                 logger.exception("sync reversa: falha ao consultar envio %s", sid)
-                continue
+
+            code = info.get("tracking") or info.get("melhorenvio_tracking")
             if code and svc.get("tracking_code") != code:
                 svc["tracking_code"] = code
                 order.reverse_shipping_json = svc
                 await record_event(
                     db, order, type="reverse_tracking_added", actor_type="system",
                     message=f"Código de rastreio da devolução: {code}",
+                )
+                updated += 1
+
+            me_status = (info.get("status") or "").lower()
+            if info.get("delivered_at"):
+                me_status = "delivered"
+            elif info.get("posted_at") and not me_status:
+                me_status = "posted"
+
+            if me_status == "delivered" and order.status != "returned":
+                await db.commit()
+                await transition(
+                    db, order, "returned", actor_type="system",
+                    message="Correios confirmam: devolução entregue na loja.",
+                )
+                updated += 1
+            elif me_status in ("posted", "in_transit") and order.status == "returning":
+                await db.commit()
+                await transition(
+                    db, order, "return_posted", actor_type="system",
+                    message="Correios confirmam: devolução postada pelo cliente.",
                 )
                 updated += 1
 

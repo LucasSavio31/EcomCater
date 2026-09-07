@@ -29,6 +29,7 @@ const ALL_STATUSES: OrderStatus[] = [
   'canceled',
   'refunded',
   'returning',
+  'return_posted',
   'returned',
   'return_completed',
 ];

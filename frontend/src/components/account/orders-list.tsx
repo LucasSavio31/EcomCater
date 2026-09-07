@@ -10,12 +10,6 @@ import { resolveMediaUrl } from '@/lib/media';
 import { API_BASE_URL } from '@/lib/api-client';
 import { getCustomerSession } from '@/lib/customer-auth-storage';
 
-const RETURN_STATUS_LABEL: Record<string, string> = {
-  returning: 'Em Devolução',
-  returned: 'Devolvido',
-  return_completed: 'Devolução finalizada',
-};
-
 async function downloadOrderPdf(path: string): Promise<void> {
   const token = getCustomerSession()?.accessToken ?? '';
   try {
@@ -44,6 +38,10 @@ const ORDER_STATUS_PT: Record<string, string> = {
   tracking_available: 'Rastreio disponível',
   shipped: 'Enviado',
   delivered: 'Entregue',
+  returning: 'Em Devolução',
+  return_posted: 'Devolução Postada',
+  returned: 'Devolução Entregue',
+  return_completed: 'Devolução finalizada',
   canceled: 'Cancelado',
   refunded: 'Reembolsado',
 };
@@ -56,7 +54,7 @@ const PAYMENT_PT: Record<string, string> = {
   failed: 'Não autorizado',
 };
 
-type Tone = 'neutral' | 'warning' | 'success' | 'danger' | 'accent' | 'info';
+type Tone = 'neutral' | 'warning' | 'success' | 'danger' | 'accent' | 'info' | 'yellow';
 
 const ORDER_TONE: Record<string, Tone> = {
   pending_payment: 'warning',
@@ -65,6 +63,10 @@ const ORDER_TONE: Record<string, Tone> = {
   tracking_available: 'info',
   shipped: 'accent',
   delivered: 'success',
+  returning: 'warning',
+  return_posted: 'warning',
+  returned: 'yellow',
+  return_completed: 'neutral',
   canceled: 'danger',
   refunded: 'danger',
 };
@@ -361,9 +363,7 @@ export function OrdersList() {
 
                   {o.reverse_shipping && (
                     <div className="flex flex-col gap-1 rounded-card bg-bg-subtle p-2 text-sm">
-                      <span className="font-medium">
-                        Devolução: {RETURN_STATUS_LABEL[o.status] ?? o.status}
-                      </span>
+                      <span className="font-medium">Devolução: {orderStatusLabel(o.status)}</span>
                       {o.reverse_shipping.tracking_code && (
                         <span className="text-xs text-text-muted">
                           Rastreio:{' '}
@@ -428,10 +428,17 @@ export function OrdersList() {
 
 const TAG_TONE_CLASS: Record<Tone, string> = {
   neutral: 'bg-bg-subtle text-text',
-  warning: 'bg-warning/10 text-warning',
-  success: 'bg-success/10 text-success',
-  danger: 'bg-danger/10 text-danger',
-  accent: 'bg-accent/10 text-accent',
+  // cores customizadas do tema (--color-warning etc.) são hex puro -- o
+  // modificador de opacidade do Tailwind (/10) não funciona com elas (a
+  // declaração inteira é descartada, fica sem fundo nenhum). Cores reais
+  // do Tailwind suportam opacidade normalmente.
+  warning: 'bg-amber-600/10 text-amber-600',
+  success: 'bg-green-600/10 text-green-600',
+  danger: 'bg-red-600/10 text-red-600',
+  yellow: 'bg-yellow-500/10 text-yellow-700',
+  // accent é a cor customizável da loja -- sem opacidade (só teria efeito
+  // com a var em formato RGB triplo, não hex), fundo sólido.
+  accent: 'bg-accent text-accent-fg',
   info: 'bg-blue-600/10 text-blue-600',
 };
 

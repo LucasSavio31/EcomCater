@@ -285,6 +285,7 @@ _STATUS_TEMPLATE = {
     # "returning" NÃO está aqui de propósito: o e-mail dela é o dedicado
     # (com o PDF da etiqueta anexado), disparado por `order.reverse_label_ready`
     # — não duplica com um genérico aqui.
+    "return_posted": "order_return_posted",
     "returned": "order_returned",
     "return_completed": "order_return_completed",
 }
@@ -301,7 +302,8 @@ _STATUS_LABELS = {
     "canceled": "Cancelado",
     "refunded": "Reembolsado",
     "returning": "Em Devolução",
-    "returned": "Devolvido",
+    "return_posted": "Devolução Postada",
+    "returned": "Devolução Entregue",
     "return_completed": "Devolução finalizada",
 }
 
@@ -317,9 +319,14 @@ async def _on_status(payload: dict) -> None:
         if not order:
             return
         ctx = _order_ctx(order, await _latest_payment(db, order))
+        # nos status de devolução o rastreio é o do envio REVERSO (cliente ->
+        # loja), não o de ida -- senão mostraria o código errado no e-mail.
+        if status in ("return_posted", "returned"):
+            reverse_tracking = (order.reverse_shipping_json or {}).get("tracking_code")
+            ctx.update(tracking=reverse_tracking, tracking_url=None)
+        else:
+            ctx.update(tracking=_tracking(order), tracking_url=_tracking_url(order))
         ctx.update(
-            tracking=_tracking(order),
-            tracking_url=_tracking_url(order),
             store_name=await _store_name(db),
             review_url=f"{settings.site_url.rstrip('/')}/minha-conta/pedidos",
             status_label=_STATUS_LABELS.get(status, status),

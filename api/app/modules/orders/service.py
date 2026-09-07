@@ -46,7 +46,8 @@ _TRANSITIONS: dict[str, set[str]] = {
     "tracking_available": {"shipped", "delivered", "canceled", "refunded"},
     "shipped": {"delivered", "refunded", "returning"},
     "delivered": {"refunded", "returning"},
-    "returning": {"returned"},
+    "returning": {"return_posted", "returned"},
+    "return_posted": {"returned"},
     "returned": {"return_completed", "refunded"},
     "return_completed": set(),
     "canceled": set(),
@@ -361,7 +362,7 @@ async def order_pulse(
 _ORDER_STATUSES = (
     "pending_payment", "paid", "processing", "tracking_available", "shipped",
     "delivered", "canceled", "refunded",
-    "returning", "returned", "return_completed",
+    "returning", "return_posted", "returned", "return_completed",
 )
 
 

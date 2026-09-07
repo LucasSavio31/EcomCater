@@ -8,6 +8,7 @@ export type OrderStatus =
   | 'canceled'
   | 'refunded'
   | 'returning'
+  | 'return_posted'
   | 'returned'
   | 'return_completed';
 
@@ -146,7 +147,8 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   tracking_available: ['shipped', 'delivered', 'canceled', 'refunded'],
   shipped: ['delivered', 'refunded', 'returning'],
   delivered: ['refunded', 'returning'],
-  returning: ['returned'],
+  returning: ['return_posted', 'returned'],
+  return_posted: ['returned'],
   returned: ['return_completed', 'refunded'],
   return_completed: [],
   canceled: [],

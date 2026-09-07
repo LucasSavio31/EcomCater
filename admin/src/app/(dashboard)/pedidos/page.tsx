@@ -30,6 +30,10 @@ const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: 'tracking_available', label: 'Rastreio disponível' },
   { value: 'shipped', label: 'Enviado' },
   { value: 'delivered', label: 'Entregue' },
+  { value: 'returning', label: 'Em Devolução' },
+  { value: 'return_posted', label: 'Devolução Postada' },
+  { value: 'returned', label: 'Devolução Entregue' },
+  { value: 'return_completed', label: 'Devolução finalizada' },
   { value: 'canceled', label: 'Cancelado' },
   { value: 'refunded', label: 'Reembolsado' },
 ];
@@ -213,7 +217,13 @@ function PedidosPageInner() {
       key: 'me_label',
       header: 'Etiqueta',
       cell: (o) =>
-        o.status === 'delivered' ? (
+        o.status === 'returning' || o.status === 'return_posted' ? (
+          <span className="rounded-full bg-orange-600/10 px-2 py-0.5 text-xs font-medium text-orange-600">
+            ● Devolução Gerada
+          </span>
+        ) : o.status === 'returned' || o.status === 'return_completed' ? (
+          <span className="text-xs text-text-muted">—</span>
+        ) : o.status === 'delivered' ? (
           <span className="rounded-full bg-green-600/10 px-2 py-0.5 text-xs font-medium text-green-600">
             ● Entregue
           </span>
@@ -230,18 +240,18 @@ function PedidosPageInner() {
             ● A Imprimir
           </span>
         ) : o.me_label === 'waiting' ? (
-          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+          <span className="rounded-full bg-amber-600/10 px-2 py-0.5 text-xs font-medium text-amber-600">
             aguardando
           </span>
         ) : o.me_label === 'no_balance' ? (
           <span
             title="Sem saldo no Melhor Envio — pague no painel do ME para liberar a etiqueta"
-            className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning"
+            className="rounded-full bg-amber-600/10 px-2 py-0.5 text-xs font-medium text-amber-600"
           >
             aguardando…
           </span>
         ) : o.me_label === 'purchased' ? (
-          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+          <span className="rounded-full bg-amber-600/10 px-2 py-0.5 text-xs font-medium text-amber-600">
             gerando…
           </span>
         ) : (
