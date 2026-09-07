@@ -539,7 +539,9 @@ async def _me_from_block(db: AsyncSession, cfg: ShippingConfig, origin: str) -> 
     cnpj = _digits((st.cnpj if st else "") or "")
     return {
         "name": (st.legal_name or st.store_name if st else None) or "Loja",
-        "phone": _digits((st.contact_phone or st.contact_whatsapp if st else "") or ""),
+        # Vazio de propósito: o Melhor Envio imprime esse telefone na etiqueta
+        # ("REMETENTE: ..., Tel: ...") e não queremos esse dado ali.
+        "phone": "",
         "email": settings.smtp_from_email,
         "document": cpf,
         "company_document": (cnpj if len(cnpj) == 14 else None),
