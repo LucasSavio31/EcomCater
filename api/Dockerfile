@@ -24,6 +24,10 @@ COPY pyproject.toml ./
 RUN pip install --upgrade pip && pip install poetry poetry-plugin-export \
     && poetry export -f requirements.txt --output requirements.txt --without-hashes --with dev \
     && pip install -r requirements.txt
+# Chromium do Playwright (etiquetas do Melhor Envio, shipping/service.py:_render_url_to_pdf)
+# --with-deps instala as libs de sistema do Chromium (libnss3, libatk, etc.) via apt
+RUN python -m playwright install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/*
 
 # ---------- dev ----------
 FROM base AS dev
