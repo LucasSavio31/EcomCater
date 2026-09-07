@@ -73,6 +73,9 @@ def _order_ctx(order: Order, pay: Payment | None) -> dict:
     if addr.get("complement"):
         line += f" - {addr['complement']}"
     return {
+        # sempre presente -- todo e-mail de pedido do cliente tem o botão
+        # "Ir para Minha Conta" (_ACCOUNT_CTA, em app/shared/mailer.py).
+        "account_url": f"{settings.site_url.rstrip('/')}/minha-conta/pedidos",
         "number": order.number,
         "items": [
             {

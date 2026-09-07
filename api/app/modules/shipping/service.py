@@ -614,6 +614,10 @@ async def _me_apply_tracking(
                 db, order, type="tracking_update", actor_type="system",
                 message="Melhor Envio: objeto postado nos Correios.",
             )
+            # commit ANTES de emitir: o handler do e-mail abre a própria sessão
+            # e precisa enxergar o rastreio/status JÁ gravados (mesmo motivo de
+            # `orders.service.transition`).
+            await db.commit()
             await emit("order.status_changed", {"order_id": str(order.id), "status": "in_transit"})
 
     # envio cancelado/expirado no ME não mexe no status do pedido da loja
@@ -653,8 +657,13 @@ async def _me_apply_tracking(
             message=f"Melhor Envio ({source}): pedido marcado como {_labels.get(target, target)}.",
             actor_type="system",
         )
+        await _flush_tracking_added()
+        # commit ANTES de emitir (mesmo motivo do bloco "in_transit" acima) --
+        # senão o e-mail de "rastreio disponível"/"enviado" sai sem o código.
+        await db.commit()
         await emit("order.status_changed", {"order_id": str(order.id), "status": target})
         changed = True
+        return changed
     await _flush_tracking_added()
     return changed
 

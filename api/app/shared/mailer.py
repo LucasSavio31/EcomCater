@@ -72,9 +72,10 @@ def _order_email(intro: str, cta: str = "") -> str:
     return intro + _STATUS_LINE + _ORDER_DETAILS + cta
 
 
-_TRACK_CTA = (
-    "{% if tracking_url %}<p style='margin:12px 0'>"
-    "<a href='{{ tracking_url }}' class='btn' style='{{ btn_style }}'>Acompanhar entrega</a></p>{% endif %}"
+# Sempre presente nos e-mails de pedido do CLIENTE (nunca nos do lojista/admin).
+_ACCOUNT_CTA = (
+    "<p style='margin:12px 0'>"
+    "<a href='{{ account_url }}' class='btn' style='{{ btn_style }}'>Ir para Minha Conta</a></p>"
 )
 
 TEMPLATES: dict[str, tuple[str, str]] = {
@@ -82,7 +83,8 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         "Pedido {{ number }} recebido",
         _order_email(
             "<h2>Recebemos seu pedido {{ number }}</h2>"
-            "<p>Olá! Seu pedido foi registrado e está <b>aguardando pagamento</b>.</p>"
+            "<p>Olá! Seu pedido foi registrado e está <b>aguardando pagamento</b>.</p>",
+            _ACCOUNT_CTA,
         ),
     ),
     "payment_confirmed": (
@@ -90,7 +92,8 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         _order_email(
             "<h2>Pagamento aprovado! ✅</h2>"
             "<p>O pagamento do pedido <b>{{ number }}</b> foi confirmado e já estamos "
-            "preparando o envio.</p>"
+            "preparando o envio.</p>",
+            _ACCOUNT_CTA,
         ),
     ),
     "payment_failed": (
@@ -98,14 +101,16 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         _order_email(
             "<h2>Não conseguimos confirmar seu pagamento</h2>"
             "<p>O pagamento do pedido <b>{{ number }}</b> não foi concluído. "
-            "Você pode tentar novamente.</p>"
+            "Você pode tentar novamente.</p>",
+            _ACCOUNT_CTA,
         ),
     ),
     "order_processing": (
         "Pedido {{ number }} em separação",
         _order_email(
             "<h2>Estamos preparando seu pedido 📦</h2>"
-            "<p>O pedido <b>{{ number }}</b> entrou em separação e logo será enviado.</p>"
+            "<p>O pedido <b>{{ number }}</b> entrou em separação e logo será enviado.</p>",
+            _ACCOUNT_CTA,
         ),
     ),
     "order_tracking_available": (
@@ -116,7 +121,7 @@ TEMPLATES: dict[str, tuple[str, str]] = {
             "rastreio já está disponível."
             "{% if tracking %} Código: <b>{{ tracking }}</b>{% endif %}</p>"
             "<p>Assim que o objeto for postado nos Correios você recebe um novo aviso.</p>",
-            _TRACK_CTA,
+            _ACCOUNT_CTA,
         ),
     ),
     "order_shipped": (
@@ -125,7 +130,7 @@ TEMPLATES: dict[str, tuple[str, str]] = {
             "<h2>Pedido a caminho 🚚</h2>"
             "<p>O pedido <b>{{ number }}</b> foi postado."
             "{% if tracking %} Código de rastreio: <b>{{ tracking }}</b>{% endif %}</p>",
-            _TRACK_CTA,
+            _ACCOUNT_CTA,
         ),
     ),
     "order_in_transit": (
@@ -134,7 +139,7 @@ TEMPLATES: dict[str, tuple[str, str]] = {
             "<h2>Seu pedido está em trânsito 🛣️</h2>"
             "<p>O pedido <b>{{ number }}</b> está a caminho do endereço de entrega."
             "{% if tracking %} Rastreio: <b>{{ tracking }}</b>{% endif %}</p>",
-            _TRACK_CTA,
+            _ACCOUNT_CTA,
         ),
     ),
     "order_delivered": (
@@ -142,7 +147,8 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         _order_email(
             "<h2>Entregue! 🎉</h2>"
             "<p>O pedido <b>{{ number }}</b> foi entregue. Esperamos que goste!</p>",
-            "<p style='margin:12px 0'><a href='{{ review_url }}' class='btn' style='{{ btn_style }}'>Avaliar minha compra</a></p>",
+            "<p style='margin:12px 0'><a href='{{ review_url }}' class='btn' style='{{ btn_style }}'>Avaliar minha compra</a></p>"
+            + _ACCOUNT_CTA,
         ),
     ),
     "order_canceled": (
@@ -150,7 +156,8 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         _order_email(
             "<h2>Pedido cancelado</h2>"
             "<p>O pedido <b>{{ number }}</b> foi cancelado. "
-            "Em caso de dúvida, entre em contato com a loja.</p>"
+            "Em caso de dúvida, entre em contato com a loja.</p>",
+            _ACCOUNT_CTA,
         ),
     ),
     "order_refunded": (
@@ -158,7 +165,8 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         _order_email(
             "<h2>Reembolso processado</h2>"
             "<p>O reembolso do pedido <b>{{ number }}</b> foi processado. "
-            "O prazo de estorno depende do meio de pagamento.</p>"
+            "O prazo de estorno depende do meio de pagamento.</p>",
+            _ACCOUNT_CTA,
         ),
     ),
     "reverse_label_ready": (
@@ -173,7 +181,7 @@ TEMPLATES: dict[str, tuple[str, str]] = {
             "na etiqueta).</p>"
             "<p>Você também pode baixar essa etiqueta de novo a qualquer momento "
             "em Minha conta.</p>",
-            "<p style='margin:12px 0'><a href='{{ account_url }}' class='btn' style='{{ btn_style }}'>Ver meu pedido</a></p>",
+            _ACCOUNT_CTA,
         ),
     ),
     "order_returned": (
@@ -181,7 +189,8 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         _order_email(
             "<h2>Devolução recebida ✅</h2>"
             "<p>Recebemos o produto devolvido do pedido <b>{{ number }}</b>. "
-            "Em breve seu reembolso será processado.</p>"
+            "Em breve seu reembolso será processado.</p>",
+            _ACCOUNT_CTA,
         ),
     ),
     "order_return_completed": (
@@ -190,7 +199,8 @@ TEMPLATES: dict[str, tuple[str, str]] = {
             "<h2>Devolução finalizada</h2>"
             "<p>A devolução do pedido <b>{{ number }}</b> foi finalizada e o "
             "reembolso foi processado. O prazo de estorno depende do meio de "
-            "pagamento.</p>"
+            "pagamento.</p>",
+            _ACCOUNT_CTA,
         ),
     ),
     "cart_recovery": (
