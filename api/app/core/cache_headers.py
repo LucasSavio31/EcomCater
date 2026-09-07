@@ -22,12 +22,12 @@ _RULES: tuple[tuple[str, str], ...] = (
     # imagem nova = pasta nova. Pode cachear "para sempre" sem revalidar.
     ("/media/", "public, max-age=31536000, immutable"),
     ("/static/", "public, max-age=31536000, immutable"),
-    ("/api/products", "public, s-maxage=60, stale-while-revalidate=300"),
-    ("/api/categories", "public, s-maxage=120, stale-while-revalidate=600"),
-    ("/api/theme", "public, s-maxage=60, stale-while-revalidate=300"),
-    ("/api/menus", "public, s-maxage=120, stale-while-revalidate=600"),
-    ("/api/banners", "public, s-maxage=120, stale-while-revalidate=600"),
-    ("/api/analytics/config", "public, s-maxage=120, stale-while-revalidate=600"),
+    ("/api/products", "public, s-maxage=60, stale-while-revalidate=300, stale-if-error=86400"),
+    ("/api/categories", "public, s-maxage=120, stale-while-revalidate=600, stale-if-error=86400"),
+    ("/api/theme", "public, s-maxage=60, stale-while-revalidate=300, stale-if-error=86400"),
+    ("/api/menus", "public, s-maxage=120, stale-while-revalidate=600, stale-if-error=86400"),
+    ("/api/banners", "public, s-maxage=120, stale-while-revalidate=600, stale-if-error=86400"),
+    ("/api/analytics/config", "public, s-maxage=120, stale-while-revalidate=600, stale-if-error=86400"),
 )
 
 # Acima disso, não bufferiza pra calcular ETag — deixa a resposta seguir como

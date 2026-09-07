@@ -47,6 +47,18 @@ async def test_authenticated_request_has_no_etag_or_cache(client, admin_token, a
 
 
 @pytest.mark.asyncio
+async def test_stale_if_error_only_on_api_not_on_media(client):
+    r = await client.get("/api/products")
+    assert "stale-if-error=86400" in r.headers.get("cache-control", "")
+
+    m = await client.get("/media/products/inexistente/medium.webp")
+    cc = m.headers.get("cache-control", "")
+    if cc:  # só afirma sobre o Cache-Control quando ele existe (200)
+        assert "immutable" in cc
+        assert "stale-if-error" not in cc
+
+
+@pytest.mark.asyncio
 async def test_media_path_has_no_etag(client):
     # /media não passa pelo buffer de ETag (guard is_media) — só o
     # Cache-Control immutable já existente. Usa uma key inexistente: o que
