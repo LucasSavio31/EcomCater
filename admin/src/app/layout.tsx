@@ -2,11 +2,14 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { getAdminTheme, themeToCssVars } from '@/modules/theme/theme';
 
-export const metadata: Metadata = {
-  title: { default: 'Painel', template: '%s · Painel' },
-  description: 'Painel administrativo da loja.',
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { store_name } = await getAdminTheme();
+  return {
+    title: { default: `Painel ${store_name}`, template: `%s · Painel ${store_name}` },
+    description: 'Painel administrativo da loja.',
+    robots: { index: false, follow: false },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: '#111111',

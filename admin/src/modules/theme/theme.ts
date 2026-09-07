@@ -8,6 +8,7 @@ export interface AdminTheme {
   text_color: string;
   bg_color: string;
   font_family: string;
+  store_name: string;
 }
 
 export const NEUTRAL_ADMIN_THEME: AdminTheme = {
@@ -17,6 +18,7 @@ export const NEUTRAL_ADMIN_THEME: AdminTheme = {
   text_color: '#111827',
   bg_color: '#FFFFFF',
   font_family: 'Inter, system-ui, sans-serif',
+  store_name: 'Loja',
 };
 
 const API_URL =

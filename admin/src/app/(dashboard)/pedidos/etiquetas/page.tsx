@@ -87,6 +87,15 @@ function EtiquetasImpressao() {
     }
   }, [orders]);
 
+  // Título da aba / cabeçalho de impressão — "Etiquetas {loja}" em vez do "Painel" padrão.
+  useEffect(() => {
+    const prev = document.title;
+    document.title = `Etiquetas ${remetente.nome}`;
+    return () => {
+      document.title = prev;
+    };
+  }, [remetente.nome]);
+
   if (erro) return <p style={{ padding: 24 }}>{erro}</p>;
   if (!orders) return <p style={{ padding: 24 }}>Carregando…</p>;
 

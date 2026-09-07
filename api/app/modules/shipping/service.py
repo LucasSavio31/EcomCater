@@ -581,14 +581,23 @@ async def _me_apply_tracking(
     changed = False
     svc = dict(order.shipping_service_json or {})
 
+    # Registrado só no fim da função (depois do "status_changed" abaixo, se
+    # houver um) para a linha do tempo mostrar "Rastreio disponível" antes de
+    # "Rastreio adicionado" — a mudança de status é o evento principal dessa
+    # dupla, o código em si é o detalhe.
+    tracking_added_msg: str | None = None
     if tracking_code and svc.get("tracking_code") != tracking_code:
         svc["tracking_code"] = tracking_code
         order.shipping_service_json = svc
         changed = True
-        await record_event(
-            db, order, type="tracking_added", actor_type="system",
-            message=f"Código de rastreio do Melhor Envio: {tracking_code}",
-        )
+        tracking_added_msg = f"Código de rastreio do Melhor Envio: {tracking_code}"
+
+    async def _flush_tracking_added() -> None:
+        if tracking_added_msg:
+            await record_event(
+                db, order, type="tracking_added", actor_type="system",
+                message=tracking_added_msg,
+            )
 
     me_norm = (me_status or "").lower()
     prev_me = (svc.get("me_tracking_status") or "").lower()
@@ -607,10 +616,12 @@ async def _me_apply_tracking(
 
     # envio cancelado/expirado no ME não mexe no status do pedido da loja
     if me_norm in {"canceled", "cancelled", "expired"}:
+        await _flush_tracking_added()
         return changed
 
     # só avança o status de pedido já pago (nunca de um pedido não pago)
     if order.status not in {"paid", "processing", "tracking_available", "shipped"}:
+        await _flush_tracking_added()
         return changed
 
     has_tracking = bool(tracking_code or svc.get("tracking_code"))
@@ -642,6 +653,7 @@ async def _me_apply_tracking(
         )
         await emit("order.status_changed", {"order_id": str(order.id), "status": target})
         changed = True
+    await _flush_tracking_added()
     return changed
 
 
