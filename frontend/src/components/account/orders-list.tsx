@@ -7,6 +7,30 @@ import { customerApi } from '@/modules/customer/api';
 import type { Order, OrderEvent } from '@/modules/checkout/types';
 import { formatBRL } from '@/lib/format';
 import { resolveMediaUrl } from '@/lib/media';
+import { API_BASE_URL } from '@/lib/api-client';
+import { getCustomerSession } from '@/lib/customer-auth-storage';
+
+const RETURN_STATUS_LABEL: Record<string, string> = {
+  returning: 'Em Devolução',
+  returned: 'Devolvido',
+  return_completed: 'Devolução finalizada',
+};
+
+async function downloadReverseLabel(number: string): Promise<void> {
+  const token = getCustomerSession()?.accessToken ?? '';
+  try {
+    const r = await fetch(`${API_BASE_URL}/api/orders/${number}/reverse-label`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!r.ok) return;
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch {
+    /* falha silenciosa — o cliente já recebeu o PDF por e-mail */
+  }
+}
 
 const ORDER_STATUS_PT: Record<string, string> = {
   pending_payment: 'Aguardando pagamento',
@@ -320,6 +344,29 @@ export function OrdersList() {
                         </a>
                       </div>
                     )}
+
+                  {o.reverse_shipping && (
+                    <div className="flex flex-col gap-1 rounded-card bg-bg-subtle p-2 text-sm">
+                      <span className="font-medium">
+                        Devolução: {RETURN_STATUS_LABEL[o.status] ?? o.status}
+                      </span>
+                      {o.reverse_shipping.tracking_code && (
+                        <span className="text-xs text-text-muted">
+                          Rastreio:{' '}
+                          <span className="font-mono">{o.reverse_shipping.tracking_code}</span>
+                        </span>
+                      )}
+                      {o.reverse_shipping.reverse_label_key && (
+                        <button
+                          type="button"
+                          onClick={() => void downloadReverseLabel(o.number)}
+                          className="self-start text-xs text-primary underline"
+                        >
+                          Baixar etiqueta de devolução (PDF)
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {o.payment && (
                     <div className="flex flex-col gap-1">

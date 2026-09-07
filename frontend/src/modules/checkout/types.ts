@@ -83,6 +83,7 @@ export interface Order {
   coupon_code: string | null;
   shipping_method: string | null;
   shipping_service: Record<string, unknown> | null;
+  reverse_shipping: { tracking_code?: string; reverse_label_key?: string; me_status?: string } | null;
   shipping_address: Record<string, string>;
   customer_note: string | null;
   placed_at: string | null;
