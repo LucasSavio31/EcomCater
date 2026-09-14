@@ -31,6 +31,7 @@ _PAID_STATUSES = {
     "in_transit",
     "delivered",
     "refunded",  # foi pago antes de ser estornado
+    "returning", "return_posted", "returned", "return_completed",  # idem
 }
 
 
@@ -64,7 +65,10 @@ async def run() -> dict:
             if paid:
                 await financial.record(db, kind="paid", order=o, when=when)
                 counts["paid"] += 1
-            if o.status == "refunded":
+            # "return_completed" é o mesmo fato financeiro que "refunded" --
+            # só o status do PEDIDO tem rótulo diferente por causa do fluxo
+            # de devolução.
+            if o.status in ("refunded", "return_completed"):
                 await financial.record(
                     db, kind="refunded", order=o, when=o.updated_at or when
                 )

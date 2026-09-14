@@ -49,7 +49,12 @@ async def _on_paid(payload: dict) -> None:
 @on("order.status_changed")
 async def _on_status(payload: dict) -> None:
     st = payload.get("status")
-    if st == "refunded":
+    # "return_completed" é o mesmo fato financeiro que "refunded" -- o
+    # dinheiro voltou pro cliente, só o status do PEDIDO tem um rótulo
+    # diferente por causa do fluxo de devolução (orders.service.transition
+    # redireciona refunded -> return_completed quando o pedido já estava
+    # "returned"). O livro-caixa não deve diferenciar os dois.
+    if st in ("refunded", "return_completed"):
         await _record(payload["order_id"], "refunded")
     elif st == "canceled":
         await _record(payload["order_id"], "canceled")
