@@ -56,6 +56,17 @@ services:
       - media:/data/media
       - backups:/data/backups
       - private_media:/data/private
+    # Sem isso, `depends_on: [api]` do frontend/admin só espera o CONTAINER
+    # subir — não o Uvicorn escutar (migrations do prod ainda podem estar
+    # rodando). Nessa janela, tema/menu/produtos vêm com ECONNREFUSED e a
+    # loja renderiza com a paleta neutra de fallback (getTheme) em vez do
+    # tema real. O healthcheck fecha essa corrida.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
     networks: [internal]
 
   frontend:
@@ -68,7 +79,9 @@ services:
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
     container_name: cater-front
     env_file: .env
-    depends_on: [api]
+    depends_on:
+      api:
+        condition: service_healthy
     networks: [internal]
 
   admin:
@@ -81,7 +94,9 @@ services:
         NEXT_PUBLIC_ADMIN_BASE_PATH: ${NEXT_PUBLIC_ADMIN_BASE_PATH}
     container_name: cater-admin
     env_file: .env
-    depends_on: [api]
+    depends_on:
+      api:
+        condition: service_healthy
     networks: [internal]
 
 volumes:
