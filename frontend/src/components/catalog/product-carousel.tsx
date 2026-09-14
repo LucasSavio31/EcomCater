@@ -105,7 +105,12 @@ export function ProductCarousel({
       </button>
       <ul
         ref={trackRef}
-        className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 lg:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        // `snap-proximity`, não `snap-mandatory`: "mandatory" força o navegador a
+        // reavaliar e brigar por um ponto de encaixe a cada frame do gesto —
+        // é isso que trava/engasga um arrasto rápido num carrossel longo no
+        // mobile. "proximity" só encaixa quando o scroll já ia parar perto de
+        // um card, sem custo por frame durante o fling.
+        className="flex snap-x snap-proximity gap-3 overflow-x-auto pb-2 lg:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {slides.map(({ p, copy }, i) => (
           <li
