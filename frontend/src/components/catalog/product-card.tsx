@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Badge } from '@ecom/ui';
@@ -8,6 +9,24 @@ import { resolveMediaUrl } from '@/lib/media';
 import { track, itemFromListItem } from '@/modules/analytics';
 import { PriceBlock } from './price-block';
 import { Stars } from './stars';
+
+/**
+ * Ponteiro fino + hover de verdade (mouse). No touch (celular/tablet) não
+ * existe estado `:hover` — manter a 2ª imagem montada só duplica download e
+ * decode à toa, e é isso que trava o scroll dos carrosséis no mobile quando
+ * o usuário arrasta rápido por muitos cards de uma vez.
+ */
+function useCanHover(): boolean {
+  const [canHover, setCanHover] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+    setCanHover(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setCanHover(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return canHover;
+}
 
 interface ProductCardProps {
   product: ProductListItem;
@@ -41,7 +60,8 @@ export function ProductCard({
   index,
 }: ProductCardProps) {
   const primary = resolveMediaUrl(product.primary_image_url);
-  const hover = resolveMediaUrl(product.hover_image_url);
+  const canHover = useCanHover();
+  const hover = canHover ? resolveMediaUrl(product.hover_image_url) : null;
   const href = `/produto/${product.slug}`;
 
   const onSelect = () =>
