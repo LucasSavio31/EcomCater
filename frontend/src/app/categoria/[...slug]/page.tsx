@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { getCategoryByPath, getCategoryTree, getProducts } from '@/modules/catalog/api';
 import { getTheme } from '@/modules/theme';
-import type { CategoryNode, ProductSort } from '@/modules/catalog/types';
+import type { CategoryDetail, CategoryNode, ProductSort } from '@/modules/catalog/types';
+import type { ThemeSettings } from '@/modules/theme';
 import { Breadcrumbs, type Crumb } from '@/components/catalog/breadcrumbs';
 import { InfiniteProductGrid } from '@/components/catalog/infinite-product-grid';
 import { PlpSort } from '@/components/catalog/plp-sort';
@@ -10,6 +12,7 @@ import { PlpFilters, PlpFiltersDrawer } from '@/components/catalog/plp-filters';
 import { buildMetadata, breadcrumbJsonLd, jsonLdScript } from '@/lib/seo';
 import { TrackOnMount } from '@/components/analytics/track-on-mount';
 import { itemFromListItem } from '@/modules/analytics';
+import { Spinner } from '@ecom/ui';
 
 // A PLP depende de `searchParams` (filtros, ordenação, paginação na URL), então
 // NÃO dá pra colocar no Full Route Cache do Next — `generateStaticParams` aqui
@@ -23,6 +26,8 @@ interface PageProps {
   params: Promise<{ slug: string[] }>;
   searchParams: Promise<RawSearchParams>;
 }
+
+type Search = ReturnType<typeof parseSearch>;
 
 const VALID_SORTS: ProductSort[] = ['relevancia', 'menor-preco', 'maior-preco', 'lancamentos'];
 
@@ -70,6 +75,15 @@ function findCrumbs(tree: CategoryNode[], path: string): Crumb[] {
   return crumbs;
 }
 
+function nodeAt(nodes: CategoryNode[], p: string): CategoryNode | null {
+  for (const n of nodes) {
+    if (n.path === p) return n;
+    const found = nodeAt(n.children, p);
+    if (found) return found;
+  }
+  return null;
+}
+
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const path = slug.join('/');
@@ -92,20 +106,16 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
   const path = slug.join('/');
   const search = parseSearch(await searchParams);
 
-  const [category, tree, result, theme] = await Promise.all([
+  // Só o essencial pro "shell" da página (título, breadcrumbs, layout dos
+  // filtros): tema e árvore de categorias já vêm do cache Redis da API com
+  // `revalidate` de 5 minutos — praticamente instantâneo. A busca de produtos
+  // (facetas + paginação, a parte cara em SQL) fica numa Suspense boundary
+  // própria, então a navegação nunca mais fica presa atrás da query mais
+  // lenta: o usuário já vê título/breadcrumbs/filtros e só a grade de
+  // produtos mostra um esqueleto até resolver.
+  const [category, tree, theme] = await Promise.all([
     getCategoryByPath(path),
     getCategoryTree(),
-    getProducts({
-      category: path,
-      sort: search.sort,
-      page: search.page,
-      page_size: 24,
-      sizes: search.sizes,
-      materials: search.materials,
-      colors: search.colors,
-      price_min: search.price_min,
-      price_max: search.price_max,
-    }),
     getTheme(),
   ]);
 
@@ -124,14 +134,6 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
     filterShow.material;
 
   // "filtro de categoria": subcategorias da atual; se não houver, as irmãs.
-  function nodeAt(nodes: CategoryNode[], p: string): CategoryNode | null {
-    for (const n of nodes) {
-      if (n.path === p) return n;
-      const found = nodeAt(n.children, p);
-      if (found) return found;
-    }
-    return null;
-  }
   const current = nodeAt(tree, path);
   const parentPath = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
   const siblingSource = current?.children?.length
@@ -143,28 +145,11 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
     active: c.path === path,
   }));
 
-  if (!category && result.total === 0 && tree.length > 0) {
-    // Categoria inexistente e sem produtos → 404 (só quando a API respondeu).
-    const known = tree.some((n) => n.path === path || n.slug === slug[0]);
-    if (!known) notFound();
-  }
-
   const crumbs = findCrumbs(tree, path);
   const title = category?.name ?? path.split('/').pop()?.replace(/-/g, ' ') ?? 'Categoria';
 
   return (
     <div className="flex flex-col gap-4">
-      <TrackOnMount
-        event="view_item_list"
-        dedupeKey={`${title}:${result.page}`}
-        itemListId={`category:${path}`}
-        itemListName={title}
-        items={result.items
-          .slice(0, 20)
-          .map((p, i) =>
-            itemFromListItem(p, { index: i, list: { id: `category:${path}`, name: title } }),
-          )}
-      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -182,6 +167,81 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
           <p className="max-w-prose text-sm text-text-muted">{category.description}</p>
         )}
       </header>
+
+      <Suspense fallback={<CategoryResultsSkeleton anyFilter={anyFilter} />}>
+        <CategoryResults
+          path={path}
+          firstSlug={slug[0]}
+          search={search}
+          theme={theme}
+          tree={tree}
+          category={category}
+          title={title}
+          filterShow={filterShow}
+          anyFilter={anyFilter}
+          categoryLinks={categoryLinks}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+interface CategoryResultsProps {
+  path: string;
+  firstSlug: string | undefined;
+  search: Search;
+  theme: ThemeSettings;
+  tree: CategoryNode[];
+  category: CategoryDetail | null;
+  title: string;
+  filterShow: Record<'size' | 'price' | 'category' | 'color' | 'material', boolean>;
+  anyFilter: boolean;
+  categoryLinks: { name: string; path: string; active: boolean }[];
+}
+
+async function CategoryResults({
+  path,
+  firstSlug,
+  search,
+  theme,
+  tree,
+  category,
+  title,
+  filterShow,
+  anyFilter,
+  categoryLinks,
+}: CategoryResultsProps) {
+  const result = await getProducts({
+    category: path,
+    sort: search.sort,
+    page: search.page,
+    page_size: 24,
+    sizes: search.sizes,
+    materials: search.materials,
+    colors: search.colors,
+    price_min: search.price_min,
+    price_max: search.price_max,
+  });
+
+  if (!category && result.total === 0 && tree.length > 0) {
+    // Categoria inexistente e sem produtos → 404 (só quando a API respondeu).
+    const known = tree.some((n) => n.path === path || n.slug === firstSlug);
+    if (!known) notFound();
+  }
+
+  return (
+    <>
+      <TrackOnMount
+        event="view_item_list"
+        dedupeKey={`${title}:${result.page}`}
+        itemListId={`category:${path}`}
+        itemListName={title}
+        items={result.items
+          .slice(0, 20)
+          .map((p, i) =>
+            itemFromListItem(p, { index: i, list: { id: `category:${path}`, name: title } }),
+          )}
+      />
 
       {anyFilter && (
         <div className="flex items-center justify-between gap-3 lg:hidden">
@@ -220,6 +280,18 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
             }}
           />
         </div>
+      </div>
+    </>
+  );
+}
+
+/** Mantém a forma do layout (coluna de filtros + grade) enquanto os produtos carregam. */
+function CategoryResultsSkeleton({ anyFilter }: { anyFilter: boolean }) {
+  return (
+    <div className={anyFilter ? 'grid gap-6 lg:grid-cols-[220px_1fr]' : 'flex flex-col gap-4'}>
+      {anyFilter && <aside className="hidden lg:block" aria-hidden="true" />}
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <Spinner size="lg" label="Carregando produtos…" />
       </div>
     </div>
   );
