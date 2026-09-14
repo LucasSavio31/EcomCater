@@ -124,6 +124,10 @@ export function ProductCarousel({
               listId={listId}
               listName={listName ?? ariaLabel}
               index={i % products.length}
+              // Lista é pequena e triplicada pro loop — carrega tudo de cara
+              // (ver comentário em ProductCard) em vez de deixar o lazy-load
+              // nativo disparar bem na borda do salto de reset.
+              loading="eager"
             />
           </li>
         ))}

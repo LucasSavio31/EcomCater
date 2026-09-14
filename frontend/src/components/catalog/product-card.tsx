@@ -40,6 +40,15 @@ interface ProductCardProps {
   listName?: string;
   /** Posição do item na lista (0-based). */
   index?: number;
+  /**
+   * `eager` força o carregamento imediato (padrão do <Image> é lazy). Usado
+   * pelo carrossel infinito: sem isso, a imagem de um card só é buscada
+   * quando ele entra perto da tela pela primeira vez — e como o loop
+   * triplica a lista pra rolar sem emenda, isso acontece bem na hora em que
+   * o usuário cruza a borda do "salto" de reset, travando a rolagem no pior
+   * momento possível. Carregar tudo de cara evita esse travamento.
+   */
+  loading?: 'eager' | 'lazy';
 }
 
 const CARD_SIZES =
@@ -58,6 +67,7 @@ export function ProductCard({
   listId,
   listName,
   index,
+  loading,
 }: ProductCardProps) {
   const primary = resolveMediaUrl(product.primary_image_url);
   const canHover = useCanHover();
@@ -88,6 +98,7 @@ export function ProductCard({
               fill
               sizes={CARD_SIZES}
               priority={priority}
+              {...(!priority && loading ? { loading } : {})}
               className={`ecom-card-img object-contain transition-opacity duration-300 ${hover ? 'group-hover:opacity-0' : ''}`}
             />
             {hover && (
@@ -97,6 +108,7 @@ export function ProductCard({
                 aria-hidden="true"
                 fill
                 sizes={CARD_SIZES}
+                {...(!priority && loading ? { loading } : {})}
                 className="ecom-card-img object-contain opacity-0 transition-opacity duration-300 group-hover:opacity-100"
               />
             )}
