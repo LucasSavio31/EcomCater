@@ -22,12 +22,6 @@ export function ColorSiblings({ currentColorName, siblings }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
 
-  // chave estável do grupo de cor (igual em qualquer produto irmão)
-  const groupKey =
-    siblings && siblings.length > 1
-      ? 'cs-exp:' + siblings.map((s) => s.id).slice().sort().join('|')
-      : '';
-
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)');
     const sync = () => setIsDesktop(mq.matches);
@@ -36,25 +30,7 @@ export function ColorSiblings({ currentColorName, siblings }: Props) {
     return () => mq.removeEventListener('change', sync);
   }, []);
 
-  // uma vez que o cliente abriu "ver mais cores" nesta sessão, não recolhe mais
-  // (vale ao navegar entre as cores do mesmo modelo). Zera só em nova sessão.
-  useEffect(() => {
-    if (!groupKey) return;
-    try {
-      if (sessionStorage.getItem(groupKey)) setExpanded(true);
-    } catch {
-      /* sessionStorage indisponível */
-    }
-  }, [groupKey]);
-
-  const openAll = () => {
-    setExpanded(true);
-    try {
-      sessionStorage.setItem(groupKey, '1');
-    } catch {
-      /* ok */
-    }
-  };
+  const openAll = () => setExpanded(true);
 
   if (!siblings || siblings.length < 2) return null;
   const LIMIT = isDesktop ? 8 : 6;
