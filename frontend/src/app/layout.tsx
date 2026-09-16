@@ -10,6 +10,7 @@ import { AnalyticsIdentity } from '@/components/analytics/analytics-identity';
 import { ServiceWorker } from '@/components/service-worker';
 import { PresenceBeacon } from '@/components/presence-beacon';
 import { ScrollToTop } from '@/components/scroll-to-top';
+import { PdpContextGuard } from '@/components/pdp/pdp-context-guard';
 import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
 import { StorefrontShell } from '@/components/layout/storefront-shell';
@@ -98,6 +99,7 @@ export default async function RootLayout({
         </Suspense>
         <AnalyticsIdentity />
         <ScrollToTop />
+        <PdpContextGuard />
         <PresenceBeacon />
 
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: orgLd }} />

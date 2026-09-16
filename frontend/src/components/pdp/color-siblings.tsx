@@ -18,9 +18,21 @@ interface Props {
  * card "ver mais cores" (prévia ofuscada da próxima). Ao clicar, carrega o
  * resto das miniaturas.
  */
+// chaves de sessionStorage: guardam qual "família" (mesmo modelo, cores
+// diferentes) está com "ver mais cores" aberto — ver PDPContextGuard, que
+// limpa isso ao sair da área de produto (navegar pra fora de /produto/).
+const GROUP_KEY = 'cs-group';
+const EXPANDED_KEY = 'cs-expanded';
+
 export function ColorSiblings({ currentColorName, siblings }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+
+  // chave estável do grupo de cor (igual em qualquer produto irmão)
+  const groupKey =
+    siblings && siblings.length > 1
+      ? 'g:' + siblings.map((s) => s.id).slice().sort().join('|')
+      : '';
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)');
@@ -30,7 +42,32 @@ export function ColorSiblings({ currentColorName, siblings }: Props) {
     return () => mq.removeEventListener('change', sync);
   }, []);
 
-  const openAll = () => setExpanded(true);
+  // Continuar navegando entre as cores do MESMO modelo mantém aberto. Sair
+  // pra outro produto/página e voltar depois mostra fechado de novo.
+  useEffect(() => {
+    if (!groupKey) return;
+    try {
+      const sameGroup = sessionStorage.getItem(GROUP_KEY) === groupKey;
+      if (sameGroup && sessionStorage.getItem(EXPANDED_KEY) === '1') {
+        setExpanded(true);
+      } else {
+        sessionStorage.removeItem(EXPANDED_KEY);
+      }
+      sessionStorage.setItem(GROUP_KEY, groupKey);
+    } catch {
+      /* sessionStorage indisponível */
+    }
+  }, [groupKey]);
+
+  const openAll = () => {
+    setExpanded(true);
+    try {
+      sessionStorage.setItem(GROUP_KEY, groupKey);
+      sessionStorage.setItem(EXPANDED_KEY, '1');
+    } catch {
+      /* ok */
+    }
+  };
 
   if (!siblings || siblings.length < 2) return null;
   const LIMIT = isDesktop ? 8 : 6;
