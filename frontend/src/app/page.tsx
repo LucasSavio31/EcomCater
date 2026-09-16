@@ -197,10 +197,8 @@ export default async function HomePage() {
 
       {nothing && (
         <section className="rounded-card border border-dashed border-surface-border p-10 text-center">
-          <h1 className="text-xl font-semibold">Loja no ar</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            O catálogo aparece aqui assim que houver produtos e banners cadastrados.
-          </p>
+          <h1 className="text-xl font-semibold">Loja em atualização</h1>
+          <p className="mt-1 text-sm text-text-muted">Voltamos em instantes.</p>
         </section>
       )}
 
