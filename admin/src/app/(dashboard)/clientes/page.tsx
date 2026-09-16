@@ -216,7 +216,12 @@ export default function ClientesPage() {
           emptyMessage="Nenhum cliente encontrado."
           onRowClick={(c) => router.push(`/clientes/${c.id}`)}
           rowActions={(c) => (
-            <Button size="sm" variant="outline" onClick={() => router.push(`/clientes/${c.id}`)}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="whitespace-nowrap"
+              onClick={() => router.push(`/clientes/${c.id}`)}
+            >
               Ver / editar dados
             </Button>
           )}
