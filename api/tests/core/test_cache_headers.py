@@ -25,6 +25,19 @@ async def test_if_none_match_returns_304(client):
 
 
 @pytest.mark.asyncio
+async def test_304_content_length_matches_empty_body(client):
+    # regressão: o 304 reaproveitava o Content-Length do 200 original (corpo
+    # cheio) mandando corpo vazio -- Starlette derrubava a conexão
+    # ("Response content shorter than Content-Length") em produção.
+    first = await client.get("/api/products")
+    etag = first.headers["etag"]
+
+    second = await client.get("/api/products", headers={"If-None-Match": etag})
+    assert second.status_code == 304
+    assert second.headers.get("content-length") == "0"
+
+
+@pytest.mark.asyncio
 async def test_stale_etag_returns_200(client):
     r = await client.get("/api/products", headers={"If-None-Match": 'W/"stale-value"'})
     assert r.status_code == 200

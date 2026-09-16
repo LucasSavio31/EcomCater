@@ -110,10 +110,14 @@ class PublicCacheHeaders:
     async def _flush(send: Send, cc: str, if_none_match: str | None, state: dict) -> None:
         start = state["start"] or {"status": 200, "headers": []}
         status = start.get("status", 200)
+        # content-length é recalculado abaixo a partir do corpo que de fato
+        # mandamos (vazio no 304) — reaproveitar o valor original do 200 aqui
+        # deixa a resposta com Content-Length maior que o corpo enviado, o
+        # que derruba a conexão (RuntimeError no Starlette).
         headers = [
             (k, v)
             for k, v in (start.get("headers") or [])
-            if k.lower() not in (b"cache-control", b"vary")
+            if k.lower() not in (b"cache-control", b"vary", b"content-length")
         ]
         content_type = next((v for k, v in headers if k.lower() == b"content-type"), b"")
         is_json = content_type.split(b";")[0].strip() == b"application/json"
@@ -125,6 +129,7 @@ class PublicCacheHeaders:
         body = b"".join(state["chunks"])
 
         if not eligible:
+            headers.append((b"content-length", str(len(body)).encode()))
             await send({"type": "http.response.start", "status": status, "headers": headers})
             await send({"type": "http.response.body", "body": body, "more_body": False})
             return
@@ -133,9 +138,11 @@ class PublicCacheHeaders:
         headers.append((b"etag", etag.encode()))
 
         if if_none_match is not None and if_none_match == etag:
+            headers.append((b"content-length", b"0"))
             await send({"type": "http.response.start", "status": 304, "headers": headers})
             await send({"type": "http.response.body", "body": b"", "more_body": False})
             return
 
+        headers.append((b"content-length", str(len(body)).encode()))
         await send({"type": "http.response.start", "status": status, "headers": headers})
         await send({"type": "http.response.body", "body": body, "more_body": False})
