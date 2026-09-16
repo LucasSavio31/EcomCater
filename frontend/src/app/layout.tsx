@@ -85,6 +85,11 @@ export default async function RootLayout({
             <link rel="dns-prefetch" href={API_ORIGIN} />
           </>
         )}
+        {/* CSS vars do tema — precisa vir antes de qualquer <script src> bloqueante
+            (GTM/gtag/Pixel abaixo), senão o parser trava nesses scripts e pinta
+            o body com as cores padrão do navegador antes de chegar aqui (FOUC). */}
+        <ThemeStyle theme={theme} />
+
         {/* Tags de marketing (GTM / GA4 / Google Ads / Meta Pixel) o mais alto possível. */}
         <AnalyticsHeadScripts config={analytics} />
         <AnalyticsBodyNoScript config={analytics} />
@@ -95,8 +100,6 @@ export default async function RootLayout({
         <ScrollToTop />
         <PresenceBeacon />
 
-        {/* CSS vars do tema — antes do primeiro paint (sem FOUC). */}
-        <ThemeStyle theme={theme} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: orgLd }} />
 
         <a href="#conteudo" className="skip-link rounded-card bg-primary px-3 py-2 text-primary-fg">
