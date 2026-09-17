@@ -1,14 +1,14 @@
-/* eslint-disable @next/next/no-before-interactive-script-outside-document --
-   App Router: `beforeInteractive` no layout raiz é o lugar correto para tags de
-   marketing (GTM/gtag/Pixel) irem para o `<head>`. Não existe `_document`. */
 import Script from 'next/script';
 import type { AnalyticsConfig } from './types';
 
 /**
- * Tags de marketing injetadas o mais alto possível no `<head>` (SSR), como
- * exigem a documentação do Google Tag Manager, do Google (gtag.js) e do
- * Meta Pixel. `strategy="beforeInteractive"` só é permitido no layout raiz —
- * é exatamente onde este componente é usado.
+ * Tags de marketing (GTM/gtag/Pixel). `strategy="afterInteractive"` (não
+ * `beforeInteractive`) — são scripts de terceiro que não precisam bloquear
+ * a hidratação da página; `beforeInteractive` entrava na contagem de tempo
+ * de execução de JS / trabalho da thread principal do LCP à toa (achado do
+ * PageSpeed). `dataLayer.push`/`fbq.queue` já são resilientes a carregar
+ * um pouco depois — é o padrão recomendado pela própria doc do Next.js
+ * pra GTM.
  *
  * Nada é renderizado quando a integração está desligada no admin.
  */
@@ -33,12 +33,12 @@ export function AnalyticsHeadScripts({ config }: { config: AnalyticsConfig }) {
 
   return (
     <>
-      <Script id="ecom-analytics-bootstrap" strategy="beforeInteractive">
+      <Script id="ecom-analytics-bootstrap" strategy="afterInteractive">
         {bootstrap}
       </Script>
 
       {gtm && (
-        <Script id="gtm" strategy="beforeInteractive">
+        <Script id="gtm" strategy="afterInteractive">
           {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${gtm}');`}
         </Script>
       )}
@@ -47,10 +47,10 @@ export function AnalyticsHeadScripts({ config }: { config: AnalyticsConfig }) {
         <>
           <Script
             id="gtag-src"
-            strategy="beforeInteractive"
+            strategy="afterInteractive"
             src={`https://www.googletagmanager.com/gtag/js?id=${gtagPrimary}`}
           />
-          <Script id="gtag-init" strategy="beforeInteractive">
+          <Script id="gtag-init" strategy="afterInteractive">
             {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}window.gtag=window.gtag||gtag;gtag('js',new Date());${
               ga4 ? `gtag('config','${ga4}');` : ''
             }${ads ? `gtag('config','${ads}');` : ''}`}
@@ -59,7 +59,7 @@ export function AnalyticsHeadScripts({ config }: { config: AnalyticsConfig }) {
       )}
 
       {pixel && (
-        <Script id="meta-pixel" strategy="beforeInteractive">
+        <Script id="meta-pixel" strategy="afterInteractive">
           {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${pixel}');fbq('track','PageView');`}
         </Script>
       )}

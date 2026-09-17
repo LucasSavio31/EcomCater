@@ -177,7 +177,14 @@ export default async function HomePage() {
 
       {showcase.length > 0 && (
         <section aria-label="Coleções">
-          <BannerGrid banners={showcase.slice(0, 4)} variant="showcase" />
+          {/* prioridade só quando este é o 1º conteúdo visual da página (sem
+              hero e sem "Mais buscados" antes) — é o caso real que o PageSpeed
+              flagou: LCP sem fetchpriority=high por faltar essa marcação. */}
+          <BannerGrid
+            banners={showcase.slice(0, 4)}
+            variant="showcase"
+            priority={!showHero && sections.mais_buscados.length === 0}
+          />
         </section>
       )}
 

@@ -22,6 +22,20 @@ def _uuid(v: str | uuid.UUID) -> uuid.UUID:
         raise ValidationError("id inválido") from exc
 
 
+def _medium_url(key: str | None) -> str | None:
+    """`process_image` já salva thumb/medium/zoom no mesmo diretório — só a
+    key do `zoom` é gravada no banner. Pra vitrines pequenas (grid de
+    "Coleções"), usar a zoom inteira desperdiça banda à toa (imagem de
+    banner full-bleed servida numa lider de ~1/4 da tela). Como o arquivo
+    `medium.webp` já existe no storage, dá pra apontar pra ele só trocando o
+    nome do arquivo na key — sem migration nem reprocessar nada. GIF
+    animado (key termina em `.gif`) não tem variante `medium`: cai para
+    `None` e quem chama usa a própria zoom/gif como fallback."""
+    if not key or not key.endswith("/zoom.webp"):
+        return None
+    return storage.url(key[: -len("zoom.webp")] + "medium.webp")
+
+
 def _out(b: Banner) -> dict:
     desktop = storage.url(b.image_desktop_key) if b.image_desktop_key else None
     mobile = storage.url(b.image_mobile_key) if b.image_mobile_key else None
@@ -33,6 +47,9 @@ def _out(b: Banner) -> dict:
         "image_url": desktop,
         "image_desktop_url": desktop,
         "image_mobile_url": mobile,
+        # variante menor pra grids pequenos (ex.: showcase) — ver `_medium_url`
+        "image_desktop_medium_url": _medium_url(b.image_desktop_key) or desktop,
+        "image_mobile_medium_url": _medium_url(b.image_mobile_key) or mobile,
         "link_url": b.link_url,
         "alt": b.alt,
         "position": b.position,

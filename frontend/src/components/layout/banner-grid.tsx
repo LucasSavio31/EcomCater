@@ -26,10 +26,26 @@ export function BannerGrid({ banners, variant = 'hero', priority = false }: Bann
 
   const aspect = variant === 'hero' ? 'aspect-[16/10] sm:aspect-[21/9]' : 'aspect-[4/3] sm:aspect-[3/2]';
 
+  // Precisa bater com `cols` acima — sem isso o navegador (e o `next/image`,
+  // que aqui roda com `unoptimized: true`, então NÃO gera srcset sozinho)
+  // não tem como saber que o tile é bem menor que 100vw.
+  const sizes =
+    banners.length === 1
+      ? '100vw'
+      : banners.length === 2
+        ? '(min-width: 640px) 50vw, 100vw'
+        : banners.length === 3
+          ? '(min-width: 640px) 33vw, 100vw'
+          : '(min-width: 1024px) 25vw, 50vw';
+
   return (
     <ul className={`grid gap-3 ${cols}`}>
       {banners.map((banner, i) => {
-        const src = resolveMediaUrl(banner.image_url ?? banner.image_desktop_url);
+        // grid pequeno: usa a variante `medium` (mesma imagem, ~4x menor) em
+        // vez da `zoom` full-bleed pensada pro hero — ver `_medium_url` na API.
+        const src = resolveMediaUrl(
+          banner.image_desktop_medium_url ?? banner.image_url ?? banner.image_desktop_url,
+        );
         const alt = banner.alt ?? banner.title ?? 'Banner promocional';
         const inner = (
           <span className={`relative block w-full overflow-hidden rounded-card bg-bg-subtle ${aspect}`}>
@@ -38,7 +54,7 @@ export function BannerGrid({ banners, variant = 'hero', priority = false }: Bann
                 src={src}
                 alt={alt}
                 fill
-                sizes="(min-width: 640px) 100vw, 100vw"
+                sizes={sizes}
                 priority={priority && i === 0}
                 unoptimized={/\.gif($|\?)/i.test(src)}
                 className="object-cover"
