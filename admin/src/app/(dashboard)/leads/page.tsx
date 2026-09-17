@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Card, Input, Modal } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { Select } from '@/components/form-controls';
 import { AsyncBoundary } from '@/components/async-boundary';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { PageSizeSelect, DEFAULT_PAGE_SIZE } from '@/components/date-range-filter';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { formatDateTime, formatNumber } from '@/lib/format';
@@ -27,6 +28,8 @@ export default function LeadsPage() {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [couponCode, setCouponCode] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const rows = useMemo(() => {
     let all = data ?? [];
@@ -38,6 +41,18 @@ export default function LeadsPage() {
     return all;
   }, [data, source, quick]);
 
+  // troca de filtro/tamanho de página → zera pra 1ª página (os ids marcados
+  // podem não estar mais visíveis)
+  useEffect(() => {
+    setPage(1);
+  }, [source, quick, pageSize]);
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const pagedRows = useMemo(
+    () => rows.slice((page - 1) * pageSize, page * pageSize),
+    [rows, page, pageSize],
+  );
+
   function applyQuick(key: 'checkout' | 'popup' | 'coupon') {
     setSource('');
     setQuick((cur) => (cur === key ? '' : key));
@@ -47,7 +62,7 @@ export default function LeadsPage() {
     () => Array.from(new Set((data ?? []).map((l) => l.source))),
     [data],
   );
-  const allChecked = rows.length > 0 && rows.every((l) => selected.has(l.id));
+  const allChecked = pagedRows.length > 0 && pagedRows.every((l) => selected.has(l.id));
   const selectedList = [...selected];
 
   const toggle = (id: string) =>
@@ -60,8 +75,8 @@ export default function LeadsPage() {
   const toggleAll = () =>
     setSelected((s) => {
       const n = new Set(s);
-      if (allChecked) rows.forEach((l) => n.delete(l.id));
-      else rows.forEach((l) => n.add(l.id));
+      if (allChecked) pagedRows.forEach((l) => n.delete(l.id));
+      else pagedRows.forEach((l) => n.add(l.id));
       return n;
     });
 
@@ -245,7 +260,7 @@ export default function LeadsPage() {
                   </td>
                 </tr>
               )}
-              {rows.map((l) => (
+              {pagedRows.map((l) => (
                 <tr key={l.id} className={l.subscribed ? '' : 'opacity-50'}>
                   <td className="px-3 py-2">
                     <input
@@ -271,6 +286,38 @@ export default function LeadsPage() {
           </table>
         </div>
       </AsyncBoundary>
+
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          <div className="flex items-center gap-4">
+            <span className="text-text-muted">{rows.length} lead(s)</span>
+            <PageSizeSelect value={pageSize} onChange={setPageSize} />
+          </div>
+          {pageCount > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Anterior
+              </Button>
+              <span>
+                Página {page} de {pageCount}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= pageCount}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Próxima
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       <Modal
         open={campaignOpen}
