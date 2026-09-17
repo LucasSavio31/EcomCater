@@ -110,6 +110,7 @@ export function HeroBanner({ banners, mode, autoplaySeconds, viewport = 'desktop
                     fill
                     sizes="100vw"
                     priority={i === 0}
+                    fetchPriority={i === 0 ? 'high' : undefined}
                     unoptimized={/\.gif($|\?)/i.test(src)}
                     className="object-cover"
                   />

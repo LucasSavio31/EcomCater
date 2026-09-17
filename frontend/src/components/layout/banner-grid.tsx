@@ -56,6 +56,7 @@ export function BannerGrid({ banners, variant = 'hero', priority = false }: Bann
                 fill
                 sizes={sizes}
                 priority={priority && i === 0}
+                fetchPriority={priority && i === 0 ? 'high' : undefined}
                 unoptimized={/\.gif($|\?)/i.test(src)}
                 className="object-cover"
               />

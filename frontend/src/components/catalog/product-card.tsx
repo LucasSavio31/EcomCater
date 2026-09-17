@@ -98,6 +98,7 @@ export function ProductCard({
               fill
               sizes={CARD_SIZES}
               priority={priority}
+              fetchPriority={priority ? 'high' : undefined}
               {...(!priority && loading ? { loading } : {})}
               className={`ecom-card-img object-contain transition-opacity duration-300 ${hover ? 'group-hover:opacity-0' : ''}`}
             />
