@@ -40,6 +40,7 @@ async def lifespan(_: FastAPI):
     # e rotinas de fundo não disputam worker/conexão com a navegação.
     schedulers: list = []
     if settings.run_schedulers:
+        from app.modules.bling import scheduler as bling_scheduler
         from app.modules.cart_recovery import scheduler as recovery_scheduler
         from app.modules.domains import scheduler as domains_scheduler
         from app.modules.shipping import scheduler as me_tracking_scheduler
@@ -54,6 +55,7 @@ async def lifespan(_: FastAPI):
             recovery_scheduler,
             email_retry_scheduler,
             domains_scheduler,
+            bling_scheduler,
         ]
         for s in schedulers:
             s.start()
@@ -108,6 +110,12 @@ def create_app() -> FastAPI:
 
     discover_modules()
     register_all(app)
+
+    # REST API do WooCommerce (`/wp-json/wc/v3/...`) -- caminho fixo por
+    # convenção do WordPress, fora do prefixo `/api/...` dos demais módulos.
+    from app.modules.woocommerce.router_public import router as woocommerce_router
+
+    app.include_router(woocommerce_router, prefix="/wp-json", tags=["woocommerce"])
 
     @app.get("/health", tags=["meta"])
     async def health() -> dict:

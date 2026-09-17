@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, Sequence, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -61,6 +61,13 @@ class Order(UUIDPKMixin, TimestampMixin, Base):
     # atribuição de marketing p/ a Conversions API da Meta / Enhanced
     # Conversions do Google: {fbp, fbc, client_ip, client_user_agent, landing_url}
     marketing_json: Mapped[dict | None] = mapped_column(JSONB)
+
+    # Id inteiro estável, só pra compatibilidade com a REST API do
+    # WooCommerce (`/wp-json/wc/v3/orders/<wc_id>`) — o ERP (Bling etc.) só
+    # fala com IDs inteiros, nunca UUID. Gerado uma vez, nunca muda.
+    wc_id: Mapped[int] = mapped_column(
+        BigInteger, Sequence("orders_wc_id_seq"), unique=True, nullable=False
+    )
 
     items: Mapped[list[OrderItem]] = relationship(
         back_populates="order", cascade="all, delete-orphan"

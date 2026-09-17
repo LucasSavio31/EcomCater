@@ -15,6 +15,7 @@ import {
   IconCart,
   IconDashboard,
   IconFilters,
+  IconIntegrations,
   IconLeads,
   IconMail,
   IconMenus,
@@ -71,6 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/promocoes', label: 'Promoções', icon: IconPromotions },
       { href: '/pagamento', label: 'Pagamento', icon: IconPayment },
       { href: '/frete', label: 'Frete', icon: IconShipping },
+      { href: '/integracoes', label: 'Integrações', icon: IconIntegrations },
     ],
   },
   {

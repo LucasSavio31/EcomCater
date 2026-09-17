@@ -6,12 +6,14 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     Numeric,
+    Sequence,
     String,
     Text,
     UniqueConstraint,
@@ -33,6 +35,12 @@ class Product(UUIDPKMixin, TimestampMixin, Base):
         Index("ix_products_status_featured", "status", "is_featured"),
     )
 
+    # Id inteiro estável só pra REST API do WooCommerce
+    # (`/wp-json/wc/v3/products/<wc_id>`) — ERPs (Bling etc.) só falam com
+    # IDs inteiros, nunca UUID.
+    wc_id: Mapped[int] = mapped_column(
+        BigInteger, Sequence("products_wc_id_seq"), unique=True, nullable=False
+    )
     name: Mapped[str] = mapped_column(String(240))
     slug: Mapped[str] = mapped_column(String(260), unique=True, index=True)
     sku_root: Mapped[str | None] = mapped_column(String(60), unique=True)
@@ -147,6 +155,11 @@ class ProductVariant(UUIDPKMixin, TimestampMixin, Base):
 
     product_id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), index=True
+    )
+    # Id inteiro estável -- vira o id da "variation" do WooCommerce
+    # (`/wp-json/wc/v3/products/<product.wc_id>/variations/<wc_id>`).
+    wc_id: Mapped[int] = mapped_column(
+        BigInteger, Sequence("product_variants_wc_id_seq"), unique=True, nullable=False
     )
     sku: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     price_cents: Mapped[int | None] = mapped_column(Integer)  # null => herda do produto
