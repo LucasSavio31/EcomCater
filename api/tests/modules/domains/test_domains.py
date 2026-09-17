@@ -419,13 +419,16 @@ async def test_apply_cache_pages_builds_bypass_and_cache_rules(
     assert data["cache_applied_at"] is not None
 
     assert captured["zone_id"] == "zone-abc"
-    descriptions = [rule["description"] for rule in captured["rules"]]
-    # bypass sempre presente, mesmo sem o usuário pedir
-    assert "bypass: /carrinho" in descriptions
-    assert "bypass: /checkout" in descriptions
-    assert "bypass: /minha-conta" in descriptions
-    assert "bypass: admin.cacheteste.com.br" in descriptions
-    assert "bypass: api.cacheteste.com.br" in descriptions
+    rules = captured["rules"]
+    # no máximo 7 regras (2 bypass + até 5 de cache) -- teto de 10 do plano Free
+    assert len(rules) <= 7
+    descriptions = [rule["description"] for rule in rules]
+    bypass_rule = next(r for r in rules if "carrinho" in r["expression"])
+    # bypass consolidado numa regra só (com "or"), não uma por caminho
+    for path in ("/carrinho", "/checkout", "/minha-conta", "/favoritos", "/esqueci-senha", "/redefinir-senha"):
+        assert path in bypass_rule["expression"]
+    sub_rule = next(r for r in rules if "admin.cacheteste.com.br" in r["expression"])
+    assert "api.cacheteste.com.br" in sub_rule["expression"]
     # só as páginas selecionadas viram regra de cache
     assert "cache: home" in descriptions
     assert "cache: produto" in descriptions

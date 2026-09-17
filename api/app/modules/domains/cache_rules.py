@@ -69,46 +69,54 @@ _ALWAYS_BYPASS_PATHS = [
 ]
 
 
-def _expr(hostname: str, path: str, *, is_prefix: bool) -> str:
-    host_cond = f'http.host eq "{hostname}"'
+def _path_cond(path: str, *, is_prefix: bool) -> str:
     if path == "/":
-        path_cond = 'http.request.uri.path eq "/"'
-    elif is_prefix:
-        path_cond = f'starts_with(http.request.uri.path, "{path}")'
-    else:
-        path_cond = f'http.request.uri.path eq "{path}"'
-    return f"({host_cond} and {path_cond})"
+        return 'http.request.uri.path eq "/"'
+    if is_prefix:
+        return f'starts_with(http.request.uri.path, "{path}")'
+    return f'http.request.uri.path eq "{path}"'
+
+
+def _expr(hostname: str, path: str, *, is_prefix: bool) -> str:
+    return f'(http.host eq "{hostname}" and {_path_cond(path, is_prefix=is_prefix)})'
 
 
 def build_rules(hostname: str, selected_pages: list[str]) -> list[dict]:
     """Monta as regras da fase `http_request_cache_settings` pro domínio raiz.
 
-    Bypass primeiro (carrinho/checkout/conta/etc. + admin./api.), depois uma
-    regra de cache por tipo de página selecionado.
+    Contas Free da Cloudflare têm **teto de 10 regras** nessa fase — por
+    isso os bypass (carrinho/checkout/conta/etc. e admin./api.) vão cada um
+    numa ÚNICA regra com `or`, em vez de uma regra por caminho. No máximo
+    2 (bypass) + 5 (uma por tipo de página) = 7 regras, sempre dentro do
+    teto mesmo marcando tudo.
     """
     rules: list[dict] = []
 
-    for path in _ALWAYS_BYPASS_PATHS:
-        rules.append(
-            {
-                "expression": _expr(hostname, path, is_prefix=True),
-                "description": f"bypass: {path}",
-                "action": "set_cache_settings",
-                "action_parameters": {"cache": False},
-            }
-        )
+    bypass_paths = " or ".join(
+        _path_cond(p, is_prefix=True) for p in _ALWAYS_BYPASS_PATHS
+    )
+    rules.append(
+        {
+            "expression": f'(http.host eq "{hostname}" and ({bypass_paths}))',
+            "description": "bypass: carrinho/checkout/conta/favoritos/senha",
+            "action": "set_cache_settings",
+            "action_parameters": {"cache": False},
+        }
+    )
 
     # admin./api. nunca cacheados por este ruleset, mesmo que algum dia
     # compartilhem zona com paths parecidos.
-    for sub in (f"admin.{hostname}", f"api.{hostname}"):
-        rules.append(
-            {
-                "expression": f'(http.host eq "{sub}")',
-                "description": f"bypass: {sub}",
-                "action": "set_cache_settings",
-                "action_parameters": {"cache": False},
-            }
-        )
+    sub_hosts = " or ".join(
+        f'http.host eq "{sub}"' for sub in (f"admin.{hostname}", f"api.{hostname}")
+    )
+    rules.append(
+        {
+            "expression": f"({sub_hosts})",
+            "description": "bypass: admin./api.",
+            "action": "set_cache_settings",
+            "action_parameters": {"cache": False},
+        }
+    )
 
     for key in selected_pages:
         page = CACHE_PAGE_DEFS.get(key)
