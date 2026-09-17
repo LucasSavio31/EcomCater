@@ -86,6 +86,47 @@ async def test_guest_lookup_requires_email(client, variant):
 
 
 @pytest.mark.asyncio
+async def test_cor_options_from_color_siblings(client, variant, admin_token, auth_headers):
+    """Quando o produto não tem opção "Cor" própria (caso deste catálogo:
+    cada cor é um produto separado), a edição do pedido deve listar as cores
+    dos produtos irmãos (mesmo `color_group_id`) como opções — não ficar
+    sem nenhuma, e não quebrar a rota."""
+    h = auth_headers(admin_token)
+    order = await _order(client, variant)
+
+    cat = (await client.post("/api/admin/categories", json={"name": "C2"}, headers=h)).json()
+    sibling = (
+        await client.post(
+            "/api/admin/products",
+            json={"name": "Item Vermelho", "category_id": cat["id"], "price_cents": 7000, "status": "active"},
+            headers=h,
+        )
+    ).json()
+    # id do produto usado no pedido (fixture `variant` cria "Item")
+    products = (await client.get("/api/admin/products", params={"q": "Item"}, headers=h)).json()
+    base_product_id = next(p["id"] for p in products["items"] if p["name"] == "Item")
+
+    r = await client.put(
+        f"/api/admin/products/{base_product_id}/color-group",
+        json={"color_name": "Azul", "sibling_ids": [sibling["id"]]},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    # reciprocal: sem passar sibling_ids aqui, o service desfaria o vínculo
+    # (len(members) <= 1) -- precisa repetir o par pra só atualizar o nome.
+    await client.put(
+        f"/api/admin/products/{sibling['id']}/color-group",
+        json={"color_name": "Vermelho", "sibling_ids": [base_product_id]},
+        headers=h,
+    )
+
+    detail = await client.get(f"/api/admin/orders/{order['number']}", headers=h)
+    assert detail.status_code == 200, detail.text
+    item = detail.json()["items"][0]
+    assert set(item["cor_options"]) == {"Azul", "Vermelho"}
+
+
+@pytest.mark.asyncio
 async def test_admin_status_transitions(client, variant, admin_token, auth_headers):
     h = auth_headers(admin_token)
     order = await _order(client, variant)

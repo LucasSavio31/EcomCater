@@ -568,7 +568,7 @@ async def attach_variation_options(db: AsyncSession, out: dict) -> dict:
     """Enriquece cada item do pedido com as opções de Cor / Número cadastradas
     no produto correspondente (dropdowns da edição) e completa a miniatura
     quando o item não tem imagem snapshot."""
-    from app.modules.products.models import ProductImage, VariantOptionType
+    from app.modules.products.models import Product, ProductImage, VariantOptionType
 
     pids = {i["product_id"] for i in out.get("items", []) if i.get("product_id")}
     if not pids:
@@ -589,6 +589,32 @@ async def attach_variation_options(db: AsyncSession, out: dict) -> dict:
             cor_by_pid.setdefault(pid, []).extend(vals)
         if ot.is_size or "num" in name or "tam" in name:
             num_by_pid.setdefault(pid, []).extend(vals)
+
+    # Neste catálogo, "cor" geralmente não é uma opção de variação dentro do
+    # produto — cada cor é um PRODUTO separado, agrupado por `color_group_id`
+    # (mesmo mecanismo do "ver mais cores" da PDP). Pra produto sem opção de
+    # cor própria, a lista de cores pro dropdown vem dos produtos irmãos.
+    missing_cor_pids = [p for p in pids if p not in cor_by_pid]
+    if missing_cor_pids:
+        own = await db.execute(
+            select(Product.id, Product.color_group_id).where(
+                Product.id.in_([uuid.UUID(p) for p in missing_cor_pids])
+            )
+        )
+        group_by_pid = {str(pid): gid for pid, gid in own if gid is not None}
+        group_ids = list(set(group_by_pid.values()))
+        if group_ids:
+            siblings = await db.scalars(
+                select(Product).where(Product.color_group_id.in_(group_ids))
+            )
+            names_by_group: dict[uuid.UUID, list[str]] = {}
+            for sp in siblings:
+                label = sp.color_name or sp.name
+                names_by_group.setdefault(sp.color_group_id, []).append(label)
+            for pid, gid in group_by_pid.items():
+                names = sorted(set(names_by_group.get(gid, [])))
+                if names:
+                    cor_by_pid[pid] = names
 
     # imagem principal atual de cada produto (fallback da miniatura)
     imgs = await db.scalars(
