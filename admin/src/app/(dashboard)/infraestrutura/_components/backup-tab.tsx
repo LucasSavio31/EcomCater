@@ -197,7 +197,13 @@ export function BackupTab() {
               />
               {cfg.gdrive.enabled && (
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <Input label="ID da pasta do Drive" value={cfg.gdrive.folder_id ?? ''} onChange={(e) => setGdrive({ folder_id: e.target.value })} />
+                  <Input
+                    label="Link ou ID da pasta do Drive"
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    value={cfg.gdrive.folder_id ?? ''}
+                    onChange={(e) => setGdrive({ folder_id: e.target.value })}
+                    hint="Cole o link da pasta (ou só o ID) — a loja extrai o ID sozinha ao salvar. Todo backup feito manda uma cópia pra lá."
+                  />
                   <Input
                     label="Caminho do JSON da conta de serviço"
                     value={cfg.gdrive.service_account_json_path ?? ''}

@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import select
 
 from app.modules.admin.models import EmailLog
-from app.modules.system.models import BackupSettings
+from app.modules.system.models import BackupRecord, BackupSettings
 
 
 def _local(y, m, d, h, minute=0):
@@ -106,6 +106,52 @@ async def test_check_backup_states(db):
     await db.commit()
     status, _ms, _d = await _check_backup(db)
     assert status == "degraded"  # atrasado
+
+
+@pytest.mark.asyncio
+async def test_check_backup_flags_failed_destination(db):
+    """Arquivo em si ok, mas uma cópia extra (ex.: Google Drive) falhou --
+    tem que aparecer como degraded, não "ok" (o `last_status` do
+    BackupSettings só reflete o dump em si, não os destinos extras)."""
+    from app.modules.system.service_health import _check_backup
+
+    db.add(
+        BackupSettings(
+            id=1, auto_enabled=True, frequency="diario", last_status="ok",
+            last_run_at=datetime.now(UTC) - timedelta(hours=1),
+        )
+    )
+    db.add(
+        BackupRecord(
+            filename="backup_loja_2026-09-17_12-00-00_abcdef.tar.gz",
+            status="ok",
+            triggered_by="auto",
+            destinations_json=[
+                {"type": "folder", "ok": True, "detail": "/mnt/backups/x.tar.gz"},
+                {"type": "gdrive", "ok": False, "detail": "credencial inválida"},
+            ],
+            created_at=datetime.now(UTC),
+        )
+    )
+    await db.commit()
+
+    status, _ms, detail = await _check_backup(db)
+    assert status == "degraded"
+    assert "gdrive" in detail
+
+
+@pytest.mark.asyncio
+async def test_extract_drive_folder_id():
+    from app.modules.system.service_backup import extract_drive_folder_id
+
+    assert (
+        extract_drive_folder_id(
+            "https://drive.google.com/drive/folders/1eeXDxfN9b_KW5bygO_GW7aD6KdcILgH9?hl=pt-br"
+        )
+        == "1eeXDxfN9b_KW5bygO_GW7aD6KdcILgH9"
+    )
+    assert extract_drive_folder_id("1eeXDxfN9b_KW5bygO_GW7aD6KdcILgH9") == "1eeXDxfN9b_KW5bygO_GW7aD6KdcILgH9"
+    assert extract_drive_folder_id("") == ""
 
 
 @pytest.mark.asyncio

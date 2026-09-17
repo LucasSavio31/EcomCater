@@ -107,8 +107,11 @@ def _check_storage() -> tuple[str, int, str]:
 
 
 async def _check_backup(db: AsyncSession) -> tuple[str, int, str]:
-    """Saúde do backup agendado: último resultado + se está atrasado."""
-    from app.modules.system.models import BackupSettings
+    """Saúde do backup agendado: último resultado + se está atrasado + se
+    alguma cópia extra (pasta local/SFTP/Google Drive) falhou -- o arquivo
+    em si pode ter sido gerado certo (`last_status == "ok"`) e mesmo assim
+    uma cópia específica ter falhado (ex.: credencial do Drive vencida)."""
+    from app.modules.system.models import BackupRecord, BackupSettings
 
     row = await db.get(BackupSettings, 1)
     if not row or not row.auto_enabled:
@@ -117,6 +120,16 @@ async def _check_backup(db: AsyncSession) -> tuple[str, int, str]:
         return "down", 0, "último backup falhou — ver Sistema → Backup"
     if not row.last_run_at:
         return "degraded", 0, "nenhum backup executado ainda"
+
+    last_rec = await db.scalar(
+        select(BackupRecord).order_by(BackupRecord.created_at.desc()).limit(1)
+    )
+    if last_rec:
+        failed = [d for d in (last_rec.destinations_json or []) if not d.get("ok")]
+        if failed:
+            names = ", ".join(d.get("type", "?") for d in failed)
+            return "degraded", 0, f"cópia extra falhou ({names}) — ver Sistema → Backup"
+
     last = row.last_run_at
     if last.tzinfo is None:
         last = last.replace(tzinfo=UTC)

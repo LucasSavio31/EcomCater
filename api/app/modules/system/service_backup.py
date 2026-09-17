@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -28,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.modules.system.models import BackupRecord, BackupSettings
+from app.shared.slugify import make_slug
 
 logger = logging.getLogger("system.backup")
 
@@ -150,6 +152,21 @@ def _copy_to_sftp(archive: Path, cfg: dict) -> dict:
         return {"type": "sftp", "ok": False, "detail": str(exc)}
 
 
+def extract_drive_folder_id(value: str) -> str:
+    """Aceita tanto o ID puro quanto o link completo da pasta (o campo do
+    admin recebe qualquer um dos dois) -- ex.:
+    `https://drive.google.com/drive/folders/1eeXDxfN9b...?hl=pt-br` -> `1eeXDxfN9b...`.
+    """
+    v = (value or "").strip()
+    m = re.search(r"/folders/([a-zA-Z0-9_-]+)", v)
+    if m:
+        return m.group(1)
+    m2 = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", v)
+    if m2:
+        return m2.group(1)
+    return v
+
+
 def _copy_to_gdrive(archive: Path, cfg: dict) -> dict:
     sa_path = cfg.get("service_account_json_path")
     if not sa_path or not Path(sa_path).is_file():
@@ -240,7 +257,10 @@ async def update_settings(db: AsyncSession, data: dict) -> BackupSettings:
     if "sftp" in data and data["sftp"] is not None:
         row.sftp_json = _merge_secret(row.sftp_json, data["sftp"], ("password",))
     if "gdrive" in data and data["gdrive"] is not None:
-        row.gdrive_json = dict(data["gdrive"])
+        gdrive = dict(data["gdrive"])
+        if gdrive.get("folder_id"):
+            gdrive["folder_id"] = extract_drive_folder_id(gdrive["folder_id"])
+        row.gdrive_json = gdrive
     row.updated_at = datetime.now(UTC)
     await db.flush()
     return row
@@ -310,10 +330,14 @@ async def _prune(db: AsyncSession, keep: int) -> None:
 
 async def create_backup(db: AsyncSession, *, triggered_by: str = "manual",
                         include_media: bool | None = None) -> BackupRecord:
+    from app.modules.admin.models import StoreSettings
+
     cfg = await get_settings_row(db)
     with_media = cfg.include_media if include_media is None else include_media
-    ts = datetime.now(UTC).strftime("%Y-%m-%d_%H-%M-%S-%f")
-    name = f"backup_{ts}.tar.gz"
+    store = await db.get(StoreSettings, 1)
+    store_slug = make_slug(store.store_name) if store and store.store_name else "loja"
+    ts = _store_now().strftime("%Y-%m-%d_%H-%M-%S")
+    name = f"backup_{store_slug}_{ts}_{uuid.uuid4().hex[:6]}.tar.gz"
     archive = backup_dir() / name
     rec = BackupRecord(filename=name, status="running", triggered_by=triggered_by,
                        includes_media=with_media, created_at=datetime.now(UTC))
@@ -352,27 +376,37 @@ async def create_backup(db: AsyncSession, *, triggered_by: str = "manual",
     if rec.status == "ok" and triggered_by in _TRIGGERS_PRUNED:
         await _prune(db, cfg.keep)
 
-    # avisa o admin de TODO backup (auto/manual), bem-sucedido ou com erro
+    # avisa o admin de TODO backup (auto/manual), bem-sucedido ou com erro --
+    # "erro" aqui inclui uma cópia extra (ex.: Google Drive) que falhou
+    # mesmo com o arquivo em si tendo sido gerado certo.
     if triggered_by in ("auto", "manual"):
         try:
             from app.shared import mailer
 
+            dests = rec.destinations_json or []
+            dest_errors = [
+                f"{d.get('type', '?')}: {d.get('detail') or 'erro desconhecido'}"
+                for d in dests
+                if not d.get("ok")
+            ]
+            all_ok = rec.status == "ok" and not dest_errors
+            error_text = rec.error_message or ("; ".join(dest_errors) if dest_errors else None)
             await mailer.send(
                 db,
                 to=await mailer.admin_notify_email(db),
                 template="backup_result",
                 context={
-                    "ok": rec.status == "ok",
+                    "ok": all_ok,
                     "trigger": "automático" if triggered_by == "auto" else "manual",
                     "when": rec.created_at.strftime("%d/%m/%Y %H:%M UTC"),
                     "filename": rec.filename,
-                    "size_mb": round(rec.size_bytes / 1048576, 2),
+                    "size_mb": round(rec.size_bytes / 1048576, 2) if rec.size_bytes else 0,
                     "with_media": rec.includes_media,
                     "destinations": ", ".join(
-                        d.get("kind", "?") for d in (rec.destinations_json or [])
+                        f"{d.get('type', '?')} ({'ok' if d.get('ok') else 'falhou'})" for d in dests
                     )
                     or None,
-                    "error": rec.error_message,
+                    "error": error_text,
                 },
             )
         except Exception:  # noqa: BLE001
