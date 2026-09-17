@@ -40,15 +40,16 @@ function CopyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Bling (via app "WooCommerce" deles): a loja responde a REST API do
- * WooCommerce em `/wp-json/wc/v3/...` -- o mesmo app pronto que o Bling já
- * tem no marketplace deles conecta aqui sem precisar de nada sob medida,
- * só a URL da loja + as chaves geradas abaixo. */
-export function BlingCard() {
+/** A loja responde a REST API do WooCommerce em `/wp-json/wc/v3/...` --
+ * qualquer ERP/ferramenta que já tenha um conector "WooCommerce" pronto
+ * (Bling, SoftUp, e por aí vai) conecta aqui direto, sem nada sob medida:
+ * só a URL da loja + uma chave gerada abaixo. Uma chave por ferramenta
+ * (revogar uma não afeta as outras). */
+export function WooCommerceCard() {
   const toast = useToast();
   const keysRes = useResource(() => woocommerceApi.listKeys());
   const webhooksRes = useResource(() => woocommerceApi.listWebhooks());
-  const [description, setDescription] = useState('Bling');
+  const [description, setDescription] = useState('');
   const [permission, setPermission] = useState<WooPermission>('read_write');
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -56,14 +57,19 @@ export function BlingCard() {
   const [justCreated, setJustCreated] = useState<WooKeyCreated | null>(null);
 
   async function createKey(): Promise<void> {
+    if (!description.trim()) {
+      toast.error('Dê um nome pra chave (ex.: "Bling", "SoftUp") -- ajuda a identificar de onde vem cada uma.');
+      return;
+    }
     setCreating(true);
-    const res = await woocommerceApi.createKey({ description: description.trim() || undefined, permission });
+    const res = await woocommerceApi.createKey({ description: description.trim(), permission });
     setCreating(false);
     if (!res.ok) {
       toast.error(res.error.message);
       return;
     }
     setJustCreated(res.data);
+    setDescription('');
     keysRes.reload();
   }
 
@@ -83,16 +89,16 @@ export function BlingCard() {
   return (
     <Card variant="outline" className="flex flex-col gap-4">
       <div>
-        <h2 className="text-base font-semibold">Bling</h2>
+        <h2 className="text-base font-semibold">WooCommerce API (Bling, SoftUp, ...)</h2>
         <p className="text-sm text-text-muted">
-          A loja responde como um WooCommerce pra integrações -- no Bling, use o app{' '}
-          <b>WooCommerce</b> (Central de Integrações), cole a URL da loja abaixo e as chaves geradas
-          aqui. Pedido pago dispara webhook pra lá na hora; estoque/preço/status que o Bling mudar
-          volta pra cá.
+          A loja responde como um WooCommerce pra integrações -- em qualquer ERP com um conector
+          &quot;WooCommerce&quot; pronto (Bling, SoftUp, e outros), cole a URL da loja abaixo e gere
+          uma chave dedicada pra ele. Pedido pago dispara webhook na hora; estoque/preço/status que
+          o ERP mudar volta pra cá.
         </p>
       </div>
 
-      <CopyRow label="URL do canal de venda (cole no Bling)" value={STORE_URL} />
+      <CopyRow label="URL da loja (cole no campo de loja WooCommerce do ERP)" value={STORE_URL} />
 
       <AsyncBoundary loading={keysRes.loading} error={keysRes.error} onRetry={keysRes.reload}>
         <div className="flex flex-col gap-2">
@@ -127,10 +133,10 @@ export function BlingCard() {
 
           <div className="flex flex-wrap items-end gap-2 border-t border-surface-border pt-3">
             <Input
-              label="Descrição"
+              label="Nome da chave"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Bling"
+              placeholder="Bling, SoftUp..."
             />
             <Select
               label="Permissão"
@@ -151,7 +157,7 @@ export function BlingCard() {
 
       {webhooksRes.data && webhooksRes.data.length > 0 && (
         <div className="flex flex-col gap-2 border-t border-surface-border pt-3">
-          <span className="text-sm font-semibold">Webhooks registrados pelo Bling</span>
+          <span className="text-sm font-semibold">Webhooks registrados</span>
           {webhooksRes.data.map((w) => (
             <div key={w.id} className="rounded-card border border-surface-border p-2 text-sm">
               <span className="font-medium">{w.topic}</span>
@@ -178,7 +184,7 @@ export function BlingCard() {
       <ConfirmDialog
         open={confirmRevoke !== null}
         title="Revogar chave"
-        description="Quem estiver usando essa chave (ex.: o app WooCommerce no Bling) para de conseguir acessar a loja."
+        description="Quem estiver usando essa chave (o ERP correspondente) para de conseguir acessar a loja."
         confirmLabel="Revogar"
         tone="danger"
         loading={revoking !== null}

@@ -46,6 +46,7 @@ async def lifespan(_: FastAPI):
         from app.modules.system import email_retry as email_retry_scheduler
         from app.modules.system import health_scheduler
         from app.modules.system import scheduler as backup_scheduler
+        from app.modules.upseller import scheduler as upseller_scheduler
 
         schedulers = [
             backup_scheduler,
@@ -54,6 +55,7 @@ async def lifespan(_: FastAPI):
             recovery_scheduler,
             email_retry_scheduler,
             domains_scheduler,
+            upseller_scheduler,
         ]
         for s in schedulers:
             s.start()
