@@ -28,7 +28,9 @@ class BackupSettings(Base):
     folder_path: Mapped[str | None] = mapped_column(String(500))
     # cópia por SFTP: {enabled, host, port, user, password, key_path, remote_dir}
     sftp_json: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}", nullable=False)
-    # cópia para o Google Drive: {enabled, folder_id, service_account_json_path, account_email}
+    # cópia para o Google Drive: {enabled, folder_id} -- via rclone (remote
+    # "gdrive", autorizado uma vez com a conta Google do lojista, token em
+    # ~/.config/rclone/rclone.conf no servidor), não Conta de Serviço.
     gdrive_json: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}", nullable=False)
 
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

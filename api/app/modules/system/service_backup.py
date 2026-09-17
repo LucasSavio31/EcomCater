@@ -168,30 +168,28 @@ def extract_drive_folder_id(value: str) -> str:
 
 
 def _copy_to_gdrive(archive: Path, cfg: dict) -> dict:
-    sa_path = cfg.get("service_account_json_path")
-    if not sa_path or not Path(sa_path).is_file():
-        return {"type": "gdrive", "ok": False,
-                "detail": "credencial ausente: informe o caminho do JSON da conta de serviço"}
+    """Copia pro Google Drive via `rclone` (remote "gdrive") -- autorizado
+    UMA VEZ com a própria conta Google do lojista (não uma Conta de
+    Serviço: é o mesmo "arrastar e soltar" que ele já faz manualmente,
+    contra a pasta que ele mesmo compartilhou). O token fica em
+    `~/.config/rclone/rclone.conf` no servidor e se renova sozinho."""
+    folder_id = cfg.get("folder_id")
+    if not folder_id:
+        return {"type": "gdrive", "ok": False, "detail": "pasta do Drive não configurada"}
+    rclone = shutil.which("rclone")
+    if not rclone:
+        return {"type": "gdrive", "ok": False, "detail": "rclone não instalado no servidor"}
     try:
-        from google.oauth2 import service_account  # type: ignore
-        from googleapiclient.discovery import build  # type: ignore
-        from googleapiclient.http import MediaFileUpload  # type: ignore
-    except Exception:  # noqa: BLE001
-        return {"type": "gdrive", "ok": False,
-                "detail": "bibliotecas do Google não instaladas no servidor"}
-    try:
-        creds = service_account.Credentials.from_service_account_file(
-            sa_path, scopes=["https://www.googleapis.com/auth/drive.file"]
+        res = subprocess.run(
+            [rclone, "copyto", str(archive), f"gdrive:{archive.name}",
+             "--drive-root-folder-id", folder_id],
+            capture_output=True, text=True, timeout=300,
         )
-        drive = build("drive", "v3", credentials=creds, cache_discovery=False)
-        meta = {"name": archive.name}
-        if cfg.get("folder_id"):
-            meta["parents"] = [cfg["folder_id"]]
-        media = MediaFileUpload(str(archive), resumable=False)
-        f = drive.files().create(body=meta, media_body=media, fields="id").execute()
-        return {"type": "gdrive", "ok": True, "detail": f"file_id={f.get('id')}"}
-    except Exception as exc:  # noqa: BLE001
-        return {"type": "gdrive", "ok": False, "detail": str(exc)}
+    except subprocess.TimeoutExpired:
+        return {"type": "gdrive", "ok": False, "detail": "rclone demorou demais (timeout)"}
+    if res.returncode != 0:
+        return {"type": "gdrive", "ok": False, "detail": (res.stderr or res.stdout).strip()[:300] or "rclone falhou"}
+    return {"type": "gdrive", "ok": True, "detail": f"{archive.name} copiado para a pasta do Drive"}
 
 
 async def _run_destinations(archive: Path, cfg: BackupSettings) -> list[dict]:

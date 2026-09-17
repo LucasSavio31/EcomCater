@@ -10,7 +10,7 @@ WORKDIR /app
 # - libpango/harfbuzz + fontes (Liberation ~= Arial) p/ o WeasyPrint gerar a
 #   fatura em PDF (HTML+CSS -> PDF, sem browser)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential libpq-dev curl ca-certificates gnupg \
+        build-essential libpq-dev curl unzip ca-certificates gnupg \
         libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libffi8 \
         fonts-liberation fonts-dejavu-core \
     && install -d /usr/share/postgresql-common/pgdg \
@@ -20,6 +20,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update && apt-get install -y --no-install-recommends postgresql-client-16 \
     && rm -rf /var/lib/apt/lists/*
+# rclone (backup -> Google Drive, remote "gdrive" configurado no host e
+# montado em /root/.config/rclone pelo compose de prod).
+RUN curl -fsSL https://rclone.org/install.sh | bash
 COPY pyproject.toml ./
 RUN pip install --upgrade pip && pip install poetry poetry-plugin-export \
     && poetry export -f requirements.txt --output requirements.txt --without-hashes --with dev \

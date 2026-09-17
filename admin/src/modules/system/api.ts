@@ -47,8 +47,6 @@ export interface SftpConfig {
 export interface GDriveConfig {
   enabled?: boolean;
   folder_id?: string;
-  service_account_json_path?: string;
-  account_email?: string;
 }
 
 export interface BackupSettings {

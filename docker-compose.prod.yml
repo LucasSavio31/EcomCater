@@ -19,6 +19,11 @@ services:
       - "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers --forwarded-allow-ips=*"
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      # rclone (backup -> Google Drive): remote "gdrive", autorizado uma vez
+      # com a conta Google do lojista. Config fica no HOST, montada só
+      # leitura -- o container não precisa (nem deve) sobrescrever o token.
+      - /root/.config/rclone:/root/.config/rclone:ro
 
   frontend:
     build:
