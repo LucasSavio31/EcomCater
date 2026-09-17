@@ -22,7 +22,10 @@ _task: asyncio.Task | None = None
 
 
 async def _tick_once() -> None:
+    from sqlalchemy import or_
+
     from app.modules.domains.models import (
+        STATUS_ACTIVE,
         STATUS_AWAITING_NAMESERVERS,
         STATUS_DNS_PENDING,
         STATUS_FAILED,
@@ -34,8 +37,13 @@ async def _tick_once() -> None:
         try:
             pending = await db.scalars(
                 select(Domain).where(
-                    Domain.status.in_(
-                        [STATUS_AWAITING_NAMESERVERS, STATUS_DNS_PENDING, STATUS_FAILED]
+                    or_(
+                        Domain.status.in_(
+                            [STATUS_AWAITING_NAMESERVERS, STATUS_DNS_PENDING, STATUS_FAILED]
+                        ),
+                        # site já ativo (proxy ok) mas o SSL falhou numa
+                        # tentativa anterior — continua tentando emitir.
+                        (Domain.status == STATUS_ACTIVE) & (Domain.ssl_status == "error"),
                     )
                 )
             )

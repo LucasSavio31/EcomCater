@@ -72,6 +72,17 @@ class CloudflareClient:
         data = await self._request("GET", f"/zones/{zone_id}")
         return (data.get("result") or {}).get("status", "pending")
 
+    async def set_cache_rules(self, *, zone_id: str, rules: list[dict]) -> None:
+        """Substitui por inteiro o ruleset de cache (fase
+        `http_request_cache_settings`) da zona pelo `rules` dado — idempotente,
+        não precisa gerenciar ID de regra individual. Requer a permissão
+        `Zone / Cache Rules / Edit` no token (além de `Zone / DNS / Edit`)."""
+        await self._request(
+            "PUT",
+            f"/zones/{zone_id}/rulesets/phases/http_request_cache_settings/entrypoint",
+            json={"rules": rules},
+        )
+
     async def upsert_dns_record(
         self, *, zone_id: str, name: str, record_type: str, content: str, proxied: bool = True
     ) -> None:

@@ -15,6 +15,17 @@ class DomainIn(BaseModel):
     hostname: str = Field(min_length=3, max_length=255)
 
 
+class CachePagesIn(BaseModel):
+    pages: list[str] = Field(default_factory=list)
+
+
+class CachePageOut(BaseModel):
+    key: str
+    label: str
+    description: str
+    ttl_seconds: int
+
+
 class DomainOut(BaseModel):
     id: str
     hostname: str
@@ -28,3 +39,5 @@ class DomainOut(BaseModel):
     api_hostname: str
     cloudflare_nameservers: list[str] | None
     dns_confirmed: bool
+    cache_pages: list[str]
+    cache_applied_at: str | None

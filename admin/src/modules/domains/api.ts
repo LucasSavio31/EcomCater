@@ -23,6 +23,15 @@ export interface DomainRecord {
   api_hostname: string;
   cloudflare_nameservers: string[] | null;
   dns_confirmed: boolean;
+  cache_pages: string[];
+  cache_applied_at: string | null;
+}
+
+export interface CachePageOption {
+  key: string;
+  label: string;
+  description: string;
+  ttl_seconds: number;
 }
 
 export interface DomainsState {
@@ -31,6 +40,7 @@ export interface DomainsState {
   aapanel_url: string;
   server_ip: string;
   domains: DomainRecord[];
+  cache_page_options: CachePageOption[];
 }
 
 export interface DomainsCredentialsIn {
@@ -67,4 +77,7 @@ export const domainsApi = {
 
   remove: (id: string): Promise<ApiResult<void>> =>
     adminFetch<void>(`/api/admin/domains/${id}`, { method: 'DELETE' }),
+
+  saveCachePages: (id: string, pages: string[]): Promise<ApiResult<DomainRecord>> =>
+    adminFetch<DomainRecord>(`/api/admin/domains/${id}/cache`, { method: 'PUT', body: { pages } }),
 };

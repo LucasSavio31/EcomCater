@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ValidationError
 from app.modules.domains.aapanel_client import AaPanelClient, AaPanelError
+from app.modules.domains.cache_rules import CACHE_PAGE_DEFS, build_rules
 from app.modules.domains.cloudflare_client import CloudflareClient, CloudflareError
 from app.modules.domains.config import DomainsConfig
 from app.modules.domains.models import (
@@ -139,10 +140,12 @@ async def delete_domain(db: AsyncSession, domain: Domain) -> None:
 async def provision(db: AsyncSession, domain: Domain) -> None:
     """Roda os passos de DNS (opcional) + vhost + SSL. Grava status/erro no domínio.
 
-    Síncrono e best-effort: erro num passo não impede os seguintes fazerem
-    sentido tentar de novo depois (`scheduler.py` reprocessa
-    `awaiting_nameservers`/`dns_pending`/`failed`), então cada etapa é isolada
-    em seu próprio try/except.
+    Idempotente em toda etapa — pode ser chamado de novo a qualquer momento
+    (o `scheduler.py` reprocessa `awaiting_nameservers`/`dns_pending`/
+    `failed`, e também `active` com `ssl_status=error`) sem duplicar nada:
+    site/proxy reverso são recriados/sobrescritos sem erro se já existirem,
+    e falha de SSL não derruba o domínio pra `failed` — o site já funciona
+    por HTTP nesse ponto.
     """
     cfg = await load_config(db)
     domain.last_error = None
@@ -183,14 +186,18 @@ async def provision(db: AsyncSession, domain: Domain) -> None:
         return
 
     client = AaPanelClient(base_url=cfg.aapanel_url, api_key=cfg.aapanel_api_key)
+    hosts = [
+        (domain.hostname, _UPSTREAM_STORE),
+        (admin_hostname(domain.hostname), _UPSTREAM_ADMIN),
+        (api_hostname(domain.hostname), _UPSTREAM_API),
+    ]
     try:
-        await client.create_reverse_proxy_site(hostname=domain.hostname, upstream=_UPSTREAM_STORE)
-        await client.create_reverse_proxy_site(
-            hostname=admin_hostname(domain.hostname), upstream=_UPSTREAM_ADMIN
-        )
-        await client.create_reverse_proxy_site(
-            hostname=api_hostname(domain.hostname), upstream=_UPSTREAM_API
-        )
+        for host, upstream in hosts:
+            await client.ensure_site(host)
+            await client.set_reverse_proxy(hostname=host, upstream=upstream)
+        # um restart só, depois dos 3 — cada `set_reverse_proxy` já escreveu
+        # o arquivo; recarregar 3x seguidas não muda nada a mais.
+        await client.reload_web_server()
     except AaPanelError as exc:
         logger.warning("aaPanel: falha ao criar vhost de %s: %s", domain.hostname, exc)
         domain.status = STATUS_FAILED
@@ -208,23 +215,27 @@ async def provision(db: AsyncSession, domain: Domain) -> None:
         await db.flush()
         return
 
-    try:
-        await client.issue_ssl(domain.hostname)
-        await client.issue_ssl(admin_hostname(domain.hostname))
-        await client.issue_ssl(api_hostname(domain.hostname))
-    except AaPanelError as exc:
-        logger.warning("aaPanel: falha ao emitir SSL de %s: %s", domain.hostname, exc)
-        domain.status = STATUS_DNS_PENDING  # tenta de novo no próximo tick (DNS pode ainda não ter propagado)
-        domain.ssl_status = "error"
-        domain.last_error = f"SSL: {exc}"
-        domain.last_checked_at = datetime.now(UTC)
-        await db.flush()
-        return
+    # SSL é best-effort e NÃO derruba o domínio pra `failed`: o site já
+    # funciona por HTTP nesse ponto (proxy + DNS ok). Uma falha aqui (ex.:
+    # DNS ainda propagando na prática, mesmo com a zona Cloudflare "active")
+    # fica registrada em `ssl_status`/`last_error`, e o scheduler tenta nas
+    # próximas passagens — sem tirar o site do ar nem marcar erro geral.
+    ssl_error: str | None = None
+    for host, _upstream in hosts:
+        try:
+            await client.issue_ssl(host)
+        except AaPanelError as exc:
+            logger.warning("aaPanel: falha ao emitir SSL de %s: %s", host, exc)
+            ssl_error = str(exc)
 
     domain.status = STATUS_ACTIVE
-    domain.ssl_status = "issued"
-    domain.last_error = None
     domain.last_checked_at = datetime.now(UTC)
+    if ssl_error:
+        domain.ssl_status = "error"
+        domain.last_error = f"SSL: {ssl_error}"
+    else:
+        domain.ssl_status = "issued"
+        domain.last_error = None
     await db.flush()
 
 
@@ -278,3 +289,31 @@ async def _apply_cloudflare_records(cfg: DomainsConfig, domain: Domain) -> None:
         return
 
     domain.dns_managed_by_cloudflare = True
+
+
+# --------------------------------------------------------------- cache (Cloudflare)
+async def apply_cache_pages(db: AsyncSession, domain: Domain, pages: list[str]) -> None:
+    """Salva quais tipos de página cachear agressivamente e aplica o ruleset
+    de Cache Rules na zona Cloudflare do domínio. Carrinho/checkout/conta/
+    favoritos/recuperação de senha (e os hosts admin./api.) sempre ficam em
+    bypass — não é uma opção, `build_rules` já garante isso.
+    """
+    valid = [p for p in pages if p in CACHE_PAGE_DEFS]
+    if not domain.cloudflare_zone_id:
+        raise ValidationError(
+            "Este domínio ainda não tem zona Cloudflare confirmada — configure o DNS primeiro."
+        )
+    cfg = await load_config(db)
+    if not cfg.cloudflare_api_token:
+        raise ValidationError("Cloudflare não configurada — cadastre o token em Credenciais.")
+
+    client = CloudflareClient(api_token=cfg.cloudflare_api_token)
+    rules = build_rules(domain.hostname, valid)
+    try:
+        await client.set_cache_rules(zone_id=domain.cloudflare_zone_id, rules=rules)
+    except CloudflareError as exc:
+        raise ValidationError(f"Cloudflare: {exc}") from exc
+
+    domain.cache_pages = valid
+    domain.cache_applied_at = datetime.now(UTC)
+    await db.flush()

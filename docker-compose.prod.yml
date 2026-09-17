@@ -2,25 +2,12 @@
 #  Override de PROD.
 #  Quem publica pro mundo (80/443, TLS de verdade, um vhost por domínio) é o
 #  aaPanel/OpenLiteSpeed já instalado na VPS — configurado pelo admin em
-#  Infraestrutura -> Domínio, não por este compose. O container `proxy`
-#  (nginx) continua fazendo gzip/cache/headers/streaming, mas só em HTTP e só
-#  em 127.0.0.1 — nunca exposto direto pra internet.
+#  Infraestrutura -> Domínio, não por este compose. Cada app publica sua
+#  porta direto em 127.0.0.1 (nunca exposto pra internet) e o LiteSpeed faz
+#  proxy reverso + SSL direto pra elas — sem nginx no meio.
 #  Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 # ============================================================
 services:
-  proxy:
-    image: nginx:1.27-alpine
-    container_name: cater-proxy
-    restart: unless-stopped
-    depends_on: [frontend, admin, api]
-    volumes:
-      - ./infra/proxy/nginx.conf:/etc/nginx/nginx.conf:ro
-    ports:
-      - "127.0.0.1:3000:3000"
-      - "127.0.0.1:3001:3001"
-      - "127.0.0.1:8000:8000"
-    networks: [internal]
-
   api:
     build:
       target: prod
@@ -30,7 +17,8 @@ services:
       - sh
       - -c
       - "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers --forwarded-allow-ips=*"
-    # sem `ports`: só a rede interna; o LiteSpeed do aaPanel é quem publica pro mundo
+    ports:
+      - "127.0.0.1:8000:8000"
 
   frontend:
     build:
@@ -38,11 +26,13 @@ services:
     restart: unless-stopped
     environment:
       # SSR/RSC falam com a API pela rede interna do Docker — sem sair pra
-      # internet, sem TLS, sem passar pelo proxy. O navegador segue na URL pública.
+      # internet, sem TLS. O navegador segue na URL pública (via LiteSpeed).
       API_URL_INTERNAL: http://api:8000
       NODE_EXTRA_CA_CERTS: /certs/cert.pem
     volumes:
       - ./certs:/certs:ro
+    ports:
+      - "127.0.0.1:3000:3000"
 
   admin:
     build:
@@ -52,6 +42,8 @@ services:
       NODE_EXTRA_CA_CERTS: /certs/cert.pem
     volumes:
       - ./certs:/certs:ro
+    ports:
+      - "127.0.0.1:3001:3001"
 
   db:
     restart: unless-stopped

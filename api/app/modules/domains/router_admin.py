@@ -16,8 +16,15 @@ from app.core.deps import require_role
 from app.core.errors import NotFoundError
 from app.modules.admin.models import AdminUser
 from app.modules.domains import service
+from app.modules.domains.cache_rules import CACHE_PAGE_DEFS
 from app.modules.domains.models import Domain
-from app.modules.domains.schemas import DomainIn, DomainOut, DomainsConfigIn
+from app.modules.domains.schemas import (
+    CachePageOut,
+    CachePagesIn,
+    DomainIn,
+    DomainOut,
+    DomainsConfigIn,
+)
 
 admin_router = APIRouter()
 
@@ -39,6 +46,8 @@ def _domain_out(d: Domain) -> DomainOut:
         api_hostname=service.api_hostname(d.hostname),
         cloudflare_nameservers=d.cloudflare_nameservers,
         dns_confirmed=d.dns_confirmed_at is not None,
+        cache_pages=d.cache_pages or [],
+        cache_applied_at=d.cache_applied_at.isoformat() if d.cache_applied_at else None,
     )
 
 
@@ -49,6 +58,10 @@ def _config_out(cfg, domains: list[Domain]) -> dict:
         "aapanel_url": cfg.aapanel_url,
         "server_ip": cfg.server_ip,
         "domains": [_domain_out(d) for d in domains],
+        "cache_page_options": [
+            CachePageOut(key=k, label=v.label, description=v.description, ttl_seconds=v.ttl_seconds)
+            for k, v in CACHE_PAGE_DEFS.items()
+        ],
     }
 
 
@@ -86,6 +99,15 @@ async def retry_domain(domain_id: str, db: DbDep, _: SuperDep) -> DomainOut:
     if not domain:
         raise NotFoundError("Domínio não encontrado.")
     await service.provision(db, domain)
+    return _domain_out(domain)
+
+
+@admin_router.put("/{domain_id}/cache")
+async def update_cache_pages(domain_id: str, body: CachePagesIn, db: DbDep, _: SuperDep) -> DomainOut:
+    domain = await service.get_domain(db, domain_id)
+    if not domain:
+        raise NotFoundError("Domínio não encontrado.")
+    await service.apply_cache_pages(db, domain, body.pages)
     return _domain_out(domain)
 
 

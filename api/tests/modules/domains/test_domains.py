@@ -82,10 +82,18 @@ async def test_provision_with_aapanel_but_no_dns_ends_dns_pending(
 ):
     calls: list[str] = []
 
-    async def fake_create_proxy(self, *, hostname, upstream):
+    async def fake_ensure_site(self, hostname):
+        return None
+
+    async def fake_set_proxy(self, *, hostname, upstream):
         calls.append(hostname)
 
-    monkeypatch.setattr(AaPanelClient, "create_reverse_proxy_site", fake_create_proxy)
+    async def fake_reload(self):
+        return None
+
+    monkeypatch.setattr(AaPanelClient, "ensure_site", fake_ensure_site)
+    monkeypatch.setattr(AaPanelClient, "set_reverse_proxy", fake_set_proxy)
+    monkeypatch.setattr(AaPanelClient, "reload_web_server", fake_reload)
 
     h = auth_headers(admin_token)
     await client.put(
@@ -107,10 +115,16 @@ async def test_provision_with_aapanel_but_no_dns_ends_dns_pending(
 async def test_provision_full_success_with_cloudflare(
     client, admin_token, auth_headers, monkeypatch
 ):
-    async def fake_create_proxy(self, *, hostname, upstream):
+    async def fake_ensure_site(self, hostname):
         return None
 
-    async def fake_issue_ssl(self, hostname, *, extra_domains=None):
+    async def fake_set_proxy(self, *, hostname, upstream):
+        return None
+
+    async def fake_reload(self):
+        return None
+
+    async def fake_issue_ssl(self, hostname, *, email=""):
         return None
 
     async def fake_find_zone(self, hostname):
@@ -120,7 +134,9 @@ async def test_provision_full_success_with_cloudflare(
     async def fake_upsert(self, *, zone_id, name, record_type, content, proxied=True):
         return None
 
-    monkeypatch.setattr(AaPanelClient, "create_reverse_proxy_site", fake_create_proxy)
+    monkeypatch.setattr(AaPanelClient, "ensure_site", fake_ensure_site)
+    monkeypatch.setattr(AaPanelClient, "set_reverse_proxy", fake_set_proxy)
+    monkeypatch.setattr(AaPanelClient, "reload_web_server", fake_reload)
     monkeypatch.setattr(AaPanelClient, "issue_ssl", fake_issue_ssl)
     monkeypatch.setattr(CloudflareClient, "find_zone", fake_find_zone)
     monkeypatch.setattr(CloudflareClient, "upsert_dns_record", fake_upsert)
@@ -157,7 +173,7 @@ async def test_new_cloudflare_domain_awaits_nameservers(
     aapanel_calls: list[str] = []
     dns_calls: list[tuple[str, str, str]] = []
 
-    async def fake_create_proxy(self, *, hostname, upstream):
+    async def fake_ensure_site(self, hostname):
         aapanel_calls.append(hostname)
 
     async def fake_find_zone(self, hostname):
@@ -173,7 +189,7 @@ async def test_new_cloudflare_domain_awaits_nameservers(
     async def fake_upsert(self, *, zone_id, name, record_type, content, proxied=True):
         dns_calls.append((name, record_type, content))
 
-    monkeypatch.setattr(AaPanelClient, "create_reverse_proxy_site", fake_create_proxy)
+    monkeypatch.setattr(AaPanelClient, "ensure_site", fake_ensure_site)
     monkeypatch.setattr(CloudflareClient, "find_zone", fake_find_zone)
     monkeypatch.setattr(CloudflareClient, "create_zone", fake_create_zone)
     monkeypatch.setattr(CloudflareClient, "upsert_dns_record", fake_upsert)
@@ -212,10 +228,16 @@ async def test_retry_confirms_once_nameservers_propagate(
     zone_status = {"value": "pending"}
     zone_checks: list[str] = []
 
-    async def fake_create_proxy(self, *, hostname, upstream):
+    async def fake_ensure_site(self, hostname):
         return None
 
-    async def fake_issue_ssl(self, hostname, *, extra_domains=None):
+    async def fake_set_proxy(self, *, hostname, upstream):
+        return None
+
+    async def fake_reload(self):
+        return None
+
+    async def fake_issue_ssl(self, hostname, *, email=""):
         return None
 
     async def fake_find_zone(self, hostname):
@@ -229,7 +251,9 @@ async def test_retry_confirms_once_nameservers_propagate(
     async def fake_upsert(self, *, zone_id, name, record_type, content, proxied=True):
         return None
 
-    monkeypatch.setattr(AaPanelClient, "create_reverse_proxy_site", fake_create_proxy)
+    monkeypatch.setattr(AaPanelClient, "ensure_site", fake_ensure_site)
+    monkeypatch.setattr(AaPanelClient, "set_reverse_proxy", fake_set_proxy)
+    monkeypatch.setattr(AaPanelClient, "reload_web_server", fake_reload)
     monkeypatch.setattr(AaPanelClient, "issue_ssl", fake_issue_ssl)
     monkeypatch.setattr(CloudflareClient, "find_zone", fake_find_zone)
     monkeypatch.setattr(CloudflareClient, "upsert_dns_record", fake_upsert)
@@ -316,3 +340,93 @@ async def test_delete_domain(client, admin_token, auth_headers):
 
     listed = await client.get("/api/admin/domains", headers=h)
     assert listed.json()["domains"] == []
+
+
+@pytest.mark.asyncio
+async def test_cache_page_options_listed(client, admin_token, auth_headers):
+    r = await client.get("/api/admin/domains", headers=auth_headers(admin_token))
+    keys = {o["key"] for o in r.json()["cache_page_options"]}
+    assert keys == {"home", "categoria", "produto", "pagina", "busca"}
+
+
+@pytest.mark.asyncio
+async def test_cache_pages_requires_confirmed_zone(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    created = await client.post(
+        "/api/admin/domains", json={"hostname": "semzoneainda.com.br"}, headers=h
+    )
+    domain_id = created.json()["id"]
+    r = await client.put(
+        f"/api/admin/domains/{domain_id}/cache",
+        json={"pages": ["home", "produto"]},
+        headers=h,
+    )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_cache_pages_forbidden_for_staff(client, staff_token, auth_headers):
+    r = await client.put(
+        "/api/admin/domains/00000000-0000-0000-0000-000000000000/cache",
+        json={"pages": []},
+        headers=auth_headers(staff_token),
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_apply_cache_pages_builds_bypass_and_cache_rules(
+    client, admin_token, auth_headers, monkeypatch
+):
+    from app.modules.domains.cloudflare_client import CloudflareClient as CFClient
+
+    captured: dict = {}
+
+    async def fake_find_zone(self, hostname):
+        return {"id": "zone-abc", "status": "active", "name_servers": ["a.ns.cloudflare.com"]}
+
+    async def fake_upsert(self, *, zone_id, name, record_type, content, proxied=True):
+        return None
+
+    async def fake_set_cache_rules(self, *, zone_id, rules):
+        captured["zone_id"] = zone_id
+        captured["rules"] = rules
+
+    monkeypatch.setattr(CFClient, "find_zone", fake_find_zone)
+    monkeypatch.setattr(CFClient, "upsert_dns_record", fake_upsert)
+    monkeypatch.setattr(CFClient, "set_cache_rules", fake_set_cache_rules)
+
+    h = auth_headers(admin_token)
+    await client.put(
+        "/api/admin/domains/credentials",
+        json={"cloudflare_api_token": "fake-token", "server_ip": "167.86.92.107"},
+        headers=h,
+    )
+    created = await client.post(
+        "/api/admin/domains", json={"hostname": "cacheteste.com.br"}, headers=h
+    )
+    domain_id = created.json()["id"]
+    assert created.json()["dns_managed_by_cloudflare"] is True  # zona já ativa
+
+    r = await client.put(
+        f"/api/admin/domains/{domain_id}/cache",
+        json={"pages": ["home", "produto"]},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["cache_pages"] == ["home", "produto"]
+    assert data["cache_applied_at"] is not None
+
+    assert captured["zone_id"] == "zone-abc"
+    descriptions = [rule["description"] for rule in captured["rules"]]
+    # bypass sempre presente, mesmo sem o usuário pedir
+    assert "bypass: /carrinho" in descriptions
+    assert "bypass: /checkout" in descriptions
+    assert "bypass: /minha-conta" in descriptions
+    assert "bypass: admin.cacheteste.com.br" in descriptions
+    assert "bypass: api.cacheteste.com.br" in descriptions
+    # só as páginas selecionadas viram regra de cache
+    assert "cache: home" in descriptions
+    assert "cache: produto" in descriptions
+    assert "cache: categoria" not in descriptions

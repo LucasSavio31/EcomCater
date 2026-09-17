@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import { Button, Card, Input } from '@ecom/ui';
 import { AsyncBoundary } from '@/components/async-boundary';
+import { Checkbox } from '@/components/form-controls';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import {
   domainsApi,
+  type CachePageOption,
   type CredentialsTestResult,
   type DomainRecord,
   type DomainStatus,
@@ -117,6 +119,61 @@ function DnsInstructions({ domain, serverIp }: { domain: DomainRecord; serverIp:
   );
 }
 
+const ALWAYS_BYPASS_LABEL =
+  'Carrinho, Checkout, Minha conta, Favoritos e recuperação de senha nunca são cacheados — regra fixa, não dá pra desmarcar.';
+
+function CacheSection({
+  domain,
+  options,
+  onSave,
+}: {
+  domain: DomainRecord;
+  options: CachePageOption[];
+  onSave: (pages: string[]) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<string[]>(domain.cache_pages);
+  const [saving, setSaving] = useState(false);
+  const dirty = JSON.stringify([...draft].sort()) !== JSON.stringify([...domain.cache_pages].sort());
+
+  const toggle = (key: string, checked: boolean) => {
+    setDraft((cur) => (checked ? [...cur, key] : cur.filter((k) => k !== key)));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    await onSave(draft);
+    setSaving(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-2 rounded-card border border-surface-border p-3">
+      <h3 className="text-sm font-semibold">Cache na Cloudflare</h3>
+      <p className="text-xs text-text-muted">{ALWAYS_BYPASS_LABEL}</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {options.map((opt) => (
+          <Checkbox
+            key={opt.key}
+            label={`${opt.label} (${opt.ttl_seconds}s)`}
+            hint={opt.description}
+            checked={draft.includes(opt.key)}
+            onChange={(v) => toggle(opt.key, v)}
+          />
+        ))}
+      </div>
+      <div className="flex items-center gap-3">
+        <Button size="sm" loading={saving} disabled={!dirty} onClick={() => void save()}>
+          Salvar cache
+        </Button>
+        {domain.cache_applied_at && (
+          <span className="text-xs text-text-muted">
+            Aplicado em {new Date(domain.cache_applied_at).toLocaleString('pt-BR')}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function DomainTab() {
   const toast = useToast();
   const stateRes = useResource(() => domainsApi.getState());
@@ -192,6 +249,16 @@ export function DomainTab() {
       return;
     }
     toast.success(res.data.status === 'active' ? 'Domínio ativo!' : 'Nova tentativa registrada.');
+    stateRes.reload();
+  };
+
+  const saveCachePages = async (id: string, pages: string[]) => {
+    const res = await domainsApi.saveCachePages(id, pages);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return;
+    }
+    toast.success('Regras de cache aplicadas na Cloudflare.');
     stateRes.reload();
   };
 
@@ -316,7 +383,8 @@ export function DomainTab() {
                     <div className="flex gap-2">
                       {(d.status === 'failed' ||
                         d.status === 'dns_pending' ||
-                        d.status === 'awaiting_nameservers') && (
+                        d.status === 'awaiting_nameservers' ||
+                        (d.status === 'active' && d.ssl_status === 'error')) && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -347,6 +415,13 @@ export function DomainTab() {
                     <p className="text-sm text-success">DNS criado automaticamente via Cloudflare ✓</p>
                   ) : (
                     <DnsInstructions domain={d} serverIp={stateRes.data!.server_ip} />
+                  )}
+                  {d.dns_confirmed && (
+                    <CacheSection
+                      domain={d}
+                      options={stateRes.data!.cache_page_options}
+                      onSave={(pages) => saveCachePages(d.id, pages)}
+                    />
                   )}
                 </Card>
               ))}
