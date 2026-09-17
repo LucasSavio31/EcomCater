@@ -28,6 +28,27 @@ const LABEL: Record<HealthStatus, string> = {
 };
 const RANK: Record<HealthStatus, number> = { ok: 0, degraded: 1, down: 2 };
 
+/** Ordem fixa dos serviços — igual em "hoje" e em qualquer dia do histórico,
+ * pra posição nunca pular quando o status muda ou ao navegar por dia (mesma
+ * ordem de registro em `run_checks()` no backend). Containers/chaves fora
+ * dessa lista entram depois, na ordem em que aparecerem. */
+const CANONICAL_ORDER = [
+  'api',
+  'database',
+  'migrations',
+  'cache',
+  'storage',
+  'smtp',
+  'cart_recovery',
+  'backup',
+  'melhor_envio',
+  'appmax',
+];
+function canonicalRank(key: string): number {
+  const i = CANONICAL_ORDER.indexOf(key);
+  return i === -1 ? CANONICAL_ORDER.length : i;
+}
+
 function dayISO(offsetDays = 0): string {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
@@ -173,8 +194,10 @@ export function HealthTab() {
     const liveArr = live ?? [];
     const hist = dayHist ?? [];
     const liveByKey = new Map(liveArr.map((s) => [s.key, s]));
-    // ordem: os checks ao vivo primeiro (ordem canônica); depois chaves que só
-    // existem no histórico do dia (ex.: containers que já não rodam).
+    // ordem fixa (`CANONICAL_ORDER`) sempre — independe de vir do check ao
+    // vivo (hoje) ou só do histórico (outros dias), pra nunca pular de
+    // posição. Chaves fora da lista (ex.: containers) entram depois, na
+    // ordem em que apareceram.
     const keys: string[] = [];
     const seen = new Set<string>();
     for (const k of [...liveArr.map((s) => s.key), ...hist.map((h) => h.key)]) {
@@ -183,6 +206,7 @@ export function HealthTab() {
         keys.push(k);
       }
     }
+    keys.sort((a, b) => canonicalRank(a) - canonicalRank(b));
 
     return keys.map((key) => {
       const h = hist.find((x) => x.key === key);
