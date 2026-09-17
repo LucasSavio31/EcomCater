@@ -48,6 +48,7 @@ def _domain_out(d: Domain) -> DomainOut:
         dns_confirmed=d.dns_confirmed_at is not None,
         cache_pages=d.cache_pages or [],
         cache_applied_at=d.cache_applied_at.isoformat() if d.cache_applied_at else None,
+        switch_requested_at=d.switch_requested_at.isoformat() if d.switch_requested_at else None,
     )
 
 
@@ -99,6 +100,18 @@ async def retry_domain(domain_id: str, db: DbDep, _: SuperDep) -> DomainOut:
     if not domain:
         raise NotFoundError("Domínio não encontrado.")
     await service.provision(db, domain)
+    return _domain_out(domain)
+
+
+@admin_router.post("/{domain_id}/set-primary")
+async def set_primary_domain(domain_id: str, db: DbDep, _: SuperDep) -> DomainOut:
+    """Torna este o domínio principal -- pede a troca das variáveis do site
+    (`.env`) + rebuild do front/admin sozinho (arquivo-gatilho, aplicado por
+    um script no servidor em até alguns minutos)."""
+    domain = await service.get_domain(db, domain_id)
+    if not domain:
+        raise NotFoundError("Domínio não encontrado.")
+    domain = await service.set_primary(db, domain)
     return _domain_out(domain)
 
 

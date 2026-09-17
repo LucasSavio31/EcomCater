@@ -25,6 +25,7 @@ export interface DomainRecord {
   dns_confirmed: boolean;
   cache_pages: string[];
   cache_applied_at: string | null;
+  switch_requested_at: string | null;
 }
 
 export interface CachePageOption {
@@ -74,6 +75,9 @@ export const domainsApi = {
 
   retry: (id: string): Promise<ApiResult<DomainRecord>> =>
     adminFetch<DomainRecord>(`/api/admin/domains/${id}/retry`, { method: 'POST' }),
+
+  setPrimary: (id: string): Promise<ApiResult<DomainRecord>> =>
+    adminFetch<DomainRecord>(`/api/admin/domains/${id}/set-primary`, { method: 'POST' }),
 
   remove: (id: string): Promise<ApiResult<void>> =>
     adminFetch<void>(`/api/admin/domains/${id}`, { method: 'DELETE' }),

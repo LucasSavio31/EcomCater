@@ -287,6 +287,25 @@ export function DomainTab() {
     stateRes.reload();
   };
 
+  const setPrimary = async (id: string) => {
+    if (
+      !confirm(
+        'Tornar este o domínio principal? A loja/admin/API passam a usar este domínio em até alguns minutos (o servidor troca as variáveis e rebuilda sozinho).',
+      )
+    ) {
+      return;
+    }
+    setBusyId(id);
+    const res = await domainsApi.setPrimary(id);
+    setBusyId(null);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return;
+    }
+    toast.success('Troca solicitada — aplicando no servidor em até alguns minutos.');
+    stateRes.reload();
+  };
+
   const saveCachePages = async (id: string, pages: string[]) => {
     const res = await domainsApi.saveCachePages(id, pages);
     if (!res.ok) {
@@ -297,10 +316,14 @@ export function DomainTab() {
     stateRes.reload();
   };
 
-  const remove = async (id: string) => {
-    if (!confirm('Remover este domínio da lista? Isso não desfaz o vhost/SSL já criados no aaPanel.')) {
+  const remove = async (d: DomainRecord) => {
+    const msg = d.is_primary
+      ? 'Remover o domínio PRINCIPAL? A loja/admin/API voltam a responder direto por IP:PORTA (sem TLS) em até alguns minutos, até você cadastrar outro domínio. Isso não desfaz o vhost/SSL já criados no aaPanel.'
+      : 'Remover este domínio da lista? Isso não desfaz o vhost/SSL já criados no aaPanel.';
+    if (!confirm(msg)) {
       return;
     }
+    const id = d.id;
     setBusyId(id);
     const res = await domainsApi.remove(id);
     setBusyId(null);
@@ -429,12 +452,22 @@ export function DomainTab() {
                           Tentar novamente
                         </Button>
                       )}
+                      {d.status === 'active' && !d.is_primary && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          loading={busyId === d.id}
+                          onClick={() => void setPrimary(d.id)}
+                        >
+                          Tornar principal
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
                         className="text-danger"
                         loading={busyId === d.id}
-                        onClick={() => void remove(d.id)}
+                        onClick={() => void remove(d)}
                       >
                         Remover
                       </Button>
@@ -443,6 +476,12 @@ export function DomainTab() {
                   <p className="text-sm text-text-muted">
                     Admin: {d.admin_hostname} · API: {d.api_hostname}
                   </p>
+                  {d.switch_requested_at && (
+                    <p className="text-xs text-text-muted">
+                      Troca de domínio pedida em {new Date(d.switch_requested_at).toLocaleString('pt-BR')} — o
+                      servidor aplica sozinho em até alguns minutos.
+                    </p>
+                  )}
                   {d.last_error && <p className="text-sm text-danger">{d.last_error}</p>}
                   {d.status === 'awaiting_nameservers' ? (
                     <NameserverInstructions domain={d} />

@@ -52,3 +52,8 @@ class Domain(UUIDPKMixin, TimestampMixin, Base):
     # não é uma opção do usuário.
     cache_pages: Mapped[list | None] = mapped_column(JSONB)
     cache_applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # gravado quando a API pede a troca de domínio primário (arquivo-gatilho
+    # pro script do host) -- evita pedir de novo a cada tick do scheduler
+    # enquanto esse domínio continuar ativo/primário.
+    switch_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

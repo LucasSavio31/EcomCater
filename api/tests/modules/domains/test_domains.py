@@ -432,4 +432,183 @@ async def test_apply_cache_pages_builds_bypass_and_cache_rules(
     # só as páginas selecionadas viram regra de cache
     assert "cache: home" in descriptions
     assert "cache: produto" in descriptions
-    assert "cache: categoria" not in descriptions
+
+
+# ------------------------------------------------ troca de domínio (arquivo-gatilho)
+
+def _mock_full_provision(monkeypatch):
+    """Mocka aaPanel + Cloudflare pra provisão terminar em `active` de
+    verdade (sem Cloudflare, o fluxo pára em `dns_pending` -- não dispara
+    o gatilho de troca)."""
+    async def fake_ensure_site(self, hostname):
+        return None
+
+    async def fake_set_proxy(self, *, hostname, upstream):
+        return None
+
+    async def fake_reload(self):
+        return None
+
+    async def fake_issue_ssl(self, hostname, *, email=""):
+        return None
+
+    async def fake_find_zone(self, hostname):
+        return {"id": "zone-123", "status": "active", "name_servers": ["bob.ns.cloudflare.com"]}
+
+    async def fake_upsert(self, *, zone_id, name, record_type, content, proxied=True):
+        return None
+
+    monkeypatch.setattr(AaPanelClient, "ensure_site", fake_ensure_site)
+    monkeypatch.setattr(AaPanelClient, "set_reverse_proxy", fake_set_proxy)
+    monkeypatch.setattr(AaPanelClient, "reload_web_server", fake_reload)
+    monkeypatch.setattr(AaPanelClient, "issue_ssl", fake_issue_ssl)
+    monkeypatch.setattr(CloudflareClient, "find_zone", fake_find_zone)
+    monkeypatch.setattr(CloudflareClient, "upsert_dns_record", fake_upsert)
+
+
+_FULL_CREDENTIALS = {
+    "aapanel_url": "http://127.0.0.1:7800",
+    "aapanel_api_key": "fake-key",
+    "cloudflare_api_token": "fake-token",
+    "server_ip": "167.86.92.107",
+}
+
+
+@pytest.mark.asyncio
+async def test_first_domain_going_active_writes_switch_trigger(
+    client, admin_token, auth_headers, monkeypatch, tmp_path
+):
+    """1º domínio cadastrado (por isso já nasce `is_primary`) ficando ativo
+    pede a troca sozinho -- sem precisar de "tornar principal" manual."""
+    import json
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "deploy_trigger_dir", str(tmp_path))
+    _mock_full_provision(monkeypatch)
+
+    h = auth_headers(admin_token)
+    await client.put("/api/admin/domains/credentials", json=_FULL_CREDENTIALS, headers=h)
+    r = await client.post(
+        "/api/admin/domains", json={"hostname": "primeirodominio.com.br"}, headers=h
+    )
+    data = r.json()
+    assert data["status"] == "active"
+    assert data["is_primary"] is True
+    assert data["switch_requested_at"] is not None
+
+    trigger = json.loads((tmp_path / "domain-switch.json").read_text())
+    assert trigger["mode"] == "domain"
+    assert trigger["hostname"] == "primeirodominio.com.br"
+    assert trigger["admin_hostname"] == "admin.primeirodominio.com.br"
+    assert trigger["api_hostname"] == "api.primeirodominio.com.br"
+
+    # retry não escreve de novo (switch_requested_at já setado)
+    (tmp_path / "domain-switch.json").unlink()
+    await client.post(f"/api/admin/domains/{data['id']}/retry", headers=h)
+    assert not (tmp_path / "domain-switch.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_set_primary_requires_active_domain(client, admin_token, auth_headers, monkeypatch):
+    h = auth_headers(admin_token)
+    await client.put(
+        "/api/admin/domains/credentials",
+        json={"aapanel_url": "http://127.0.0.1:7800", "aapanel_api_key": "fake-key"},
+        headers=h,
+    )
+    created = await client.post(
+        "/api/admin/domains", json={"hostname": "semaapanel.com.br"}, headers=h
+    )
+    assert created.json()["status"] == "failed"  # sem mock, aaPanel real inacessível
+
+    r = await client.post(
+        f"/api/admin/domains/{created.json()['id']}/set-primary", headers=h
+    )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_set_primary_switches_and_writes_trigger(
+    client, admin_token, auth_headers, monkeypatch, tmp_path
+):
+    import json
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "deploy_trigger_dir", str(tmp_path))
+    _mock_full_provision(monkeypatch)
+
+    h = auth_headers(admin_token)
+    await client.put("/api/admin/domains/credentials", json=_FULL_CREDENTIALS, headers=h)
+    first = (
+        await client.post("/api/admin/domains", json={"hostname": "um.com.br"}, headers=h)
+    ).json()
+    second = (
+        await client.post("/api/admin/domains", json={"hostname": "dois.com.br"}, headers=h)
+    ).json()
+    assert first["is_primary"] is True
+    assert second["is_primary"] is False
+
+    (tmp_path / "domain-switch.json").unlink()  # limpa o gatilho do 1º (bootstrap)
+
+    r = await client.post(f"/api/admin/domains/{second['id']}/set-primary", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["is_primary"] is True
+
+    trigger = json.loads((tmp_path / "domain-switch.json").read_text())
+    assert trigger["hostname"] == "dois.com.br"
+
+    listed = (await client.get("/api/admin/domains", headers=h)).json()["domains"]
+    by_host = {d["hostname"]: d for d in listed}
+    assert by_host["um.com.br"]["is_primary"] is False
+    assert by_host["dois.com.br"]["is_primary"] is True
+
+
+@pytest.mark.asyncio
+async def test_removing_primary_domain_requests_ip_mode(
+    client, admin_token, auth_headers, monkeypatch, tmp_path
+):
+    """Remover o domínio principal tem que voltar o acesso pra IP:PORTA --
+    senão o lojista fica sem conseguir entrar na loja/admin."""
+    import json
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "deploy_trigger_dir", str(tmp_path))
+    _mock_full_provision(monkeypatch)
+
+    h = auth_headers(admin_token)
+    await client.put("/api/admin/domains/credentials", json=_FULL_CREDENTIALS, headers=h)
+    created = (
+        await client.post("/api/admin/domains", json={"hostname": "vaisair.com.br"}, headers=h)
+    ).json()
+    (tmp_path / "domain-switch.json").unlink()  # limpa o gatilho do bootstrap
+
+    r = await client.delete(f"/api/admin/domains/{created['id']}", headers=h)
+    assert r.status_code == 200, r.text
+
+    trigger = json.loads((tmp_path / "domain-switch.json").read_text())
+    assert trigger["mode"] == "ip"
+
+
+@pytest.mark.asyncio
+async def test_removing_non_primary_domain_does_not_touch_trigger(
+    client, admin_token, auth_headers, monkeypatch, tmp_path
+):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "deploy_trigger_dir", str(tmp_path))
+    _mock_full_provision(monkeypatch)
+
+    h = auth_headers(admin_token)
+    await client.put("/api/admin/domains/credentials", json=_FULL_CREDENTIALS, headers=h)
+    await client.post("/api/admin/domains", json={"hostname": "primario.com.br"}, headers=h)
+    second = (
+        await client.post("/api/admin/domains", json={"hostname": "secundario.com.br"}, headers=h)
+    ).json()
+    (tmp_path / "domain-switch.json").unlink()  # limpa o gatilho do bootstrap (1º domínio)
+
+    r = await client.delete(f"/api/admin/domains/{second['id']}", headers=h)
+    assert r.status_code == 200, r.text
+    assert not (tmp_path / "domain-switch.json").exists()

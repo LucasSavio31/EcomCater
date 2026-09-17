@@ -31,8 +31,8 @@ def _uuid(v: str) -> uuid.UUID:
     except ValueError as exc:
         raise ValidationError("id inválido") from exc
 
-# portas internas do `cater-proxy` (nginx no Docker), só acessíveis em
-# 127.0.0.1 na VPS depois que o aaPanel assume as portas 80/443 públicas.
+# cada app (api/frontend/admin) publica direto em 127.0.0.1 -- o aaPanel/
+# LiteSpeed é quem fica público nas portas 80/443 e faz o proxy pra cá.
 _UPSTREAM_STORE = "http://127.0.0.1:3000"
 _UPSTREAM_ADMIN = "http://127.0.0.1:3001"
 _UPSTREAM_API = "http://127.0.0.1:8000"
@@ -133,7 +133,69 @@ async def upsert_domain(db: AsyncSession, hostname: str) -> Domain:
 
 
 async def delete_domain(db: AsyncSession, domain: Domain) -> None:
+    """Remove o domínio. Se era o principal, pede a reversão pra acesso
+    direto por IP:PORTA (`_request_domain_switch(None)`) -- sem isso, o
+    lojista ficaria sem conseguir acessar loja/admin/API nenhuma: o proxy
+    reverso (aaPanel/LiteSpeed) só responde pro hostname configurado, e as
+    portas dos containers ficam fechadas pro mundo enquanto há domínio
+    ativo (só em 127.0.0.1)."""
+    was_primary = domain.is_primary
     await db.delete(domain)
+    if was_primary:
+        _request_domain_switch(None)
+
+
+async def set_primary(db: AsyncSession, domain: Domain) -> Domain:
+    """Torna este o domínio principal (só 1 por vez) e pede a troca das
+    variáveis do site (`.env`) + rebuild do front/admin -- ver
+    `_request_domain_switch`. Só permitido com o domínio já ativo (senão
+    não tem SSL/DNS prontos pro site funcionar nele)."""
+    if domain.status != STATUS_ACTIVE:
+        raise ValidationError("O domínio precisa estar ativo (DNS + SSL prontos) antes de virar o principal.")
+    others = await db.scalars(select(Domain).where(Domain.id != domain.id, Domain.is_primary.is_(True)))
+    for o in others:
+        o.is_primary = False
+    domain.is_primary = True
+    _request_domain_switch(domain)
+    await db.flush()
+    return domain
+
+
+def _request_domain_switch(domain: Domain | None) -> None:
+    """Escreve o arquivo-gatilho numa pasta compartilhada com o HOST (bind
+    mount) -- a API nunca toca em `.env`/Docker diretamente. Um script já
+    rodando no servidor (fora do container) lê esse arquivo a cada poucos
+    minutos e aplica sozinho: troca as variáveis do site + rebuilda
+    front/admin/api. `domain=None` pede o MODO IP -- sem domínio nenhum
+    ativo, volta o acesso a ser direto por IP:PORTA (sem TLS), pra nunca
+    ficar sem conseguir entrar na loja/admin. Best-effort: se a pasta não
+    existir (dev local, bind mount não configurado), só loga e segue -- não
+    quebra o fluxo de provisionamento/remoção."""
+    import json
+    from pathlib import Path
+
+    from app.core.config import settings
+
+    try:
+        d = Path(settings.deploy_trigger_dir)
+        d.mkdir(parents=True, exist_ok=True)
+        if domain is None:
+            payload = {"mode": "ip", "requested_at": datetime.now(UTC).isoformat()}
+        else:
+            payload = {
+                "mode": "domain",
+                "hostname": domain.hostname,
+                "admin_hostname": admin_hostname(domain.hostname),
+                "api_hostname": api_hostname(domain.hostname),
+                "requested_at": datetime.now(UTC).isoformat(),
+            }
+            domain.switch_requested_at = datetime.now(UTC)
+        (d / "domain-switch.json").write_text(json.dumps(payload, indent=2))
+    except OSError:
+        logger.warning(
+            "não foi possível escrever o arquivo-gatilho de troca de domínio (%s)",
+            domain.hostname if domain else "modo IP", exc_info=True,
+        )
 
 
 # --------------------------------------------------------------- provisionamento
@@ -236,6 +298,13 @@ async def provision(db: AsyncSession, domain: Domain) -> None:
     else:
         domain.ssl_status = "issued"
         domain.last_error = None
+    # 1ª vez que ESTE domínio principal fica ativo (o "torna principal"
+    # explícito, pra um domínio que já não era o 1º cadastrado, passa por
+    # `set_primary`, não por aqui) -- pede a troca das variáveis do site
+    # sozinho, uma vez só (`switch_requested_at` evita repetir a cada
+    # passagem do scheduler).
+    if domain.is_primary and not domain.switch_requested_at:
+        _request_domain_switch(domain)
     await db.flush()
 
 

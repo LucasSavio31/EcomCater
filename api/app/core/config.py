@@ -57,6 +57,11 @@ class Settings(BaseSettings):
 
     # backup / sistema
     backup_dir: str = "./.data/backups"
+    # pasta compartilhada com o HOST (bind mount) onde a API só ESCREVE um
+    # pedido de troca de domínio primário -- um script já rodando no
+    # servidor (fora do container, com acesso de verdade ao .env/Docker) lê
+    # daqui e aplica sozinho. A API nunca toca em Docker/`.env` diretamente.
+    deploy_trigger_dir: str = "./.data/triggers"
     # diretório dos binários do Postgres (pg_dump/pg_restore). Vazio = usa o PATH.
     pg_bin_dir: str = ""
     # fuso da loja — usado pelo agendador de backup (a "hora" é local, não UTC)

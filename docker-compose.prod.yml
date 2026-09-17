@@ -2,9 +2,13 @@
 #  Override de PROD.
 #  Quem publica pro mundo (80/443, TLS de verdade, um vhost por domínio) é o
 #  aaPanel/OpenLiteSpeed já instalado na VPS — configurado pelo admin em
-#  Infraestrutura -> Domínio, não por este compose. Cada app publica sua
-#  porta direto em 127.0.0.1 (nunca exposto pra internet) e o LiteSpeed faz
-#  proxy reverso + SSL direto pra elas — sem nginx no meio.
+#  Infraestrutura -> Domínio, não por este compose. Com domínio ativo, cada
+#  app publica sua porta só em 127.0.0.1 (nunca exposto pra internet) e o
+#  LiteSpeed faz proxy reverso + SSL direto pra elas — sem nginx no meio.
+#  `PUBLIC_BIND_ADDR` no `.env` controla isso: `127.0.0.1` (padrão, com
+#  domínio) ou `0.0.0.0` (sem domínio algum ativo -- acesso direto por
+#  IP:PORTA, sem TLS; é o modo de segurança pra nunca perder acesso ao
+#  remover/trocar domínio -- ver domains/service.py `_request_domain_switch`).
 #  Uso: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 # ============================================================
 services:
@@ -18,12 +22,15 @@ services:
       - -c
       - "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers --forwarded-allow-ips=*"
     ports:
-      - "127.0.0.1:8000:8000"
+      - "${PUBLIC_BIND_ADDR:-127.0.0.1}:8000:8000"
     volumes:
       # rclone (backup -> Google Drive): remote "gdrive", autorizado uma vez
       # com a conta Google do lojista. Config fica no HOST, montada só
       # leitura -- o container não precisa (nem deve) sobrescrever o token.
       - /root/.config/rclone:/root/.config/rclone:ro
+      # arquivo-gatilho de troca de domínio (API só escreve; o
+      # domain-switch-watcher.sh no host lê e aplica -- ver DEPLOY_TRIGGER_DIR).
+      - ./.data/triggers:/data/triggers
 
   frontend:
     build:
@@ -37,7 +44,7 @@ services:
     volumes:
       - ./certs:/certs:ro
     ports:
-      - "127.0.0.1:3000:3000"
+      - "${PUBLIC_BIND_ADDR:-127.0.0.1}:3000:3000"
 
   admin:
     build:
@@ -48,7 +55,7 @@ services:
     volumes:
       - ./certs:/certs:ro
     ports:
-      - "127.0.0.1:3001:3001"
+      - "${PUBLIC_BIND_ADDR:-127.0.0.1}:3001:3001"
 
   db:
     restart: unless-stopped

@@ -41,3 +41,4 @@ class DomainOut(BaseModel):
     dns_confirmed: bool
     cache_pages: list[str]
     cache_applied_at: str | None
+    switch_requested_at: str | None
