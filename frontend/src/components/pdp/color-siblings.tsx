@@ -74,6 +74,16 @@ export function ColorSiblings({ currentColorName, siblings }: Props) {
   const current = siblings.find((s) => s.is_current);
   const label = current?.color_name || currentColorName;
 
+  // A cor aberta agora sempre ocupa o 1º slot das miniaturas — nunca fica
+  // escondida atrás do "ver mais cores" nem pula de posição dependendo da
+  // ordem que a API devolveu.
+  const currentIdx = siblings.findIndex((s) => s.is_current);
+  const currentSibling = currentIdx >= 0 ? siblings[currentIdx] : undefined;
+  const orderedSiblings =
+    currentSibling && currentIdx > 0
+      ? [currentSibling, ...siblings.slice(0, currentIdx), ...siblings.slice(currentIdx + 1)]
+      : siblings;
+
   const swatchCls = (isCurrent: boolean) =>
     `relative block h-[70px] w-[103px] overflow-hidden rounded-card border-2 bg-white ${
       isCurrent ? 'border-var-border' : 'border-surface-border hover:border-var-border'
@@ -97,10 +107,10 @@ export function ColorSiblings({ currentColorName, siblings }: Props) {
     );
   };
 
-  const collapsed = !expanded && siblings.length > LIMIT;
-  const visible = collapsed ? siblings.slice(0, LIMIT - 1) : siblings;
-  const teaser = collapsed ? siblings[LIMIT - 1] : null;
-  const hiddenCount = siblings.length - (LIMIT - 1);
+  const collapsed = !expanded && orderedSiblings.length > LIMIT;
+  const visible = collapsed ? orderedSiblings.slice(0, LIMIT - 1) : orderedSiblings;
+  const teaser = collapsed ? orderedSiblings[LIMIT - 1] : null;
+  const hiddenCount = orderedSiblings.length - (LIMIT - 1);
 
   return (
     <div className="flex flex-col gap-2">
