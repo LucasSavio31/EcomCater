@@ -150,10 +150,12 @@ async def test_new_cloudflare_domain_awaits_nameservers(
     client, admin_token, auth_headers, monkeypatch
 ):
     """Zona nova (ainda não existe na Cloudflare): a API cria a zona, devolve
-    os nameservers pra gente mostrar na tela, e o domínio fica
-    `awaiting_nameservers` até o usuário trocar isso no registrador — SEM
-    tentar aaPanel/SSL ainda."""
+    os nameservers pra gente mostrar na tela, JÁ cria os registros A/CNAME
+    (a Cloudflare aceita numa zona "pending", só não ficam públicos ainda) e
+    o domínio fica `awaiting_nameservers` até o usuário trocar isso no
+    registrador — SEM tentar aaPanel/SSL ainda."""
     aapanel_calls: list[str] = []
+    dns_calls: list[tuple[str, str, str]] = []
 
     async def fake_create_proxy(self, *, hostname, upstream):
         aapanel_calls.append(hostname)
@@ -168,9 +170,13 @@ async def test_new_cloudflare_domain_awaits_nameservers(
             "name_servers": ["bob.ns.cloudflare.com", "kate.ns.cloudflare.com"],
         }
 
+    async def fake_upsert(self, *, zone_id, name, record_type, content, proxied=True):
+        dns_calls.append((name, record_type, content))
+
     monkeypatch.setattr(AaPanelClient, "create_reverse_proxy_site", fake_create_proxy)
     monkeypatch.setattr(CloudflareClient, "find_zone", fake_find_zone)
     monkeypatch.setattr(CloudflareClient, "create_zone", fake_create_zone)
+    monkeypatch.setattr(CloudflareClient, "upsert_dns_record", fake_upsert)
 
     h = auth_headers(admin_token)
     await client.put(
@@ -191,6 +197,9 @@ async def test_new_cloudflare_domain_awaits_nameservers(
     assert data["dns_confirmed"] is False
     assert data["cloudflare_nameservers"] == ["bob.ns.cloudflare.com", "kate.ns.cloudflare.com"]
     assert aapanel_calls == []  # não tenta vhost antes de confirmar o DNS
+    assert ("novo-dominio.com.br", "A", "167.86.92.107") in dns_calls
+    assert ("admin.novo-dominio.com.br", "CNAME", "novo-dominio.com.br") in dns_calls
+    assert ("api.novo-dominio.com.br", "CNAME", "novo-dominio.com.br") in dns_calls
 
 
 @pytest.mark.asyncio

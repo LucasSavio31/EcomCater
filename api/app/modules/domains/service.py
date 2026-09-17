@@ -151,17 +151,24 @@ async def provision(db: AsyncSession, domain: Domain) -> None:
     # existe e checa se os nameservers já foram trocados no registrador. Uma
     # vez confirmado (`dns_confirmed_at` gravado), NUNCA mais checa de novo
     # pra este domínio — só se ele for removido e recadastrado.
+    confirmed = bool(domain.dns_confirmed_at)
     if cfg.cloudflare_api_token and not domain.dns_confirmed_at:
         confirmed = await _sync_cloudflare_zone(cfg, domain)
-        if not confirmed:
-            domain.status = STATUS_AWAITING_NAMESERVERS
-            domain.last_checked_at = datetime.now(UTC)
-            await db.flush()
-            return
-        domain.dns_confirmed_at = datetime.now(UTC)
+        if confirmed:
+            domain.dns_confirmed_at = datetime.now(UTC)
 
+    # Os registros A/CNAME são criados assim que a zona existe — a Cloudflare
+    # aceita registros numa zona ainda "pending" (não-ativa), eles só não
+    # ficam públicos até os nameservers propagarem. Não precisa esperar a
+    # confirmação pra isso, só a existência da zona.
     if cfg.cloudflare_api_token and cfg.server_ip and domain.cloudflare_zone_id:
         await _apply_cloudflare_records(cfg, domain)
+
+    if cfg.cloudflare_api_token and not confirmed:
+        domain.status = STATUS_AWAITING_NAMESERVERS
+        domain.last_checked_at = datetime.now(UTC)
+        await db.flush()
+        return
 
     domain.status = STATUS_PROVISIONING
     await db.flush()
