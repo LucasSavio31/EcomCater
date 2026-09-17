@@ -44,9 +44,12 @@ logger = logging.getLogger("domains.aapanel")
 # mensagens de "já existe"/"já está ok" que tratamos como sucesso — a
 # automação precisa ser idempotente (reprocessa domínios em `failed`/
 # `dns_pending` sem parar de novo por causa de um passo que outra tentativa
-# já completou).
+# já completou). O aaPanel não é consistente na frase ("already exists",
+# "Requested directory exists", "Requested file exists" já apareceram) —
+# por isso o filtro é só "exists"/"existe", não a frase inteira.
 _IDEMPOTENT_OK_SUBSTRINGS = (
-    "already exist",
+    "exist",
+    "existe",
     "already ok",
     "already have",
 )
