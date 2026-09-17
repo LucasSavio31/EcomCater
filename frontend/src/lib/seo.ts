@@ -17,13 +17,24 @@ export const SITE_URL: string =
  * custo) — o resto do site (canonical/OG por página) continua estático
  * com `SITE_URL`, sem esse trade-off de cache.
  */
+/** `X-Forwarded-*` pode chegar com mais de um valor (cada proxy da cadeia —
+ * Cloudflare, LiteSpeed — concatena o seu em vez de substituir), separados
+ * por vírgula. O primeiro é o mais próximo do cliente/borda, que é o que
+ * interessa aqui. */
+function firstForwardedValue(raw: string | null): string | null {
+  if (!raw) return null;
+  return raw.split(',')[0]?.trim() || null;
+}
+
 export async function resolveSiteUrl(): Promise<string> {
   try {
     const { headers } = await import('next/headers');
     const h = await headers();
-    const host = h.get('x-forwarded-host') ?? h.get('host');
+    const host = firstForwardedValue(h.get('x-forwarded-host')) ?? h.get('host');
     if (host) {
-      const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+      const proto =
+        firstForwardedValue(h.get('x-forwarded-proto')) ??
+        (host.startsWith('localhost') ? 'http' : 'https');
       return `${proto}://${host}`;
     }
   } catch {
