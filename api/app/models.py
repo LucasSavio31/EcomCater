@@ -41,6 +41,9 @@ from app.modules.customers.models import (  # noqa: F401
     WishlistItem,
 )
 
+# --- domains ---
+from app.modules.domains.models import Domain  # noqa: F401
+
 # --- menus ---
 from app.modules.menus.models import Menu, MenuItem  # noqa: F401
 
