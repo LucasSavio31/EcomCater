@@ -40,7 +40,6 @@ async def lifespan(_: FastAPI):
     # e rotinas de fundo não disputam worker/conexão com a navegação.
     schedulers: list = []
     if settings.run_schedulers:
-        from app.modules.bling import scheduler as bling_scheduler
         from app.modules.cart_recovery import scheduler as recovery_scheduler
         from app.modules.domains import scheduler as domains_scheduler
         from app.modules.shipping import scheduler as me_tracking_scheduler
@@ -55,7 +54,6 @@ async def lifespan(_: FastAPI):
             recovery_scheduler,
             email_retry_scheduler,
             domains_scheduler,
-            bling_scheduler,
         ]
         for s in schedulers:
             s.start()
