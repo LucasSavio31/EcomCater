@@ -7,6 +7,31 @@ import type { Metadata } from 'next';
 export const SITE_URL: string =
   process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
+/**
+ * URL do site a partir do `Host` real da requisição, em vez do
+ * `NEXT_PUBLIC_SITE_URL` fixo (definido uma vez no build/deploy). Usado só
+ * por `robots.ts`/`sitemap.ts`/`llms.txt` — arquivos que precisam refletir
+ * o domínio de verdade que bateu na loja (o mesmo cadastrado em
+ * Infraestrutura → Domínio no admin, sem precisar redeploy se ele mudar).
+ * Chamar `headers()` marca a rota como dinâmica (só essas 3 pagam esse
+ * custo) — o resto do site (canonical/OG por página) continua estático
+ * com `SITE_URL`, sem esse trade-off de cache.
+ */
+export async function resolveSiteUrl(): Promise<string> {
+  try {
+    const { headers } = await import('next/headers');
+    const h = await headers();
+    const host = h.get('x-forwarded-host') ?? h.get('host');
+    if (host) {
+      const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+      return `${proto}://${host}`;
+    }
+  } catch {
+    /* fora de uma requisição (build estático) — cai pro env var. */
+  }
+  return SITE_URL;
+}
+
 /** Fallback genérico — o nome real vem de `theme.store_name` (admin). */
 export const SITE_NAME = 'Loja';
 

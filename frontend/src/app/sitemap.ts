@@ -1,10 +1,8 @@
 import type { MetadataRoute } from 'next';
-import { SITE_URL } from '@/lib/seo';
+import { resolveSiteUrl } from '@/lib/seo';
 import { apiFetch } from '@/lib/api-client';
 import { KNOWN_PAGE_SLUGS } from '@/modules/content/api';
 import type { CategoryNode, PagedProducts } from '@/modules/catalog/types';
-
-export const revalidate = 3600;
 
 function flattenCategories(nodes: CategoryNode[], acc: string[] = []): string[] {
   for (const node of nodes) {
@@ -30,14 +28,15 @@ async function collectProductSlugs(): Promise<string[]> {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const siteUrl = await resolveSiteUrl();
   const now = new Date();
   const entries: MetadataRoute.Sitemap = [
-    { url: `${SITE_URL}/`, lastModified: now, changeFrequency: 'daily', priority: 1 },
+    { url: `${siteUrl}/`, lastModified: now, changeFrequency: 'daily', priority: 1 },
   ];
 
   for (const slug of KNOWN_PAGE_SLUGS) {
     entries.push({
-      url: `${SITE_URL}/pagina/${slug}`,
+      url: `${siteUrl}/pagina/${slug}`,
       lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.3,
@@ -51,7 +50,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (treeRes.ok) {
       for (const path of flattenCategories(treeRes.data)) {
         entries.push({
-          url: `${SITE_URL}/categoria/${path}`,
+          url: `${siteUrl}/categoria/${path}`,
           lastModified: now,
           changeFrequency: 'daily',
           priority: 0.7,
@@ -61,7 +60,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     for (const slug of await collectProductSlugs()) {
       entries.push({
-        url: `${SITE_URL}/produto/${slug}`,
+        url: `${siteUrl}/produto/${slug}`,
         lastModified: now,
         changeFrequency: 'weekly',
         priority: 0.6,

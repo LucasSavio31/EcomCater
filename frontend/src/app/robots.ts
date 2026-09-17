@@ -1,14 +1,15 @@
 import type { MetadataRoute } from 'next';
-import { SITE_URL } from '@/lib/seo';
+import { resolveSiteUrl } from '@/lib/seo';
 
-export default function robots(): MetadataRoute.Robots {
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const siteUrl = await resolveSiteUrl();
   return {
     rules: {
       userAgent: '*',
       allow: '/',
       disallow: ['/carrinho', '/checkout', '/minha-conta', '/busca'],
     },
-    sitemap: `${SITE_URL}/sitemap.xml`,
-    host: SITE_URL,
+    sitemap: `${siteUrl}/sitemap.xml`,
+    host: siteUrl,
   };
 }

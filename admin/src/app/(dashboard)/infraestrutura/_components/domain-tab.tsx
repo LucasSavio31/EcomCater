@@ -119,6 +119,41 @@ function DnsInstructions({ domain, serverIp }: { domain: DomainRecord; serverIp:
   );
 }
 
+function SeoLinksSection({ hostname }: { hostname: string }) {
+  const toast = useToast();
+  const base = `https://${hostname}`;
+  const links = [
+    { label: 'Sitemap', href: `${base}/sitemap.xml` },
+    { label: 'robots.txt', href: `${base}/robots.txt` },
+    { label: 'llms.txt', href: `${base}/llms.txt` },
+  ];
+  const copy = (text: string) => {
+    void navigator.clipboard.writeText(text);
+    toast.success('Copiado.');
+  };
+  return (
+    <div className="flex flex-col gap-2 rounded-card border border-surface-border p-3">
+      <h3 className="text-sm font-semibold">URLs de SEO</h3>
+      <p className="text-xs text-text-muted">
+        Gerados sozinhos a partir do catálogo/tema/páginas atuais — nada fixo, atualiza junto com
+        o site.
+      </p>
+      <ul className="flex flex-col gap-1 text-sm">
+        {links.map((l) => (
+          <li key={l.href} className="flex items-center gap-2">
+            <a href={l.href} target="_blank" rel="noreferrer" className="text-accent underline">
+              {l.href}
+            </a>
+            <button type="button" className="text-xs text-text-muted underline" onClick={() => copy(l.href)}>
+              copiar
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 const ALWAYS_BYPASS_LABEL =
   'Carrinho, Checkout, Minha conta, Favoritos e recuperação de senha nunca são cacheados — regra fixa, não dá pra desmarcar.';
 
@@ -416,6 +451,7 @@ export function DomainTab() {
                   ) : (
                     <DnsInstructions domain={d} serverIp={stateRes.data!.server_ip} />
                   )}
+                  {d.status === 'active' && <SeoLinksSection hostname={d.hostname} />}
                   {d.dns_confirmed && (
                     <CacheSection
                       domain={d}
