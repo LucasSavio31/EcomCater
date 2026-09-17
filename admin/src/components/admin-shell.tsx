@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button, Drawer, cn } from '@ecom/ui';
 import { useAdminAuth } from '@/modules/auth';
+import { NotificationBell } from './notification-bell';
 import {
   IconAnalytics,
   IconAppearance,
@@ -212,6 +213,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 {user.name} · {user.role}
               </span>
             )}
+            <NotificationBell />
             <Button variant="ghost" size="sm" onClick={() => void signOut()}>
               Sair
             </Button>

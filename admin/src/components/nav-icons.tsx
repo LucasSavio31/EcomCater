@@ -67,6 +67,12 @@ export const IconShipping = (p: P) => (
     <circle cx="17" cy="17" r="2" />
   </svg>
 );
+export const IconBell = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </svg>
+);
 export const IconIntegrations = (p: P) => (
   <svg {...base(p)}>
     <path d="M9 3v4M15 3v4M5 9h3a1 1 0 0 1 1 1v2a4 4 0 0 0 4 4v3M19 9h-3a1 1 0 0 0-1 1v2a4 4 0 0 1-4 4" />
