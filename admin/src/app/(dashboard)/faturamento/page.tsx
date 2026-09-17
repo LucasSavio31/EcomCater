@@ -77,6 +77,7 @@ export default function FaturamentoPage() {
     ? [
         { label: 'Faturamento bruto', value: formatBRL(data.gross_cents) },
         { label: 'Custo dos produtos', value: formatBRL(data.cost_cents) },
+        { label: 'Custo de frete', value: formatBRL(data.shipping_cents) },
         { label: 'Faturamento líquido', value: formatBRL(data.net_cents) },
         { label: 'Margem de lucratividade', value: `${data.margin_pct.toFixed(1)}%` },
         {
@@ -130,8 +131,8 @@ export default function FaturamentoPage() {
         </div>
         <p className="text-xs text-text-muted">
           <b>Bruto</b> = soma dos pedidos pagos no período. <b>Líquido</b> = bruto − custo dos itens
-          (campo “Custo” do produto). <b>Margem</b> = líquido ÷ bruto. Estornos e cancelamentos são
-          contabilizados na data em que ocorreram.
+          (campo “Custo” do produto) − custo de frete (campo “Frete” do pedido). <b>Margem</b> =
+          líquido ÷ bruto. Estornos e cancelamentos são contabilizados na data em que ocorreram.
         </p>
       </Card>
 

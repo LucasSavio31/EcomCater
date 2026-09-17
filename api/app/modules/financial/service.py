@@ -9,11 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.financial.models import FinancialEvent
 
 
-async def _order_amounts(db: AsyncSession, order) -> tuple[int, int, int]:
-    """(gross_cents, cost_cents, items_count) de um Order já carregado com items."""
+async def _order_amounts(db: AsyncSession, order) -> tuple[int, int, int, int]:
+    """(gross_cents, cost_cents, shipping_cents, items_count) de um Order já
+    carregado com items."""
     from app.modules.products.models import Product
 
     gross = int(order.grand_total_cents or 0)
+    shipping = int(order.shipping_cents or 0)
     items = list(order.items)
     n = sum(int(i.quantity or 0) for i in items)
 
@@ -31,7 +33,7 @@ async def _order_amounts(db: AsyncSession, order) -> tuple[int, int, int]:
         if unit is None:
             unit = prod_cost.get(i.product_id, 0)
         cost += int(unit or 0) * int(i.quantity or 0)
-    return gross, cost, n
+    return gross, cost, shipping, n
 
 
 async def record(db: AsyncSession, *, kind: str, order, when: datetime | None = None) -> None:
@@ -43,7 +45,7 @@ async def record(db: AsyncSession, *, kind: str, order, when: datetime | None = 
     )
     if exists:
         return
-    gross, cost, n = await _order_amounts(db, order)
+    gross, cost, shipping, n = await _order_amounts(db, order)
     db.add(
         FinancialEvent(
             occurred_at=when or datetime.now(UTC),
@@ -52,6 +54,7 @@ async def record(db: AsyncSession, *, kind: str, order, when: datetime | None = 
             order_id=order.id,
             gross_cents=gross,
             cost_cents=cost,
+            shipping_cents=shipping,
             items_count=n,
             created_at=datetime.now(UTC),
         )
@@ -103,6 +106,7 @@ async def series_buckets(
                 bi,
                 _sum_of(FinancialEvent.gross_cents, "paid"),
                 _sum_of(FinancialEvent.cost_cents, "paid"),
+                _sum_of(FinancialEvent.shipping_cents, "paid"),
                 _sum_of(FinancialEvent.gross_cents, "refunded"),
                 _sum_of(FinancialEvent.gross_cents, "canceled"),
                 _count_of("placed"),
@@ -123,11 +127,12 @@ async def series_buckets(
             out[idx] = {
                 "gross": int(r[1] or 0),
                 "cost": int(r[2] or 0),
-                "refunded_cents": int(r[3] or 0),
-                "canceled_cents": int(r[4] or 0),
-                "placed_count": int(r[5] or 0),
-                "refunded_count": int(r[6] or 0),
-                "canceled_count": int(r[7] or 0),
+                "shipping": int(r[3] or 0),
+                "refunded_cents": int(r[4] or 0),
+                "canceled_cents": int(r[5] or 0),
+                "placed_count": int(r[6] or 0),
+                "refunded_count": int(r[7] or 0),
+                "canceled_count": int(r[8] or 0),
             }
     return out
 
@@ -141,6 +146,7 @@ async def summary(db: AsyncSession, win_start: datetime, win_end: datetime) -> d
                 _count_of("placed"),
                 _sum_of(FinancialEvent.gross_cents, "paid"),
                 _sum_of(FinancialEvent.cost_cents, "paid"),
+                _sum_of(FinancialEvent.shipping_cents, "paid"),
                 _sum_of(FinancialEvent.gross_cents, "refunded"),
                 _count_of("refunded"),
                 _sum_of(FinancialEvent.gross_cents, "canceled"),
@@ -154,11 +160,13 @@ async def summary(db: AsyncSession, win_start: datetime, win_end: datetime) -> d
     orders_total = int(agg[0] or 0)
     gross = int(agg[1] or 0)
     cost = int(agg[2] or 0)
-    net = gross - cost
-    refunded = int(agg[3] or 0)
-    refunds_count = int(agg[4] or 0)
-    canceled = int(agg[5] or 0)
-    canceled_count = int(agg[6] or 0)
+    shipping = int(agg[3] or 0)
+    # lucro = valor de venda - (custo do produto + custo de frete)
+    net = gross - cost - shipping
+    refunded = int(agg[4] or 0)
+    refunds_count = int(agg[5] or 0)
+    canceled = int(agg[6] or 0)
+    canceled_count = int(agg[7] or 0)
 
     step, n = bucketing(win_start, win_end)
     buckets = await series_buckets(db, win_start, step, n)
@@ -168,12 +176,13 @@ async def summary(db: AsyncSession, win_start: datetime, win_end: datetime) -> d
         b = buckets.get(i)
         g = b["gross"] if b else 0
         c = b["cost"] if b else 0
+        s = b["shipping"] if b else 0
         label = b0.strftime("%d/%m") if step >= timedelta(days=1) else b0.strftime("%d/%m %Hh")
         series.append(
             {
                 "label": label,
                 "gross_cents": g,
-                "net_cents": g - c,
+                "net_cents": g - c - s,
                 "refunded_cents": b["refunded_cents"] if b else 0,
                 "canceled_cents": b["canceled_cents"] if b else 0,
                 "orders": b["placed_count"] if b else 0,
@@ -184,6 +193,7 @@ async def summary(db: AsyncSession, win_start: datetime, win_end: datetime) -> d
         "orders_total": orders_total,
         "gross_cents": gross,
         "cost_cents": cost,
+        "shipping_cents": shipping,
         "net_cents": net,
         "margin_pct": round(net / gross * 100, 1) if gross else 0.0,
         "refunded_cents": refunded,

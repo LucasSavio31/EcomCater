@@ -36,5 +36,8 @@ class FinancialEvent(UUIDPKMixin, Base):
     )
     gross_cents: Mapped[int] = mapped_column(Integer, default=0)
     cost_cents: Mapped[int] = mapped_column(Integer, default=0)
+    # custo de frete (snapshot de `order.shipping_cents` no momento do fato) --
+    # entra no líquido/margem junto com o custo do produto.
+    shipping_cents: Mapped[int] = mapped_column(Integer, default=0)
     items_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)

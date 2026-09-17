@@ -15,6 +15,7 @@ export interface RevenueSummary {
   orders_total: number;
   gross_cents: number;
   cost_cents: number;
+  shipping_cents: number;
   net_cents: number;
   margin_pct: number;
   refunded_cents: number;

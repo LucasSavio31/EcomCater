@@ -89,6 +89,35 @@ async def test_paid_order_feeds_ledger_with_net_and_margin(client, variant_with_
 
 
 @pytest.mark.asyncio
+async def test_shipping_cost_reduces_net_and_margin(db):
+    """Lucro = valor de venda - (custo do produto + custo de frete) -- o
+    frete cobrado do cliente já está no bruto (faz parte do total do
+    pedido), então precisa ser descontado no líquido igual o custo do
+    produto, senão infla a margem."""
+    from datetime import UTC, datetime
+
+    from app.modules.financial import service
+    from app.modules.financial.models import FinancialEvent
+
+    now = datetime.now(UTC)
+    db.add(
+        FinancialEvent(
+            occurred_at=now, kind="paid", order_number="S1",
+            gross_cents=10000, cost_cents=3000, shipping_cents=1500, items_count=1,
+        )
+    )
+    await db.flush()
+
+    s = await service.summary(db, now.replace(hour=0, minute=0, second=0, microsecond=0), now)
+    assert s["gross_cents"] == 10000
+    assert s["cost_cents"] == 3000
+    assert s["shipping_cents"] == 1500
+    assert s["net_cents"] == 5500  # 10000 - 3000 - 1500
+    assert s["margin_pct"] == pytest.approx(round(5500 / 10000 * 100, 1))
+    assert any(pt["net_cents"] == 5500 for pt in s["series"] if pt["gross_cents"] == 10000)
+
+
+@pytest.mark.asyncio
 async def test_ledger_survives_order_deletion(client, variant_with_cost, admin_token, auth_headers):
     h = auth_headers(admin_token)
     order = await _order(client, variant_with_cost, "led2@test.example")
