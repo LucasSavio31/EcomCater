@@ -15,7 +15,7 @@ Encrypt) por domínio e faz proxy reverso **direto pros containers**:
 
 ```
 Internet → Cloudflare (proxy laranja, opcional) → LiteSpeed (80/443, SSL)
-         → 127.0.0.1:3000 (cater-front) / :3001 (cater-admin) / :8000 (cater-api)
+         → 127.0.0.1:3000 (catstore_front) / :3001 (catstore_admin) / :8000 (catstore_api)
 ```
 
 **Não existe mais nginx no meio** (o antigo container `cater-proxy` foi
@@ -118,7 +118,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps 
 Depois do rebuild, ainda pode sobrar cache em dois lugares — sem isso, a
 home continua com URL antiga mesmo com tudo redeployado:
 - **Redis** (server-side, `home-sections` etc.): `INCR ecom:cver:catalog` e
-  `INCR ecom:cver:product` dentro do `cater-redis` invalida tudo do
+  `INCR ecom:cver:product` dentro do `catstore_redis` invalida tudo do
   catálogo num passo só (sem apagar carrinho/sessão, que ficam noutra
   chave).
 - **ISR do Next** (por página): `POST /api/revalidate?tag=products,banners,theme,categories`
