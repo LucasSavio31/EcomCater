@@ -386,3 +386,23 @@ async def apply_cache_pages(db: AsyncSession, domain: Domain, pages: list[str]) 
     domain.cache_pages = valid
     domain.cache_applied_at = datetime.now(UTC)
     await db.flush()
+
+
+async def purge_cache(db: AsyncSession, domain: Domain) -> None:
+    """Limpa tudo que já está em cache na borda da Cloudflare pra este
+    domínio -- próxima visita busca conteúdo fresco na origem. Não mexe nas
+    regras de cache (`cache_pages`) em si, só descarta o que já tinha
+    guardado."""
+    if not domain.cloudflare_zone_id:
+        raise ValidationError(
+            "Este domínio ainda não tem zona Cloudflare confirmada — configure o DNS primeiro."
+        )
+    cfg = await load_config(db)
+    if not cfg.cloudflare_api_token:
+        raise ValidationError("Cloudflare não configurada — cadastre o token em Credenciais.")
+
+    client = CloudflareClient(api_token=cfg.cloudflare_api_token)
+    try:
+        await client.purge_cache(zone_id=domain.cloudflare_zone_id)
+    except CloudflareError as exc:
+        raise ValidationError(f"Cloudflare: {exc}") from exc

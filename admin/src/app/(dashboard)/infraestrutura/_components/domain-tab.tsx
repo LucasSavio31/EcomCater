@@ -161,13 +161,16 @@ function CacheSection({
   domain,
   options,
   onSave,
+  onPurge,
 }: {
   domain: DomainRecord;
   options: CachePageOption[];
   onSave: (pages: string[]) => Promise<void>;
+  onPurge: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState<string[]>(domain.cache_pages);
   const [saving, setSaving] = useState(false);
+  const [purging, setPurging] = useState(false);
   const dirty = JSON.stringify([...draft].sort()) !== JSON.stringify([...domain.cache_pages].sort());
 
   const toggle = (key: string, checked: boolean) => {
@@ -178,6 +181,15 @@ function CacheSection({
     setSaving(true);
     await onSave(draft);
     setSaving(false);
+  };
+
+  const purge = async () => {
+    if (!confirm('Limpar todo o cache da Cloudflare pra este domínio? A próxima visita de cada página busca conteúdo fresco na origem (pode deixar o site um pouco mais lento por alguns minutos, até o cache se refazer).')) {
+      return;
+    }
+    setPurging(true);
+    await onPurge();
+    setPurging(false);
   };
 
   return (
@@ -195,9 +207,12 @@ function CacheSection({
           />
         ))}
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button size="sm" loading={saving} disabled={!dirty} onClick={() => void save()}>
           Salvar cache
+        </Button>
+        <Button size="sm" variant="outline" loading={purging} onClick={() => void purge()}>
+          Limpar cache agora
         </Button>
         {domain.cache_applied_at && (
           <span className="text-xs text-text-muted">
@@ -314,6 +329,15 @@ export function DomainTab() {
     }
     toast.success('Regras de cache aplicadas na Cloudflare.');
     stateRes.reload();
+  };
+
+  const purgeCache = async (id: string) => {
+    const res = await domainsApi.purgeCache(id);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return;
+    }
+    toast.success('Cache da Cloudflare limpo — próximas visitas buscam conteúdo fresco.');
   };
 
   const remove = async (d: DomainRecord) => {
@@ -496,6 +520,7 @@ export function DomainTab() {
                       domain={d}
                       options={stateRes.data!.cache_page_options}
                       onSave={(pages) => saveCachePages(d.id, pages)}
+                      onPurge={() => purgeCache(d.id)}
                     />
                   )}
                 </Card>

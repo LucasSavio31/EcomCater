@@ -434,6 +434,65 @@ async def test_apply_cache_pages_builds_bypass_and_cache_rules(
     assert "cache: produto" in descriptions
 
 
+# ------------------------------------------------ limpar cache (purge)
+
+@pytest.mark.asyncio
+async def test_purge_cache_forbidden_for_staff(client, staff_token, auth_headers):
+    r = await client.post(
+        "/api/admin/domains/00000000-0000-0000-0000-000000000000/purge-cache",
+        headers=auth_headers(staff_token),
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_purge_cache_requires_confirmed_zone(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    created = await client.post(
+        "/api/admin/domains", json={"hostname": "semzonepurga.com.br"}, headers=h
+    )
+    domain_id = created.json()["id"]
+    r = await client.post(f"/api/admin/domains/{domain_id}/purge-cache", headers=h)
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_purge_cache_calls_cloudflare(client, admin_token, auth_headers, monkeypatch):
+    from app.modules.domains.cloudflare_client import CloudflareClient as CFClient
+
+    captured: dict = {}
+
+    async def fake_find_zone(self, hostname):
+        return {"id": "zone-purge", "status": "active", "name_servers": ["a.ns.cloudflare.com"]}
+
+    async def fake_upsert(self, *, zone_id, name, record_type, content, proxied=True):
+        return None
+
+    async def fake_purge_cache(self, *, zone_id):
+        captured["zone_id"] = zone_id
+
+    monkeypatch.setattr(CFClient, "find_zone", fake_find_zone)
+    monkeypatch.setattr(CFClient, "upsert_dns_record", fake_upsert)
+    monkeypatch.setattr(CFClient, "purge_cache", fake_purge_cache)
+
+    h = auth_headers(admin_token)
+    await client.put(
+        "/api/admin/domains/credentials",
+        json={"cloudflare_api_token": "fake-token", "server_ip": "167.86.92.107"},
+        headers=h,
+    )
+    created = await client.post(
+        "/api/admin/domains", json={"hostname": "purgateste.com.br"}, headers=h
+    )
+    domain_id = created.json()["id"]
+    assert created.json()["dns_managed_by_cloudflare"] is True  # zona já ativa
+
+    r = await client.post(f"/api/admin/domains/{domain_id}/purge-cache", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"ok": True}
+    assert captured["zone_id"] == "zone-purge"
+
+
 # ------------------------------------------------ troca de domínio (arquivo-gatilho)
 
 def _mock_full_provision(monkeypatch):

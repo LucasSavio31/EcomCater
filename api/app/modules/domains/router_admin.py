@@ -124,6 +124,15 @@ async def update_cache_pages(domain_id: str, body: CachePagesIn, db: DbDep, _: S
     return _domain_out(domain)
 
 
+@admin_router.post("/{domain_id}/purge-cache")
+async def purge_domain_cache(domain_id: str, db: DbDep, _: SuperDep) -> dict:
+    domain = await service.get_domain(db, domain_id)
+    if not domain:
+        raise NotFoundError("Domínio não encontrado.")
+    await service.purge_cache(db, domain)
+    return {"ok": True}
+
+
 @admin_router.delete("/{domain_id}")
 async def remove_domain(domain_id: str, db: DbDep, _: SuperDep) -> dict:
     domain = await service.get_domain(db, domain_id)

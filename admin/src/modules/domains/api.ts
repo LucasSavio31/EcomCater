@@ -84,4 +84,7 @@ export const domainsApi = {
 
   saveCachePages: (id: string, pages: string[]): Promise<ApiResult<DomainRecord>> =>
     adminFetch<DomainRecord>(`/api/admin/domains/${id}/cache`, { method: 'PUT', body: { pages } }),
+
+  purgeCache: (id: string): Promise<ApiResult<{ ok: boolean }>> =>
+    adminFetch<{ ok: boolean }>(`/api/admin/domains/${id}/purge-cache`, { method: 'POST' }),
 };

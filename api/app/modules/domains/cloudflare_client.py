@@ -83,6 +83,12 @@ class CloudflareClient:
             json={"rules": rules},
         )
 
+    async def purge_cache(self, *, zone_id: str) -> None:
+        """Limpa TUDO que está em cache na borda da Cloudflare pra essa zona --
+        a próxima visita busca conteúdo fresco na origem. Requer a permissão
+        `Zone / Cache Purge / Purge` no token (além de DNS/Cache Rules)."""
+        await self._request("POST", f"/zones/{zone_id}/purge_cache", json={"purge_everything": True})
+
     async def upsert_dns_record(
         self, *, zone_id: str, name: str, record_type: str, content: str, proxied: bool = True
     ) -> None:
