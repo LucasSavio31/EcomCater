@@ -33,3 +33,13 @@ async def melhor_envio_webhook(request: Request, db: DbDep, token: str | None = 
     raw = await request.body()
     body = await request.json()
     return await service.handle_tracking_webhook(db, dict(request.headers), raw, body)
+
+
+@router.post("/frenet")
+async def frenet_webhook(request: Request, db: DbDep) -> dict:
+    """A Frenet não assina o webhook -- a verificação é por um header
+    customizado (nome/valor escolhidos pelo lojista), conferido dentro de
+    `FrenetProvider.verify_webhook` (falha fechada, igual ao token do ME)."""
+    raw = await request.body()
+    body = await request.json()
+    return await service.handle_frenet_tracking_webhook(db, dict(request.headers), raw, body)

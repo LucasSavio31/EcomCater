@@ -57,6 +57,20 @@ export interface ShippingConfig {
   free_shipping_all?: boolean;
   /** Frete grátis automático quando o subtotal do pedido atinge este valor (centavos). */
   free_shipping_min_cents?: number | null;
+
+  /* --------------------------- Frenet (2º provedor) --------------------------- */
+  /** Envie vazio no PUT = manter o token já salvo. */
+  frenet_token?: string;
+  has_frenet_token?: boolean;
+  /** Só necessário pra emissão de etiqueta (API whitelabel da Frenet). */
+  frenet_partner_token?: string;
+  has_frenet_partner_token?: boolean;
+  /** Header customizado que a Frenet manda no webhook (nome escolhido por você). */
+  frenet_webhook_header_name?: string;
+  frenet_webhook_header_value?: string;
+  has_frenet_webhook_header_value?: boolean;
+  frenet_poll_interval_seconds?: number;
+  frenet_webhook_url?: string;
 }
 
 export interface ShippingQuoteRate {
@@ -122,6 +136,14 @@ export const configApi = {
       method: 'POST',
       query: { dest_zip: destZip },
     }),
+  sendToFrenet: (orderNumbers: string[], buy: boolean) =>
+    adminFetch<{ results: Array<Record<string, unknown>> }>('/api/admin/shipping/frenet/send', {
+      method: 'POST',
+      body: { order_numbers: orderNumbers, buy },
+    }),
+  syncFrenetTracking: () =>
+    adminFetch<{ ran: boolean }>('/api/admin/shipping/frenet/sync-tracking', { method: 'POST' }),
+  frenetSyncStatus: () => adminFetch<{ enabled: boolean }>('/api/admin/shipping/frenet/sync-status'),
 
   getPayment: () => adminFetch<PaymentConfig>('/api/admin/payment/config'),
   putPaymentProvider: (slug: string, body: { enabled?: boolean; config?: Record<string, unknown> }) =>

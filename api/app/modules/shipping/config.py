@@ -43,3 +43,17 @@ class ShippingConfig(BaseModel):
     # Frete grátis automático quando o subtotal do pedido atinge este valor
     # (em centavos). None/0 = desligado.
     free_shipping_min_cents: int | None = None
+
+    # ---- Frenet (segundo provedor de frete; active_provider="frenet") ----
+    frenet_token: str = ""
+    # Só necessário pra emissão de etiqueta (API whitelabel) -- a cotação e o
+    # rastreio funcionam só com `frenet_token`. Nem toda conta Frenet tem
+    # esse token liberado por padrão (ver módulo `providers/frenet.py`).
+    frenet_partner_token: str = ""
+    # A Frenet deixa o lojista escolher o nome/valor do header que ela manda
+    # de volta no webhook -- não há assinatura HMAC.
+    frenet_webhook_header_name: str = ""
+    frenet_webhook_header_value: str = ""
+    # Intervalo (segundos) da rotina de sincronização de rastreio da Frenet.
+    # 0 = usa o padrão do servidor. Mínimo 120s (mesma regra do ME).
+    frenet_poll_interval_seconds: int = 0

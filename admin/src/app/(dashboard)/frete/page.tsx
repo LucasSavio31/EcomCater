@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import Link from 'next/link';
 import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { AsyncBoundary } from '@/components/async-boundary';
@@ -9,7 +10,6 @@ import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { formatBRL } from '@/lib/format';
 import { configApi, type ShippingConfig, type ShippingQuoteRate } from '@/modules/config/api';
-import { WebhookUrlBox } from '@/components/webhook-url';
 import { CurrencyField } from '@/components/currency-field';
 import { onlyDigits } from '@/lib/phone';
 
@@ -19,6 +19,11 @@ function maskCep(v: string): string {
   return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
 }
 
+const PROVIDER_LABEL: Record<string, string> = {
+  melhor_envio: 'Melhor Envio',
+  frenet: 'Frenet',
+};
+
 export default function FretePage() {
   const toast = useToast();
   const { data, loading, error, reload, setData } = useResource(() => configApi.getShipping());
@@ -27,25 +32,7 @@ export default function FretePage() {
   const [testZip, setTestZip] = useState('');
   const [testResult, setTestResult] = useState<ShippingQuoteRate[] | null>(null);
   const [testing, setTesting] = useState(false);
-  const [connecting, setConnecting] = useState(false);
   const cfg = draft ?? data;
-
-  // volta do OAuth do Melhor Envio (?me=connected|error)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const me = params.get('me');
-    if (!me) return;
-    if (me === 'connected') {
-      toast.success('Melhor Envio conectado!');
-      reload();
-    } else {
-      toast.error('Não foi possível conectar ao Melhor Envio. Confira Client ID/Secret e a Redirect URI.');
-    }
-    params.delete('me');
-    const q = params.toString();
-    window.history.replaceState({}, '', window.location.pathname + (q ? `?${q}` : ''));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const set = <K extends keyof ShippingConfig>(k: K, v: ShippingConfig[K]): void => {
     if (!cfg) return;
@@ -62,18 +49,27 @@ export default function FretePage() {
     set('allowed_services', [...cur]);
   };
 
+  const providerOptions = (['melhor_envio', 'frenet'] as const)
+    .filter((p) => p === cfg?.active_provider || (p === 'melhor_envio' ? cfg?.has_token : cfg?.has_frenet_token))
+    .map((p) => ({ value: p, label: PROVIDER_LABEL[p] ?? p }));
+
   async function save(): Promise<void> {
     if (!cfg) return;
     setSaving(true);
-    // Segredos: só enviar quando o lojista digitou algo — vazio = manter o que já está salvo.
-    const { melhor_envio_token, webhook_token, melhor_envio_client_secret, ...rest } = cfg;
-    const body = {
-      ...rest,
-      ...(melhor_envio_token?.trim() ? { melhor_envio_token: melhor_envio_token.trim() } : {}),
-      ...(webhook_token?.trim() ? { webhook_token: webhook_token.trim() } : {}),
-      ...(melhor_envio_client_secret?.trim()
-        ? { melhor_envio_client_secret: melhor_envio_client_secret.trim() }
-        : {}),
+    // Só os campos genéricos/compartilhados -- credenciais de cada provedor
+    // ficam em Provedores de frete.
+    const body: Partial<ShippingConfig> = {
+      active_provider: cfg.active_provider,
+      origin_zip: cfg.origin_zip,
+      sender_cpf: cfg.sender_cpf,
+      allowed_services: cfg.allowed_services,
+      label_format: cfg.label_format,
+      print_declaration: cfg.print_declaration,
+      me_poll_interval_seconds: cfg.me_poll_interval_seconds,
+      frenet_poll_interval_seconds: cfg.frenet_poll_interval_seconds,
+      default_package: cfg.default_package,
+      free_shipping_all: cfg.free_shipping_all,
+      free_shipping_min_cents: cfg.free_shipping_min_cents,
     };
     const result = await configApi.putShipping(body);
     setSaving(false);
@@ -84,45 +80,6 @@ export default function FretePage() {
     toast.success('Configuração de frete salva.');
     setData(result.data);
     setDraft(null);
-  }
-
-  async function connectMelhorEnvio(): Promise<void> {
-    if (!cfg) return;
-    if (!cfg.melhor_envio_client_id?.trim() || !(cfg.melhor_envio_client_secret?.trim() || cfg.has_client_secret)) {
-      toast.error('Preencha o Client ID e o Client Secret do app Melhor Envio.');
-      return;
-    }
-    setConnecting(true);
-    // salva client id/secret antes de redirecionar
-    const saved = await configApi.putShipping({
-      melhor_envio_client_id: cfg.melhor_envio_client_id.trim(),
-      ...(cfg.melhor_envio_client_secret?.trim()
-        ? { melhor_envio_client_secret: cfg.melhor_envio_client_secret.trim() }
-        : {}),
-    });
-    if (!saved.ok) {
-      setConnecting(false);
-      toast.error(saved.error.message);
-      return;
-    }
-    const res = await configApi.melhorEnvioAuthorizeUrl();
-    if (!res.ok) {
-      setConnecting(false);
-      toast.error(res.error.message);
-      return;
-    }
-    window.location.href = res.data.url;
-  }
-
-  async function disconnectMelhorEnvio(): Promise<void> {
-    const res = await configApi.melhorEnvioDisconnect();
-    if (!res.ok) {
-      toast.error(res.error.message);
-      return;
-    }
-    toast.success('Desconectado do Melhor Envio.');
-    setDraft(null);
-    reload();
   }
 
   async function runTest(): Promise<void> {
@@ -146,17 +103,27 @@ export default function FretePage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Frete"
-        description="Provedor, credenciais, CEP de origem e pacote padrão. Provedor atual: Melhor Envio."
+        description="Escolha qual provedor está ativo. Cadastre e conecte cada um em Provedores de frete."
+        actions={
+          <Link href="/frete/provedores" className="text-sm text-accent hover:underline">
+            → Provedores de frete
+          </Link>
+        }
       />
 
       <AsyncBoundary loading={loading} error={error} onRetry={reload}>
         {cfg && (
           <Card variant="outline" className="flex max-w-2xl flex-col gap-4">
+            {providerOptions.length === 0 && (
+              <p className="rounded-card bg-warning/10 p-2 text-sm text-warning">
+                Nenhum provedor conectado ainda — vá em Provedores de frete e configure pelo menos um.
+              </p>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <Select
-                label="Provedor"
+                label="Provedor de frete ativo"
                 value={cfg.active_provider}
-                options={[{ value: 'melhor_envio', label: 'Melhor Envio' }]}
+                options={providerOptions}
                 onChange={(e) => set('active_provider', e.target.value)}
               />
               <Input
@@ -170,28 +137,18 @@ export default function FretePage() {
                 label="CPF do remetente"
                 inputMode="numeric"
                 placeholder="000.000.000-00"
-                hint="Responsável pelo envio no Melhor Envio (obrigatório p/ gerar etiqueta)."
+                hint="Responsável pelo envio (obrigatório p/ gerar etiqueta, nos dois provedores)."
                 value={cfg.sender_cpf ?? ''}
                 onChange={(e) => set('sender_cpf', onlyDigits(e.target.value).slice(0, 11))}
               />
-              <Input
-                label="Token do webhook"
-                value={cfg.webhook_token ?? ''}
-                placeholder="deixe em branco p/ manter"
-                onChange={(e) => set('webhook_token', e.target.value)}
-              />
             </div>
-            <Checkbox
-              label="Sandbox (Melhor Envio)"
-              checked={cfg.melhor_envio_sandbox}
-              onChange={(v) => set('melhor_envio_sandbox', v)}
-            />
 
             <fieldset className="flex flex-col gap-2 rounded-card border border-surface-border p-3">
               <legend className="px-1 text-sm font-medium">Serviços oferecidos ao cliente</legend>
               <p className="text-xs text-text-muted">
-                Só os marcados aparecem no carrinho e no checkout. O Melhor Envio pode devolver
-                outros (Jadlog, etc.) — são descartados automaticamente.
+                Só os marcados aparecem no carrinho e no checkout (vale pro provedor que estiver
+                ativo). Outros serviços que o provedor devolver (Jadlog, etc.) são descartados
+                automaticamente.
               </p>
               <div className="flex flex-wrap gap-6">
                 {(['pac', 'sedex'] as const).map((s) => (
@@ -211,11 +168,12 @@ export default function FretePage() {
             </fieldset>
 
             <fieldset className="flex flex-col gap-2 rounded-card border border-surface-border p-3">
-              <legend className="px-1 text-sm font-medium">Impressão de etiquetas</legend>
+              <legend className="px-1 text-sm font-medium">Impressão de etiquetas (Melhor Envio)</legend>
               <p className="text-xs text-text-muted">
-                O botão <b>Baixar etiqueta (PDF)</b> (na tela do pedido) e o <b>Baixar etiquetas
-                (PDF)</b> (em massa) geram o PDF aqui mesmo, sem abrir o site do Melhor Envio. As
-                opções abaixo definem como o PDF é montado.
+                Vale só pro Melhor Envio — a etiqueta da Frenet já vem pronta em PDF da própria
+                Frenet. O botão <b>Baixar etiqueta (PDF)</b> (na tela do pedido) e o <b>Baixar
+                etiquetas (PDF)</b> (em massa) montam o PDF do Melhor Envio aqui mesmo, sem abrir o
+                site deles.
               </p>
               <Select
                 label="Formato"
@@ -224,9 +182,7 @@ export default function FretePage() {
                   { value: 'termica_10x15', label: 'Etiqueta térmica 10×15 (1 por página)' },
                   { value: 'a4_4up', label: 'A4 — 4 etiquetas por página' },
                 ]}
-                onChange={(e) =>
-                  set('label_format', e.target.value as 'termica_10x15' | 'a4_4up')
-                }
+                onChange={(e) => set('label_format', e.target.value as 'termica_10x15' | 'a4_4up')}
               />
               <Checkbox
                 label="Incluir a Declaração de Conteúdo (DACE simples) após cada etiqueta"
@@ -235,113 +191,38 @@ export default function FretePage() {
               />
             </fieldset>
 
-            <fieldset className="flex flex-col gap-2 rounded-card border border-surface-border p-3">
-              <legend className="px-1 text-sm font-medium">
-                Sincronização automática de rastreio
-              </legend>
-              <p className="text-xs text-text-muted">
-                De quanto em quanto tempo a loja consulta a API do Melhor Envio para preencher o
-                código de rastreio e avançar o status do pedido (Rastreio disponível → Enviado →
-                Entregue). Mínimo 120&nbsp;s. Deixe <b>0</b> para usar o padrão do servidor
-                (900&nbsp;s = 15&nbsp;min). Vale sem reiniciar a API.
-              </p>
-              <Input
-                label="Intervalo da rotina (segundos)"
-                type="number"
-                min={0}
-                step={30}
-                value={String(cfg.me_poll_interval_seconds ?? 0)}
-                onChange={(e) =>
-                  set('me_poll_interval_seconds', Math.max(0, Number(onlyDigits(e.target.value)) || 0))
-                }
-              />
-            </fieldset>
-
             <fieldset className="flex flex-col gap-3 rounded-card border border-surface-border p-3">
-              <legend className="px-1 text-sm font-medium">Conexão Melhor Envio</legend>
-
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                {cfg.has_token ? (
-                  <>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 font-medium text-success">
-                      ● Conectado
-                    </span>
-                    {cfg.token_from_env && (
-                      <span className="text-text-muted">via arquivo <code>.env</code> do servidor</span>
-                    )}
-                    {cfg.token_expires_at && (
-                      <span className="text-text-muted">
-                        expira em {new Date(cfg.token_expires_at).toLocaleDateString('pt-BR')}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-bg-subtle px-2 py-0.5 font-medium text-text-muted">
-                    ○ Não conectado
-                  </span>
-                )}
+              <legend className="px-1 text-sm font-medium">Sincronização automática de rastreio</legend>
+              <p className="text-xs text-text-muted">
+                De quanto em quanto tempo a loja consulta a API de cada provedor para preencher o
+                código de rastreio e avançar o status do pedido. Mínimo 120&nbsp;s cada. Deixe{' '}
+                <b>0</b> para usar o padrão do servidor (900&nbsp;s = 15&nbsp;min). Vale sem
+                reiniciar a API.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  label="Intervalo Melhor Envio (segundos)"
+                  type="number"
+                  min={0}
+                  step={30}
+                  value={String(cfg.me_poll_interval_seconds ?? 0)}
+                  onChange={(e) =>
+                    set('me_poll_interval_seconds', Math.max(0, Number(onlyDigits(e.target.value)) || 0))
+                  }
+                />
+                <Input
+                  label="Intervalo Frenet (segundos)"
+                  type="number"
+                  min={0}
+                  step={30}
+                  value={String(cfg.frenet_poll_interval_seconds ?? 0)}
+                  onChange={(e) =>
+                    set('frenet_poll_interval_seconds', Math.max(0, Number(onlyDigits(e.target.value)) || 0))
+                  }
+                />
               </div>
-
-              <Input
-                label="Token do Melhor Envio (JWT)"
-                hint="Cole o token pessoal do painel do Melhor Envio (Configurações → Tokens). Salvo junto com “Salvar frete”."
-                value={cfg.melhor_envio_token ?? ''}
-                placeholder={cfg.has_token ? '•••••••• configurado (deixe em branco p/ manter)' : 'eyJ0eXAiOi...'}
-                onChange={(e) => set('melhor_envio_token', e.target.value)}
-              />
-              {cfg.has_token && !cfg.token_from_env && (
-                <Button
-                  variant="outline"
-                  className="self-start"
-                  onClick={() => void disconnectMelhorEnvio()}
-                >
-                  Remover token
-                </Button>
-              )}
-              {cfg.token_from_env && (
-                <p className="text-xs text-text-muted">
-                  O token está no <code>.env</code> do servidor — remova por lá, não pelo painel.
-                </p>
-              )}
-
-              <details className="rounded-card bg-bg-subtle p-2 text-xs text-text-muted">
-                <summary className="cursor-pointer font-medium">
-                  Conectar via app (OAuth) — renova o token automaticamente
-                </summary>
-                <div className="flex flex-col gap-3 pt-3">
-                  <p>
-                    Alternativa ao token manual: crie um <b>Aplicativo</b> no painel do Melhor Envio,
-                    cadastre a Redirect URI abaixo, cole o Client ID e o Secret e clique em Conectar.
-                  </p>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Input
-                      label="Client ID"
-                      value={cfg.melhor_envio_client_id ?? ''}
-                      onChange={(e) => set('melhor_envio_client_id', e.target.value)}
-                    />
-                    <Input
-                      label="Client Secret"
-                      value={cfg.melhor_envio_client_secret ?? ''}
-                      placeholder={cfg.has_client_secret ? '•••••••• salvo (deixe em branco p/ manter)' : ''}
-                      onChange={(e) => set('melhor_envio_client_secret', e.target.value)}
-                    />
-                  </div>
-                  {cfg.oauth_redirect_uri && (
-                    <WebhookUrlBox
-                      url={cfg.oauth_redirect_uri}
-                      note="Redirect URI: cadastre exatamente esta URL no seu app no painel do Melhor Envio."
-                    />
-                  )}
-                  <Button
-                    loading={connecting}
-                    className="self-start"
-                    onClick={() => void connectMelhorEnvio()}
-                  >
-                    {cfg.has_token ? 'Reconectar via OAuth' : 'Conectar Melhor Envio'}
-                  </Button>
-                </div>
-              </details>
             </fieldset>
+
             <Checkbox
               label="Frete grátis para todos os pedidos"
               hint="O checkout não calcula frete — a entrega fica R$ 0,00 e o cliente segue direto para o pagamento."
@@ -383,11 +264,6 @@ export default function FretePage() {
                 onChange={(e) => setPkg('height_mm', e.target.value)}
               />
             </fieldset>
-
-            <WebhookUrlBox
-              url={cfg.webhook_url}
-              note="Já inclui o token do webhook. Atualiza o pedido para POSTADO / EM TRÂNSITO / ENTREGUE. Em produção troque localhost pelo seu domínio."
-            />
 
             <Button loading={saving} onClick={() => void save()} className="self-start">
               Salvar frete

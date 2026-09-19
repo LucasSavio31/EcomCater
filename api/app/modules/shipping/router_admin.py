@@ -47,6 +47,13 @@ def _config_out(cfg) -> dict:
         "free_shipping_min_cents": getattr(cfg, "free_shipping_min_cents", None),
         # URL que o lojista cadastra no painel do Melhor Envio (inclui o token)
         "webhook_url": webhook_url,
+        # Frenet (campos aditivos; nenhuma chave do Melhor Envio acima muda)
+        "has_frenet_token": bool(cfg.frenet_token),
+        "has_frenet_partner_token": bool(cfg.frenet_partner_token),
+        "frenet_webhook_header_name": cfg.frenet_webhook_header_name,
+        "has_frenet_webhook_header_value": bool(cfg.frenet_webhook_header_value),
+        "frenet_poll_interval_seconds": getattr(cfg, "frenet_poll_interval_seconds", 0),
+        "frenet_webhook_url": f"{base}/api/webhooks/shipping/frenet",
     }
 
 
@@ -63,6 +70,9 @@ async def update_config(body: ShippingConfigIn, db: DbDep, _: AdminRoleDep) -> d
     iv = patch.get("me_poll_interval_seconds")
     if iv is not None and 0 < int(iv) < 120:
         patch["me_poll_interval_seconds"] = 120
+    fiv = patch.get("frenet_poll_interval_seconds")
+    if fiv is not None and 0 < int(fiv) < 120:
+        patch["frenet_poll_interval_seconds"] = 120
     cfg = await service.save_config(db, patch)
     return _config_out(cfg)
 
@@ -136,3 +146,34 @@ async def melhor_envio_sync_status(_: AdminDep) -> dict:
     from app.modules.shipping import scheduler
 
     return scheduler.status()
+
+
+@router.post("/frenet/send")
+async def send_to_frenet(
+    db: DbDep,
+    _: AdminRoleDep,
+    order_numbers: list[str] = Body(..., embed=True),
+    buy: bool = Body(True, embed=True),
+) -> dict:
+    """Equivalente a `/melhor-envio/send`, pra Frenet: cria o envio → compra
+    → etiqueta. `buy=false` cria o envio e para (finaliza no painel da
+    Frenet)."""
+    return await service.send_orders_to_frenet(db, order_numbers, buy=buy)
+
+
+@router.post("/frenet/sync-tracking")
+async def sync_frenet_tracking(db: DbDep, _: AdminRoleDep) -> dict:
+    """Força agora a sincronização de rastreio com a Frenet (a mesma rotina
+    que roda sozinha de tempos em tempos)."""
+    from app.modules.shipping import scheduler
+
+    result = await service.poll_frenet_tracking(db)
+    scheduler.note_frenet_run(result, source="manual")
+    return result
+
+
+@router.get("/frenet/sync-status")
+async def frenet_sync_status(_: AdminDep) -> dict:
+    from app.modules.shipping import scheduler
+
+    return scheduler.frenet_status()

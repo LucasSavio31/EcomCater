@@ -101,7 +101,15 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: 'Frete',
-    items: [{ href: '/frete', label: 'Frete', icon: IconShipping, moduleSlugs: ['shipping'] }],
+    items: [
+      {
+        href: '/frete',
+        label: 'Frete',
+        icon: IconShipping,
+        moduleSlugs: ['shipping'],
+        children: [{ href: '/frete/provedores', label: 'Provedores', icon: IconModules }],
+      },
+    ],
   },
   {
     title: 'Integrações',

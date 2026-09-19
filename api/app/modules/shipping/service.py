@@ -22,12 +22,16 @@ from app.core.redis import redis_client
 from app.modules.shipping.config import ShippingConfig
 from app.modules.shipping.models import ShippingQuote
 from app.modules.shipping.providers.base import Package, ShippingProvider, TrackingUpdate
+from app.modules.shipping.providers.frenet import FrenetProvider
 from app.modules.shipping.providers.melhor_envio import MelhorEnvioProvider
 
 logger = logging.getLogger("shipping.service")
 
 _CACHE_PREFIX = "ship:quote:"
-_PROVIDERS: dict[str, type[ShippingProvider]] = {"melhor_envio": MelhorEnvioProvider}
+_PROVIDERS: dict[str, type[ShippingProvider]] = {
+    "melhor_envio": MelhorEnvioProvider,
+    "frenet": FrenetProvider,
+}
 
 def _service_allowed(rate: dict, allowed: set[str]) -> bool:
     """A tarifa passa se o serviço (ou sua 1ª palavra) estiver na lista permitida."""
@@ -80,6 +84,13 @@ def _provider(cfg: ShippingConfig) -> ShippingProvider:
         return MelhorEnvioProvider(
             token=cfg.melhor_envio_token or settings.melhor_envio_token,
             base_url=_me_base(cfg),
+        )
+    if cfg.active_provider == "frenet":
+        return FrenetProvider(
+            token=cfg.frenet_token,
+            partner_token=cfg.frenet_partner_token,
+            webhook_header_name=cfg.frenet_webhook_header_name,
+            webhook_header_value=cfg.frenet_webhook_header_value,
         )
     return cls()
 
@@ -519,12 +530,16 @@ def _me_pick_order(checkout: dict, shipment_id: str) -> dict:
 
 
 def _svc_public(svc: dict) -> dict:
+    # `shipment_id`/`me_status` são do Melhor Envio; a Frenet usa chaves
+    # próprias (`frenet_shipment_id`/`frenet_tracking_status`) pra não colidir
+    # com a rotina/consulta do ME (ver `poll_frenet_tracking`) -- aqui só
+    # soma um fallback aditivo pra exibição funcionar pros dois.
     return {
-        "shipment_id": svc.get("shipment_id"),
+        "shipment_id": svc.get("shipment_id") or svc.get("frenet_shipment_id"),
         "protocol": svc.get("protocol"),
         "tracking_code": svc.get("tracking_code"),
         "label_url": svc.get("label_url"),
-        "me_status": svc.get("me_status"),
+        "me_status": svc.get("me_status") or svc.get("frenet_tracking_status"),
     }
 
 
@@ -1552,3 +1567,492 @@ async def sync_reverse_tracking(db: AsyncSession) -> dict:
 
     await db.flush()
     return {"ran": True, "checked": len(rows), "updated": updated}
+
+
+# --------------------------------------------------------------------- Etiqueta Frenet
+# Tudo abaixo é paralelo ao bloco "Etiqueta Melhor Envio" acima -- funções
+# novas, nada do bloco do ME foi alterado. A Frenet grava o id do envio e o
+# status de rastreio em chaves PRÓPRIAS (`frenet_shipment_id`,
+# `frenet_tracking_status`) em vez de `shipment_id`/`me_tracking_status` --
+# se usasse as mesmas chaves do ME, a rotina `poll_melhor_envio_tracking`
+# (que filtra por essas chaves) passaria a tentar consultar pedidos da
+# Frenet na API do Melhor Envio. `tracking_code`/`label_url` são inertes pro
+# ME (ele nunca seleciona pedidos por esses campos) e por isso continuam
+# compartilhados, o que basta pra `_svc_public` e a tela do pedido mostrarem
+# a etiqueta da Frenet sem mudança nenhuma no front.
+def _frenet_mm_to_cm(mm: int) -> float:
+    return round(max(mm, 1) / 10, 2)
+
+
+def _frenet_g_to_kg(g: int) -> float:
+    return round(max(g, 1) / 1000, 3)
+
+
+def _frenet_address_block(addr: dict, fallback_zip: str) -> dict:
+    return {
+        "ZipCode": _digits(addr.get("zip") or fallback_zip),
+        "City": addr.get("city", ""),
+        "Street": addr.get("street", ""),
+        "AddressNumber": str(addr.get("number", "")),
+        "AddressComplement": addr.get("complement") or "",
+        "AddressQuarter": addr.get("district", ""),
+        "AddressState": (addr.get("state") or "").upper()[:2],
+        "Country": "BR",
+    }
+
+
+async def _frenet_from_block(db: AsyncSession, cfg: ShippingConfig, origin: str) -> dict:
+    """Remetente do envio Frenet = mesma fonte que `_me_from_block` usa
+    (Aparência → Dados da loja + CPF do responsável, menu Frete)."""
+    from app.modules.admin.models import StoreSettings
+
+    st = (await db.scalars(select(StoreSettings))).first()
+    sa = (st.address_json if st and st.address_json else {}) or {}
+    cpf = _digits(cfg.sender_cpf)
+    cnpj = _digits((st.cnpj if st else "") or "")
+    return {
+        "Name": (st.legal_name or st.store_name if st else None) or "Loja",
+        "Email": settings.smtp_from_email,
+        "Phone": "",
+        "Document": cnpj if len(cnpj) == 14 else cpf,
+        "Address": _frenet_address_block(sa, origin),
+    }
+
+
+async def _frenet_apply_tracking(
+    db: AsyncSession,
+    order,
+    *,
+    tracking_code: str | None,
+    frenet_status: str | None,
+    source: str = "etiqueta",
+) -> bool:
+    """Equivalente a `_me_apply_tracking`, só que pra Frenet -- função
+    paralela (não reaproveita a do ME) por causa das chaves próprias citadas
+    acima. Mesma régua `_ORDER_STATUS_RANK` (essa é genérica, compartilhada)."""
+    from app.modules.orders.service import record_event
+
+    changed = False
+    svc = dict(order.shipping_service_json or {})
+
+    tracking_added_msg: str | None = None
+    if tracking_code and svc.get("tracking_code") != tracking_code:
+        svc["tracking_code"] = tracking_code
+        order.shipping_service_json = svc
+        changed = True
+        tracking_added_msg = f"Código de rastreio da Frenet: {tracking_code}"
+
+    async def _flush_tracking_added() -> None:
+        if tracking_added_msg:
+            await record_event(
+                db, order, type="tracking_added", actor_type="system",
+                message=tracking_added_msg,
+            )
+
+    fr_norm = (frenet_status or "").upper()
+    prev_fr = (svc.get("frenet_tracking_status") or "").upper()
+    if frenet_status and prev_fr != fr_norm:
+        svc["frenet_tracking_status"] = frenet_status
+        order.shipping_service_json = svc
+        changed = True
+        if fr_norm == "EM_TRANSITO" and order.status == "shipped":
+            await record_event(
+                db, order, type="tracking_update", actor_type="system",
+                message="Frenet: objeto em trânsito.",
+            )
+            await db.commit()
+            await emit("order.status_changed", {"order_id": str(order.id), "status": "in_transit"})
+
+    if order.status not in {"paid", "processing", "tracking_available", "shipped"}:
+        await _flush_tracking_added()
+        return changed
+
+    has_tracking = bool(tracking_code or svc.get("tracking_code"))
+    if fr_norm == "ENTREGUE":
+        target = "delivered"
+    elif fr_norm in {"POSTADO", "EM_TRANSITO"}:
+        target = "shipped"
+    elif has_tracking:
+        target = "tracking_available"
+    elif svc.get("frenet_shipment_id"):
+        target = "processing"
+    else:
+        target = None
+    if target and _ORDER_STATUS_RANK.get(target, 0) > _ORDER_STATUS_RANK.get(order.status, 0):
+        prev = order.status
+        order.status = target
+        if target == "delivered":
+            order.fulfillment_status = "fulfilled"
+        elif order.fulfillment_status in {"unfulfilled", ""}:
+            order.fulfillment_status = "partial"
+        _labels = {
+            "processing": "em separação", "tracking_available": "rastreio disponível",
+            "shipped": "enviado", "delivered": "entregue",
+        }
+        await record_event(
+            db, order, type="status_changed", from_status=prev, to_status=target,
+            message=f"Frenet ({source}): pedido marcado como {_labels.get(target, target)}.",
+            actor_type="system",
+        )
+        await _flush_tracking_added()
+        await db.commit()
+        await emit("order.status_changed", {"order_id": str(order.id), "status": target})
+        changed = True
+        return changed
+    await _flush_tracking_added()
+    return changed
+
+
+async def _frenet_label_for_order(
+    provider: FrenetProvider,
+    db: AsyncSession,
+    number: str,
+    from_block: dict,
+    pkg,
+    *,
+    buy: bool,
+) -> dict:
+    from sqlalchemy.orm import selectinload
+
+    from app.modules.orders.models import Order
+
+    order = await db.scalar(
+        select(Order).where(Order.number == number).options(selectinload(Order.items))
+    )
+    if not order:
+        return {"number": number, "ok": False, "message": "Pedido não encontrado."}
+
+    svc = dict(order.shipping_service_json or {})
+    if svc.get("label_url"):
+        return {"number": number, "ok": True, "message": "Etiqueta já gerada.", **_svc_public(svc)}
+
+    service_code = svc.get("id")
+    if not service_code or str(service_code) in {"free", "0"}:
+        return {"number": number, "ok": False, "message": "Pedido sem serviço de frete selecionado."}
+
+    addr = order.shipping_address_json or {}
+    _req = ("street", "number", "district", "city", "state", "zip")
+    _missing = [k for k in _req if not str(addr.get(k) or "").strip()]
+    if _missing:
+        return {
+            "number": number, "ok": False,
+            "message": f"Endereço de entrega do pedido incompleto (falta: {', '.join(_missing)}).",
+        }
+
+    shipment_id = svc.get("frenet_shipment_id")
+    created_now = False
+
+    if not shipment_id:
+        total_qty = sum(it.quantity for it in order.items) or 1
+        item_ids = [it.sku for it in order.items] or ["ITEM-1"]
+        extra = svc.get("extra") or {}
+        shipment = {
+            "Order": {
+                "Id": number,
+                "Value": round(order.grand_total_cents / 100, 2),
+                "Items": [
+                    {
+                        "OrderId": number,
+                        "ItemId": it.sku,
+                        "ProductName": (it.name or "Item")[:120],
+                        "SKU": it.sku,
+                        "Weight": _frenet_g_to_kg(getattr(pkg, "weight_grams", 300) or 300),
+                        "Length": _frenet_mm_to_cm(getattr(pkg, "length_mm", 200) or 200),
+                        "Height": _frenet_mm_to_cm(getattr(pkg, "height_mm", 100) or 100),
+                        "Width": _frenet_mm_to_cm(getattr(pkg, "width_mm", 150) or 150),
+                        "Quantity": it.quantity,
+                        "Price": round(it.unit_price_cents / 100, 2),
+                    }
+                    for it in order.items
+                ],
+                "From": from_block,
+                "To": {
+                    "Name": addr.get("recipient_name") or order.email,
+                    "Email": order.email,
+                    "Phone": _digits(addr.get("phone", "")),
+                    "Document": _digits(order.cpf or addr.get("cpf") or ""),
+                    "Address": _frenet_address_block(addr, addr.get("zip", "")),
+                },
+            },
+            "Volumes": [
+                {
+                    "Weight": round(
+                        _frenet_g_to_kg(getattr(pkg, "weight_grams", 300) or 300) * total_qty, 3
+                    ),
+                    "Length": _frenet_mm_to_cm(getattr(pkg, "length_mm", 200) or 200),
+                    "Height": _frenet_mm_to_cm(getattr(pkg, "height_mm", 100) or 100),
+                    "Width": _frenet_mm_to_cm(getattr(pkg, "width_mm", 150) or 150),
+                    "Price": round(order.grand_total_cents / 100, 2),
+                    "DeclaredValue": round(order.grand_total_cents / 100, 2),
+                    "OrderItemsId": item_ids,
+                }
+            ],
+            "Quotation": {
+                "ShippingServiceCode": service_code,
+                "ShippingServiceName": svc.get("service", ""),
+                "Carrier": svc.get("carrier", ""),
+                "CarrierCode": extra.get("carrier_code"),
+                "ShippingPrice": round((svc.get("price_cents") or 0) / 100, 2),
+                "DeliveryTime": svc.get("delivery_days") or 0,
+            },
+        }
+        try:
+            created = await provider.create_shipment(shipment)
+        except DomainError as exc:
+            return {"number": number, "ok": False, "message": str(exc)}
+        results = created if isinstance(created, list) else created.get("Results") or [created]
+        first = (results or [{}])[0]
+        shipment_id = first.get("ShipmentId") or first.get("Id")
+        if not shipment_id:
+            return {"number": number, "ok": False, "message": "Frenet não retornou o id do envio."}
+        svc.update({"frenet_shipment_id": shipment_id, "frenet_tracking_status": "criado", "provider": "frenet"})
+        order.shipping_service_json = dict(svc)
+        created_now = True
+
+    await _frenet_apply_tracking(
+        db, order, tracking_code=None, frenet_status=None, source="etiqueta enviada"
+    )
+
+    if not buy:
+        return {
+            "number": number, "ok": True,
+            "message": "Envio criado na Frenet (aguardando compra).",
+            **_svc_public(svc),
+        }
+
+    try:
+        checkout = await provider.checkout([int(shipment_id)] if str(shipment_id).isdigit() else [shipment_id])
+    except DomainError as exc:
+        return {"number": number, "ok": False, "message": str(exc)}
+
+    if checkout.get("Status") == 2:
+        svc["frenet_tracking_status"] = "aguardando_pagamento"
+        order.shipping_service_json = dict(svc)
+        return {
+            "number": number, "ok": True,
+            "message": (
+                "Sem saldo/checkout pendente na Frenet — o envio foi criado. "
+                "Finalize o pagamento no painel da Frenet; a etiqueta é sincronizada depois."
+            ),
+            **_svc_public(svc),
+        }
+
+    try:
+        label = await provider.get_label(shipment_id)
+    except DomainError as exc:
+        return {"number": number, "ok": created_now, "message": str(exc), **_svc_public(svc)}
+
+    label_url = label.get("LabelUrl")
+    tracking_code = label.get("TrackingNumber") or svc.get("tracking_code")
+    if tracking_code:
+        svc["tracking_code"] = tracking_code
+    if label_url:
+        svc["label_url"] = label_url
+        svc["frenet_tracking_status"] = "etiqueta_pronta"
+    order.shipping_service_json = dict(svc)
+    if order.fulfillment_status in {"unfulfilled", ""}:
+        order.fulfillment_status = "partial"
+
+    ok = bool(label_url)
+    if ok:
+        # status real da transportadora (não "inventa" POSTADO só por ter
+        # código de rastreio -- ter o código não significa que já foi
+        # coletado; mesmo raciocínio de `_me_label_for_order`, que passa
+        # `me_status=svc.get("me_tracking_status")` aqui, não um valor fixo).
+        await _frenet_apply_tracking(
+            db, order, tracking_code=tracking_code, frenet_status=svc.get("frenet_tracking_status"),
+            source="etiqueta gerada",
+        )
+    return {
+        "number": number,
+        "ok": ok,
+        "message": "Etiqueta comprada e gerada." if ok else "Compra registrada, mas a etiqueta ainda não saiu.",
+        **_svc_public(svc),
+    }
+
+
+async def send_orders_to_frenet(db: AsyncSession, order_numbers: list[str], *, buy: bool = True) -> dict:
+    """Equivalente a `send_orders_to_melhor_envio`, pra Frenet."""
+    cfg = await load_config(db)
+    if not cfg.frenet_token:
+        return {
+            "results": [
+                {"number": n, "ok": False, "message": "Configure o token da Frenet no menu Frete."}
+                for n in order_numbers
+            ]
+        }
+    if len(_digits(cfg.sender_cpf)) != 11:
+        return {
+            "results": [
+                {"number": n, "ok": False, "message": "Informe o CPF do remetente no menu Frete."}
+                for n in order_numbers
+            ]
+        }
+    origin = cfg.origin_zip or settings.shipping_origin_zip
+    pkg = cfg.default_package
+    provider = FrenetProvider(
+        token=cfg.frenet_token,
+        partner_token=cfg.frenet_partner_token,
+        webhook_header_name=cfg.frenet_webhook_header_name,
+        webhook_header_value=cfg.frenet_webhook_header_value,
+    )
+    from_block = await _frenet_from_block(db, cfg, origin)
+
+    results: list[dict] = []
+    for number in order_numbers:
+        try:
+            results.append(await _frenet_label_for_order(provider, db, number, from_block, pkg, buy=buy))
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Frenet: erro no pedido %s", number)
+            results.append({"number": number, "ok": False, "message": f"Erro inesperado: {exc}"})
+    await db.flush()
+    return {"results": results}
+
+
+async def frenet_labels_pdf(db: AsyncSession, order_numbers: list[str]) -> bytes:
+    """Baixa e junta as etiquetas (já prontas em PDF/URL direta da Frenet --
+    ao contrário do ME, que não expõe PDF por API e precisa ser renderizado
+    via headless Chromium)."""
+    from sqlalchemy.orm import selectinload
+
+    from app.modules.orders.models import Order
+
+    rows = list(
+        await db.scalars(
+            select(Order).where(Order.number.in_(order_numbers)).options(selectinload(Order.items))
+        )
+    )
+    urls = [
+        (o.shipping_service_json or {}).get("label_url")
+        for o in rows
+        if (o.shipping_service_json or {}).get("label_url")
+    ]
+    if not urls:
+        raise DomainError("Nenhuma das etiquetas selecionadas está pronta ainda.", code="label_not_ready")
+
+    pdfs: list[bytes] = []
+    async with httpx.AsyncClient(timeout=30) as c:
+        for url in urls:
+            try:
+                r = await c.get(url)
+                if r.status_code < 300 and r.content:
+                    pdfs.append(r.content)
+            except Exception:  # noqa: BLE001
+                logger.exception("Frenet: falha ao baixar etiqueta %s", url)
+
+    if not pdfs:
+        raise DomainError("Não foi possível baixar as etiquetas da Frenet agora.", code="shipping_unavailable")
+
+    await _mark_labels_printed(db, order_numbers)
+    if len(pdfs) == 1:
+        return pdfs[0]
+    try:
+        from pypdf import PdfReader, PdfWriter
+
+        writer = PdfWriter()
+        for pdf in pdfs:
+            for page in PdfReader(io.BytesIO(pdf)).pages:
+                writer.add_page(page)
+        out = io.BytesIO()
+        writer.write(out)
+        return out.getvalue()
+    except Exception:  # noqa: BLE001
+        logger.exception("Frenet: falha ao juntar etiquetas em um único PDF")
+        return pdfs[0]
+
+
+async def poll_frenet_tracking(db: AsyncSession) -> dict:
+    """Equivalente a `poll_melhor_envio_tracking`, pra Frenet. A Frenet não
+    tem endpoint de consulta em lote (ao contrário do ME) -- consulta
+    `tracking/trackinginfo` um envio de cada vez."""
+    from app.modules.orders.models import Order
+
+    cfg = await load_config(db)
+    if not cfg.frenet_token:
+        return {"ran": False, "reason": "sem token da Frenet"}
+
+    rows = list(
+        await db.scalars(
+            select(Order).where(
+                Order.shipping_service_json["frenet_shipment_id"].astext.isnot(None),
+                Order.status.notin_(("canceled", "refunded", "delivered")),
+                Order.shipping_service_json["frenet_tracking_status"].astext != "ENTREGUE",
+            )
+        )
+    )
+    if not rows:
+        return {"ran": True, "checked": 0, "updated": 0}
+
+    provider = FrenetProvider(
+        token=cfg.frenet_token,
+        partner_token=cfg.frenet_partner_token,
+        webhook_header_name=cfg.frenet_webhook_header_name,
+        webhook_header_value=cfg.frenet_webhook_header_value,
+    )
+    updated = 0
+    errors = 0
+    for order in rows:
+        svc = dict(order.shipping_service_json or {})
+        service_code = str(svc.get("id") or "")
+        tracking_number = svc.get("tracking_code")
+        if not service_code or not tracking_number:
+            continue
+        try:
+            data = await provider.track(service_code=service_code, tracking_number=tracking_number)
+        except Exception:  # noqa: BLE001
+            logger.exception("poll Frenet: falha ao consultar %s", order.number)
+            errors += 1
+            continue
+        update = provider.parse_webhook(
+            {}, {"ShipmentId": svc.get("frenet_shipment_id"), "TrackingNumber": tracking_number, **data}
+        )
+        if update and await _frenet_apply_tracking(
+            db, order, tracking_code=update.tracking_code, frenet_status=update.status, source="rotina"
+        ):
+            updated += 1
+
+    await db.flush()
+    return {"ran": True, "checked": len(rows), "updated": updated, "errors": errors}
+
+
+async def handle_frenet_tracking_webhook(db: AsyncSession, headers: dict, raw_body: bytes, body: dict) -> dict:
+    """Equivalente a `handle_tracking_webhook`, mas pra Frenet -- função
+    paralela (não reaproveita a genérica) porque essa casa o pedido pelas
+    chaves `frenet_shipment_id`/`tracking_code` em vez de `shipment_id`."""
+    cfg = await load_config(db)
+    provider = FrenetProvider(
+        token=cfg.frenet_token,
+        partner_token=cfg.frenet_partner_token,
+        webhook_header_name=cfg.frenet_webhook_header_name,
+        webhook_header_value=cfg.frenet_webhook_header_value,
+    )
+    if not provider.verify_webhook(headers, raw_body):
+        raise DomainError("Assinatura de webhook inválida.", code="bad_signature")
+
+    update = provider.parse_webhook(headers, body)
+    if not update:
+        return {"ignored": True}
+
+    from app.modules.orders.models import Order
+
+    order = None
+    if update.provider_shipment_id:
+        order = await db.scalar(
+            select(Order).where(
+                Order.shipping_service_json["frenet_shipment_id"].astext == update.provider_shipment_id
+            )
+        )
+    if not order and update.tracking_code:
+        order = await db.scalar(
+            select(Order).where(
+                Order.shipping_service_json["tracking_code"].astext == update.tracking_code
+            )
+        )
+    if not order:
+        logger.info("webhook Frenet sem pedido correspondente: %s", update)
+        return {"matched": False}
+
+    changed = await _frenet_apply_tracking(
+        db, order, tracking_code=update.tracking_code, frenet_status=update.status, source="webhook"
+    )
+    return {"matched": True, "status": update.status, "tracking_saved": changed}

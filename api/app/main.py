@@ -61,6 +61,9 @@ async def lifespan(_: FastAPI):
         ]
         for s in schedulers:
             s.start()
+        # loop paralelo de rastreio da Frenet, no mesmo módulo do Melhor
+        # Envio mas independente dele (ver `shipping/scheduler.py`)
+        me_tracking_scheduler.start_frenet()
     else:
         logger.info("RUN_SCHEDULERS=0 — agendadores internos desligados neste processo")
     try:
@@ -68,6 +71,10 @@ async def lifespan(_: FastAPI):
     finally:
         for s in schedulers:
             await s.stop()
+        if settings.run_schedulers:
+            from app.modules.shipping import scheduler as _shipping_scheduler
+
+            await _shipping_scheduler.stop_frenet()
 
 
 def create_app() -> FastAPI:

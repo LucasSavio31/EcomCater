@@ -163,3 +163,130 @@ async def stop() -> None:
         with contextlib.suppress(asyncio.CancelledError):
             await _task
     _task = None
+
+
+# --------------------------------------------------------------------- Frenet
+# Loop paralelo, independente do bloco do Melhor Envio acima (nada ali foi
+# alterado). Mesmo desenho, só que consultando `poll_frenet_tracking`.
+_frenet_task: asyncio.Task | None = None
+
+_frenet_state: dict = {
+    "enabled": False,
+    "running": False,
+    "interval_seconds": 0,
+    "started_at": None,
+    "last_run_at": None,
+    "last_run_source": None,
+    "last_result": None,
+    "next_run_at": None,
+    "runs": 0,
+}
+
+
+def note_frenet_run(result: dict, *, source: str) -> None:
+    _frenet_state["last_run_at"] = _now()
+    _frenet_state["last_run_source"] = source
+    _frenet_state["last_result"] = result
+    _frenet_state["runs"] += 1
+
+
+def frenet_status() -> dict:
+    now = _now()
+    nxt = _frenet_state["next_run_at"]
+    secs = None
+    if _frenet_state["enabled"] and nxt is not None:
+        secs = max(0, int((nxt - now).total_seconds()))
+    last = _frenet_state["last_run_at"]
+    since = int((now - last).total_seconds()) if last else None
+    return {
+        "enabled": _frenet_state["enabled"],
+        "running": _frenet_state["running"],
+        "interval_seconds": _frenet_state["interval_seconds"],
+        "started_at": _frenet_state["started_at"].isoformat() if _frenet_state["started_at"] else None,
+        "last_run_at": last.isoformat() if last else None,
+        "last_run_source": _frenet_state["last_run_source"],
+        "seconds_since_last_run": since,
+        "next_run_at": nxt.isoformat() if nxt else None,
+        "seconds_until_next_run": secs,
+        "runs": _frenet_state["runs"],
+        "last_result": _frenet_state["last_result"],
+    }
+
+
+async def _resolve_frenet_interval() -> int:
+    try:
+        from app.modules.shipping.service import load_config
+
+        async with SessionLocal() as db:
+            cfg = await load_config(db)
+        override = int(getattr(cfg, "frenet_poll_interval_seconds", 0) or 0)
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "rotina Frenet: falha ao ler o intervalo da config; mantendo o valor atual",
+            exc_info=True,
+        )
+        last = int(_frenet_state.get("interval_seconds") or 0)
+        return last if last >= 120 else max(120, settings.frenet_poll_interval_seconds)
+    base = override or settings.frenet_poll_interval_seconds
+    return max(120, base)
+
+
+async def _frenet_tick_once() -> None:
+    from app.modules.shipping.service import poll_frenet_tracking
+
+    async with SessionLocal() as db:
+        try:
+            result = await poll_frenet_tracking(db)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+    note_frenet_run(result, source="auto")
+    if result.get("updated"):
+        logger.info("sincronização Frenet: %s", result)
+
+
+async def _frenet_loop() -> None:
+    _frenet_state.update(enabled=True, running=True, started_at=_now())
+    _frenet_state["interval_seconds"] = await _resolve_frenet_interval()
+    logger.info("rotina de rastreio Frenet ativa (intervalo=%ss)", _frenet_state["interval_seconds"])
+    await asyncio.sleep(min(30, _frenet_state["interval_seconds"]))
+    while True:
+        _frenet_state["next_run_at"] = _now()
+        try:
+            await _frenet_tick_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            logger.exception("falha no tick da rotina de rastreio da Frenet")
+
+        while True:
+            interval = await _resolve_frenet_interval()
+            _frenet_state["interval_seconds"] = interval
+            anchor = _frenet_state["last_run_at"] or _now()
+            target = anchor + timedelta(seconds=interval)
+            _frenet_state["next_run_at"] = target
+            remaining = (target - _now()).total_seconds()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(15.0, remaining))
+
+
+def start_frenet() -> None:
+    global _frenet_task
+    if not settings.frenet_poll_enabled or settings.api_env == "test":
+        _frenet_state["enabled"] = False
+        return
+    if _frenet_task and not _frenet_task.done():
+        return
+    _frenet_task = asyncio.create_task(_frenet_loop(), name="frenet-tracking-poll")
+
+
+async def stop_frenet() -> None:
+    global _frenet_task
+    _frenet_state.update(running=False, enabled=False, next_run_at=None)
+    if _frenet_task and not _frenet_task.done():
+        _frenet_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await _frenet_task
+    _frenet_task = None

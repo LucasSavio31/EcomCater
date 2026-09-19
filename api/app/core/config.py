@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     me_poll_enabled: bool = True
     me_poll_interval_seconds: int = 900
 
+    # frete frenet -- rotina de rastreio paralela à do Melhor Envio acima
+    frenet_poll_enabled: bool = True
+    frenet_poll_interval_seconds: int = 900
+
     # amostra de saúde dos serviços gravada a cada janela de 15 min, mesmo com
     # ninguém olhando o painel (roda no processo da API)
     health_scheduler_enabled: bool = True

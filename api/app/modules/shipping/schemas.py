@@ -46,6 +46,12 @@ class ShippingConfigOut(BaseModel):
     free_shipping_services: list[str]
     free_shipping_all: bool = False
     free_shipping_min_cents: int | None = None
+    has_frenet_token: bool = False
+    has_frenet_partner_token: bool = False
+    frenet_webhook_header_name: str = ""
+    has_frenet_webhook_header_value: bool = False
+    frenet_poll_interval_seconds: int = 0
+    frenet_webhook_url: str = ""
 
 
 class ShippingConfigIn(BaseModel):
@@ -65,3 +71,8 @@ class ShippingConfigIn(BaseModel):
     free_shipping_services: list[str] | None = None
     free_shipping_all: bool | None = None
     free_shipping_min_cents: int | None = None
+    frenet_token: str | None = None
+    frenet_partner_token: str | None = None
+    frenet_webhook_header_name: str | None = None
+    frenet_webhook_header_value: str | None = None
+    frenet_poll_interval_seconds: int | None = None

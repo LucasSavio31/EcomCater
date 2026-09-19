@@ -248,6 +248,33 @@ async def admin_reverse_label(
     return _pdf_response(private_storage.read(key), f"devolucao-{number}.pdf")
 
 
+@router.get("/frenet/labels")
+async def frenet_labels(
+    db: DbDep,
+    _: Annotated[AdminUser, Depends(get_current_admin_downloadable)],
+    numbers: str = Query(..., description="números de pedido separados por vírgula"),
+) -> Response:
+    """Equivalente a `/melhor-envio/labels`, pra Frenet -- a etiqueta da
+    Frenet já vem pronta (URL direta), então aqui é só baixar e juntar."""
+    from app.modules.shipping import service as shipping
+
+    nums = [n.strip() for n in numbers.split(",") if n.strip()]
+    pdf = await shipping.frenet_labels_pdf(db, nums)
+    return _pdf_response(pdf, "etiquetas-frenet.pdf")
+
+
+@router.get("/{number}/frenet/label")
+async def frenet_label(
+    number: str,
+    db: DbDep,
+    _: Annotated[AdminUser, Depends(get_current_admin_downloadable)],
+) -> Response:
+    from app.modules.shipping import service as shipping
+
+    pdf = await shipping.frenet_labels_pdf(db, [number])
+    return _pdf_response(pdf, f"etiqueta-{number}.pdf")
+
+
 @router.post("/bulk-status")
 async def bulk_status(
     body: BulkStatusIn, db: DbDep, admin: EditorDep, background: BackgroundTasks
