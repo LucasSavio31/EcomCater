@@ -484,6 +484,38 @@ async def test_mini_danfe_single_order(client, admin_token, auth_headers, db, mo
 
 
 @pytest.mark.asyncio
+async def test_export_month_zip(client, admin_token, auth_headers, db, monkeypatch):
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    _pid, vid = await _make_product_with_fiscal(client, h)
+    number = await _make_order(client, vid)
+    await client.patch("/api/admin/orders/" + number, json={"cpf": VALID_CPF}, headers=h)
+    await _emit_authorized(client, h, db, monkeypatch, number)
+
+    now = datetime.datetime.now(datetime.UTC)
+    r = await client.get(f"/api/admin/nfe/export-month?year={now.year}&month={now.month}", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/zip"
+
+    import zipfile
+
+    zf = zipfile.ZipFile(io.BytesIO(r.content))
+    names = zf.namelist()
+    assert len(names) == 1
+    assert names[0].endswith("-nfe.xml")
+
+
+@pytest.mark.asyncio
+async def test_export_month_empty_returns_404(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    r = await client.get("/api/admin/nfe/export-month?year=2020&month=1", headers=h)
+    assert r.status_code == 404, r.text
+
+
+@pytest.mark.asyncio
 async def test_bulk_danfe_mini_layout(client, admin_token, auth_headers, db, monkeypatch):
     h = auth_headers(admin_token)
     await _setup_store_settings(client, h)

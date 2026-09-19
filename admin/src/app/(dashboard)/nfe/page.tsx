@@ -35,6 +35,12 @@ export default function NfePage() {
   const [certBusy, setCertBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const now = new Date();
+  const [exportMonth, setExportMonth] = useState(
+    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+  );
+  const [exportBusy, setExportBusy] = useState(false);
+
   const store = storeDraft ?? storeRes.data;
   const cfg = cfgDraft ?? cfgRes.data;
 
@@ -88,6 +94,18 @@ export default function NfePage() {
     setCertFile(null);
     setCertSenha('');
     if (fileRef.current) fileRef.current.value = '';
+  }
+
+  async function doExportMonth(): Promise<void> {
+    const [y, m] = exportMonth.split('-').map(Number);
+    if (!y || !m) {
+      toast.error('Selecione um mês.');
+      return;
+    }
+    setExportBusy(true);
+    const res = await nfeApi.downloadExportMonth(y, m);
+    setExportBusy(false);
+    if (!res.ok) toast.error(res.message);
   }
 
   return (
@@ -240,6 +258,32 @@ export default function NfePage() {
                 Só é aceito certificado modelo A1 (arquivo .pfx/.p12) — o modelo A3 (token/cartão físico)
                 não funciona num servidor.
               </p>
+            </Card>
+
+            <Card variant="outline" className="flex max-w-3xl flex-col gap-4">
+              <h3 className="text-sm font-semibold">XML para o contador</h3>
+              <p className="text-sm text-text-muted">
+                Baixa um .zip com o XML de todas as NF-e autorizadas do mês escolhido (um arquivo por
+                nota, nome = chave de acesso). O XML já fica guardado no sistema desde a emissão — isso
+                só agrupa por mês pra facilitar o envio.
+              </p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium" htmlFor="nfe-export-month">
+                    Mês
+                  </label>
+                  <input
+                    id="nfe-export-month"
+                    type="month"
+                    value={exportMonth}
+                    onChange={(e) => setExportMonth(e.target.value)}
+                    className="min-h-touch rounded-card border border-surface-border bg-surface px-3 text-sm"
+                  />
+                </div>
+                <Button size="sm" loading={exportBusy} onClick={() => void doExportMonth()}>
+                  Baixar XML do mês (.zip)
+                </Button>
+              </div>
             </Card>
           </>
         )}

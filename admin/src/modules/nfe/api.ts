@@ -204,6 +204,21 @@ export const nfeApi = {
     return { ok: true };
   },
 
+  /** .zip com o XML de todas as NF-e autorizadas do mês — pra mandar pro contador. */
+  downloadExportMonth: async (
+    year: number,
+    month: number,
+  ): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const res = await downloadFile(`/api/admin/nfe/export-month?year=${year}&month=${month}`);
+    if (!res.ok) return res;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(res.blob);
+    a.download = `nfe-${year}-${String(month).padStart(2, '0')}.zip`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    return { ok: true };
+  },
+
   openDanfe: async (orderNumber: string): Promise<{ ok: true } | { ok: false; message: string }> => {
     const res = await downloadFile(`/api/admin/nfe/orders/${orderNumber}/danfe`);
     if (!res.ok) return res;

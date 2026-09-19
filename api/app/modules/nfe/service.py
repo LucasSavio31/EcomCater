@@ -362,6 +362,53 @@ async def get_mini_danfe(db: AsyncSession, order_number: str) -> tuple[bytes, st
     return pdf, f"etiqueta-nfe-{order_number}.pdf"
 
 
+async def export_month_zip(db: AsyncSession, year: int, month: int) -> tuple[bytes, str]:
+    """Todas as NF-e autorizadas num mês, num .zip só (uma delas por
+    arquivo, nome = chave de acesso -- é o formato que o contador espera pra
+    escrituração fiscal). O XML já fica guardado no sistema desde a emissão
+    (`NfeDocument.xml_key`, no private_storage); isso aqui só agrupa por mês
+    pra download, não é um armazenamento novo."""
+    import calendar
+    import io
+    import zipfile
+
+    from app.shared.storage import private_storage
+
+    if not (1 <= month <= 12):
+        raise ValidationError("Mês inválido.")
+    start = datetime(year, month, 1, tzinfo=UTC)
+    last_day = calendar.monthrange(year, month)[1]
+    end = datetime(year, month, last_day, 23, 59, 59, tzinfo=UTC)
+
+    docs = list(
+        await db.scalars(
+            select(NfeDocument)
+            .where(
+                NfeDocument.status == "authorized",
+                NfeDocument.authorized_at >= start,
+                NfeDocument.authorized_at <= end,
+            )
+            .order_by(NfeDocument.authorized_at)
+        )
+    )
+    if not docs:
+        raise NotFoundError(f"Nenhuma NF-e autorizada em {month:02d}/{year}.")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for doc in docs:
+            if not doc.xml_key:
+                continue
+            try:
+                xml_bytes = private_storage.read(doc.xml_key)
+            except Exception:
+                logger.exception("Falha ao ler XML da NF-e %s pro export mensal", doc.order_number)
+                continue
+            zf.writestr(f"{doc.chave_acesso}-nfe.xml", xml_bytes)
+
+    return buf.getvalue(), f"nfe-{year}-{month:02d}.zip"
+
+
 async def bulk_danfe_pdf(
     db: AsyncSession, order_numbers: list[str], *, mini: bool = False
 ) -> tuple[bytes, list[str]]:

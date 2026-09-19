@@ -640,10 +640,10 @@ function PedidosPageInner() {
             loading={xlsBusy}
             onClick={() => void downloadSupplierXlsx(selectedList)}
           >
-            <IconPrinter width={16} height={16} /> Baixar .xlsx (por fornecedor)
+            <IconPrinter width={16} height={16} /> Baixar xlsx
           </Button>
           <Button size="sm" variant="outline" loading={busy} onClick={() => void sendToME()}>
-            Gerar etiquetas (ME)
+            Gerar Etiquetas
           </Button>
           <Button
             size="sm"
@@ -651,7 +651,7 @@ function PedidosPageInner() {
             loading={labelBusy}
             onClick={() => void downloadLabels(selectedList)}
           >
-            <IconTag width={16} height={16} /> Baixar etiquetas (PDF)
+            <IconTag width={16} height={16} /> Baixar Etiquetas
           </Button>
           <Button
             size="sm"
@@ -659,7 +659,7 @@ function PedidosPageInner() {
             loading={nfeEmitBusy}
             onClick={() => void bulkEmitNfe(selectedList)}
           >
-            Emitir NF-e em lote
+            Emitir NF-e
           </Button>
           <Button
             size="sm"
@@ -667,7 +667,7 @@ function PedidosPageInner() {
             loading={nfeDanfeBusy}
             onClick={() => void bulkDanfe(selectedList)}
           >
-            <IconPrinter width={16} height={16} /> Baixar DANFEs (PDF)
+            <IconPrinter width={16} height={16} /> Baixar DANFEs
           </Button>
           <Button
             size="sm"
@@ -675,7 +675,7 @@ function PedidosPageInner() {
             loading={nfeMiniDanfeBusy}
             onClick={() => void bulkDanfe(selectedList, true)}
           >
-            <IconTag width={16} height={16} /> Etiquetas NF-e (10x15)
+            <IconTag width={16} height={16} /> Baixar DANFEs Simples
           </Button>
           <Button
             size="sm"

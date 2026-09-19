@@ -176,6 +176,24 @@ async def bulk_emit(body: dict, db: DbDep, admin: EditorDep) -> dict:
     return {"results": results}
 
 
+@admin_router.get("/export-month")
+async def export_month(
+    db: DbDep,
+    _: EditorDep,
+    year: int = Query(..., ge=2020, le=2100),
+    month: int = Query(..., ge=1, le=12),
+) -> Response:
+    """.zip com o XML de todas as NF-e autorizadas no mês -- pra mandar pro
+    contador. O XML já fica guardado no sistema desde a emissão; isso só
+    agrupa por mês."""
+    content, filename = await service.export_month_zip(db, year, month)
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @admin_router.get("/bulk-danfe")
 async def bulk_danfe(
     db: DbDep,
