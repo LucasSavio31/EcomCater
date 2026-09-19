@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import io
 
 import pytest
 import pytest_asyncio
@@ -342,3 +343,123 @@ async def test_cancel_requires_justificativa_min_length(client, admin_token, aut
     number = await _make_order(client, vid)
     r = await client.post(f"/api/admin/nfe/orders/{number}/cancel", json={"justificativa": "curta"}, headers=h)
     assert r.status_code in (400, 422)
+
+
+# ------------------------------------------------ lote (seleção múltipla)
+
+async def _emit_authorized(client, h, db, monkeypatch, number: str) -> None:
+    """Emite e autoriza uma NF-e de teste pra um pedido -- helper pros testes
+    em lote, que precisam de pedidos já com NF-e autorizada."""
+    from app.modules.nfe.sefaz_client import SefazClient, SefazResultado
+
+    def fake_enviar(self, edoc_dataclass, doc_id):
+        from xsdata.formats.dataclass.serializers import XmlSerializer
+        from xsdata.formats.dataclass.serializers.config import SerializerConfig
+
+        serializer = XmlSerializer(config=SerializerConfig(xml_declaration=False))
+        xml_bytes = serializer.render(edoc_dataclass).encode("utf-8")
+        return (
+            SefazResultado(ok=True, codigo_status="103", motivo="Lote recebido", numero_recibo="1"),
+            xml_bytes,
+        )
+
+    def fake_consultar_recibo(self, numero_recibo):
+        return SefazResultado(ok=True, codigo_status="100", motivo="Autorizado", numero_protocolo="135000000001")
+
+    monkeypatch.setattr(SefazClient, "enviar", fake_enviar)
+    monkeypatch.setattr(SefazClient, "consultar_recibo", fake_consultar_recibo)
+
+    draft = (await client.get(f"/api/admin/nfe/orders/{number}/draft", headers=h)).json()
+    r = await client.post(f"/api/admin/nfe/orders/{number}", json=draft, headers=h)
+    assert r.status_code == 200, r.text
+
+    from app.modules.nfe import service
+
+    avancados = await service.poll_pending(db)
+    await db.commit()
+    assert avancados == 1
+
+
+@pytest.mark.asyncio
+async def test_status_map_batch(client, admin_token, auth_headers, db, monkeypatch):
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    _pid, vid1 = await _make_product_with_fiscal(client, h)
+    n1 = await _make_order(client, vid1)
+    await client.patch("/api/admin/orders/" + n1, json={"cpf": VALID_CPF}, headers=h)
+    await _emit_authorized(client, h, db, monkeypatch, n1)
+
+    n2 = await _make_order(client, vid1)  # sem NF-e nenhuma
+
+    r = await client.post("/api/admin/nfe/status-map", json={"numbers": [n1, n2, "NAOEXISTE"]}, headers=h)
+    assert r.status_code == 200, r.text
+    results = {item.get("order_number", "NAOEXISTE"): item for item in r.json()["results"]}
+    assert results[n1]["status"] == "authorized"
+    assert results[n2]["status"] == "none"
+    assert results["NAOEXISTE"]["status"] == "none"
+
+
+@pytest.mark.asyncio
+async def test_bulk_emit_partial_failure(client, admin_token, auth_headers, monkeypatch):
+    from app.modules.nfe.sefaz_client import SefazClient, SefazResultado
+
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    _pid, vid = await _make_product_with_fiscal(client, h)
+    n1 = await _make_order(client, vid)
+    await client.patch("/api/admin/orders/" + n1, json={"cpf": VALID_CPF}, headers=h)
+
+    def fake_enviar(self, edoc_dataclass, doc_id):
+        return (
+            SefazResultado(ok=True, codigo_status="103", motivo="Lote recebido", numero_recibo="1"),
+            b"<xml/>",
+        )
+
+    monkeypatch.setattr(SefazClient, "enviar", fake_enviar)
+
+    r = await client.post("/api/admin/nfe/bulk-emit", json={"numbers": [n1, "NAOEXISTE"]}, headers=h)
+    assert r.status_code == 200, r.text
+    results = {item["number"]: item for item in r.json()["results"]}
+    assert results[n1]["ok"] is True
+    assert results["NAOEXISTE"]["ok"] is False
+
+
+@pytest.mark.asyncio
+async def test_bulk_danfe_merges_and_reports_skipped(client, admin_token, auth_headers, db, monkeypatch):
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    _pid, vid = await _make_product_with_fiscal(client, h)
+    n1 = await _make_order(client, vid)
+    await client.patch("/api/admin/orders/" + n1, json={"cpf": VALID_CPF}, headers=h)
+    await _emit_authorized(client, h, db, monkeypatch, n1)
+
+    n2 = await _make_order(client, vid)  # sem NF-e -- deve ficar de fora, sem quebrar o lote
+
+    r = await client.get(f"/api/admin/nfe/bulk-danfe?numbers={n1},{n2}", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.headers.get("x-nfe-skipped") == n2
+
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(r.content))
+    assert len(reader.pages) >= 1
+
+
+@pytest.mark.asyncio
+async def test_bulk_danfe_all_skipped_returns_error(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    _pid, vid = await _make_product_with_fiscal(client, h)
+    number = await _make_order(client, vid)
+
+    r = await client.get(f"/api/admin/nfe/bulk-danfe?numbers={number}", headers=auth_headers(admin_token))
+    assert r.status_code == 422, r.text

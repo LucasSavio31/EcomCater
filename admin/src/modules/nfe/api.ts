@@ -79,6 +79,7 @@ export interface NfeDraft {
 
 export interface NfeDocumentOut {
   id?: string;
+  order_number?: string;
   status: 'none' | 'pending' | 'processing' | 'authorized' | 'rejected' | 'canceled' | 'error';
   status_message?: string | null;
   ambiente?: string;
@@ -91,6 +92,27 @@ export interface NfeDocumentOut {
   requested_at?: string | null;
   authorized_at?: string | null;
   canceled_at?: string | null;
+}
+
+export function nfeStatusTone(status: NfeDocumentOut['status']): 'neutral' | 'warning' | 'success' | 'danger' {
+  if (status === 'authorized') return 'success';
+  if (status === 'processing' || status === 'pending') return 'warning';
+  if (status === 'rejected' || status === 'error') return 'danger';
+  return 'neutral';
+}
+
+export function nfeStatusLabel(status: NfeDocumentOut['status']): string {
+  return (
+    {
+      none: 'Não emitida',
+      pending: 'Preparando…',
+      processing: 'Processando…',
+      authorized: 'Autorizada',
+      rejected: 'Rejeitada',
+      canceled: 'Cancelada',
+      error: 'Erro',
+    }[status] ?? status
+  );
 }
 
 async function uploadMultipart<T>(path: string, form: FormData): Promise<ApiResult<T>> {
@@ -121,7 +143,7 @@ async function uploadMultipart<T>(path: string, form: FormData): Promise<ApiResu
 
 async function downloadFile(
   path: string,
-): Promise<{ ok: true; blob: Blob } | { ok: false; message: string }> {
+): Promise<{ ok: true; blob: Blob; headers: Headers } | { ok: false; message: string }> {
   const session = getSession();
   try {
     const r = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
@@ -137,7 +159,7 @@ async function downloadFile(
       }
       return { ok: false, message: msg };
     }
-    return { ok: true, blob: await r.blob() };
+    return { ok: true, blob: await r.blob(), headers: r.headers };
   } catch {
     return { ok: false, message: 'Falha de rede.' };
   }
@@ -189,5 +211,30 @@ export const nfeApi = {
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
     return { ok: true };
+  },
+
+  // --------------------------------- lote (seleção múltipla na listagem)
+
+  statusMap: (numbers: string[]): Promise<ApiResult<{ results: NfeDocumentOut[] }>> =>
+    adminFetch<{ results: NfeDocumentOut[] }>('/api/admin/nfe/status-map', {
+      method: 'POST',
+      body: { numbers },
+    }),
+
+  bulkEmit: (
+    numbers: string[],
+  ): Promise<ApiResult<{ results: Array<{ number: string; ok: boolean; status?: string; message?: string | null }> }>> =>
+    adminFetch('/api/admin/nfe/bulk-emit', { method: 'POST', body: { numbers } }),
+
+  openBulkDanfe: async (
+    numbers: string[],
+  ): Promise<{ ok: true; skipped: string[] } | { ok: false; message: string }> => {
+    const res = await downloadFile(`/api/admin/nfe/bulk-danfe?numbers=${encodeURIComponent(numbers.join(','))}`);
+    if (!res.ok) return res;
+    const url = URL.createObjectURL(res.blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    const skippedHeader = res.headers.get('X-Nfe-Skipped');
+    return { ok: true, skipped: skippedHeader ? skippedHeader.split(',') : [] };
   },
 };

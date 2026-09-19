@@ -5,7 +5,8 @@ import { Badge, Button, Input, Modal } from '@ecom/ui';
 import { Select, Textarea } from '@/components/form-controls';
 import { useToast } from '@/components/toast';
 import { formatDateTime } from '@/lib/format';
-import { nfeApi, type NfeDocumentOut, type NfeDraft } from '@/modules/nfe/api';
+import { maskCep, maskCpfCnpj, maskDigits } from '@/lib/br-masks';
+import { nfeApi, nfeStatusLabel, nfeStatusTone, type NfeDocumentOut, type NfeDraft } from '@/modules/nfe/api';
 
 const TPAG_LABELS: Record<string, string> = {
   '01': 'Dinheiro',
@@ -20,27 +21,6 @@ const TPAG_LABELS: Record<string, string> = {
 
 function centsToStr(cents: number): string {
   return (cents / 100).toFixed(2).replace('.', ',');
-}
-
-function statusTone(status: NfeDocumentOut['status']): 'neutral' | 'warning' | 'success' | 'danger' {
-  if (status === 'authorized') return 'success';
-  if (status === 'processing' || status === 'pending') return 'warning';
-  if (status === 'rejected' || status === 'error') return 'danger';
-  return 'neutral';
-}
-
-function statusLabel(status: NfeDocumentOut['status']): string {
-  return (
-    {
-      none: 'NF-e não emitida',
-      pending: 'Preparando…',
-      processing: 'Processando na SEFAZ…',
-      authorized: 'Autorizada',
-      rejected: 'Rejeitada',
-      canceled: 'Cancelada',
-      error: 'Erro',
-    }[status] ?? status
-  );
 }
 
 type ModalPhase = 'draft' | 'sending' | 'status';
@@ -181,7 +161,7 @@ export function NfePanel({ orderNumber }: { orderNumber: string }) {
     <>
       <div className="inline-flex flex-wrap items-center gap-2">
         {status && status.status !== 'none' && (
-          <Badge tone={statusTone(status.status)}>{statusLabel(status.status)}</Badge>
+          <Badge tone={nfeStatusTone(status.status)}>{nfeStatusLabel(status.status)}</Badge>
         )}
         {canEmit && (
           <Button size="sm" variant="outline" onClick={() => void openEmitPopup()}>
@@ -222,6 +202,7 @@ export function NfePanel({ orderNumber }: { orderNumber: string }) {
             : undefined
         }
         size="lg"
+        className="max-h-[90vh] sm:max-h-[85vh]"
         footer={
           phase === 'draft' ? (
             <>
@@ -266,9 +247,19 @@ export function NfePanel({ orderNumber }: { orderNumber: string }) {
                   onChange={(e) => setDraft({ ...draft, destinatario: { ...draft.destinatario, nome: e.target.value } })}
                 />
                 <Input
-                  label="CPF"
-                  value={draft.destinatario.cpf}
-                  onChange={(e) => setDraft({ ...draft, destinatario: { ...draft.destinatario, cpf: e.target.value } })}
+                  label="CPF / CNPJ"
+                  value={maskCpfCnpj(draft.destinatario.cpf || draft.destinatario.cnpj)}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '');
+                    const masked = maskCpfCnpj(e.target.value);
+                    setDraft({
+                      ...draft,
+                      destinatario:
+                        digits.length > 11
+                          ? { ...draft.destinatario, cnpj: masked, cpf: '' }
+                          : { ...draft.destinatario, cpf: masked, cnpj: '' },
+                    });
+                  }}
                 />
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -287,16 +278,17 @@ export function NfePanel({ orderNumber }: { orderNumber: string }) {
                   <Input
                     key={key}
                     label={label}
-                    value={draft.destinatario.endereco[key]}
-                    onChange={(e) =>
+                    value={key === 'cep' ? maskCep(draft.destinatario.endereco[key]) : draft.destinatario.endereco[key]}
+                    onChange={(e) => {
+                      const value = key === 'cep' ? maskCep(e.target.value) : e.target.value;
                       setDraft({
                         ...draft,
                         destinatario: {
                           ...draft.destinatario,
-                          endereco: { ...draft.destinatario.endereco, [key]: e.target.value },
+                          endereco: { ...draft.destinatario.endereco, [key]: value },
                         },
-                      })
-                    }
+                      });
+                    }}
                   />
                 ))}
               </div>
@@ -309,19 +301,31 @@ export function NfePanel({ orderNumber }: { orderNumber: string }) {
                   <div key={idx} className="rounded-card border border-surface-border p-3">
                     <p className="mb-2 text-sm font-medium">{item.descricao}</p>
                     <div className="grid gap-3 sm:grid-cols-3">
-                      <Input label="NCM" value={item.ncm} onChange={(e) => setItem(idx, { ncm: e.target.value })} />
-                      <Input label="CFOP" value={item.cfop} onChange={(e) => setItem(idx, { cfop: e.target.value })} />
-                      <Input label="CEST" value={item.cest} onChange={(e) => setItem(idx, { cest: e.target.value })} />
+                      <Input
+                        label="NCM"
+                        value={maskDigits(item.ncm, 8)}
+                        onChange={(e) => setItem(idx, { ncm: maskDigits(e.target.value, 8) })}
+                      />
+                      <Input
+                        label="CFOP"
+                        value={maskDigits(item.cfop, 4)}
+                        onChange={(e) => setItem(idx, { cfop: maskDigits(e.target.value, 4) })}
+                      />
+                      <Input
+                        label="CEST"
+                        value={maskDigits(item.cest, 7)}
+                        onChange={(e) => setItem(idx, { cest: maskDigits(e.target.value, 7) })}
+                      />
                       <Input
                         label="CSOSN/CST"
-                        value={item.csosn_cst}
-                        onChange={(e) => setItem(idx, { csosn_cst: e.target.value })}
+                        value={maskDigits(item.csosn_cst, 3)}
+                        onChange={(e) => setItem(idx, { csosn_cst: maskDigits(e.target.value, 3) })}
                       />
-                      <Input label="Unidade" value={item.unidade} onChange={(e) => setItem(idx, { unidade: e.target.value })} />
+                      <Input label="Unidade" value={item.unidade} onChange={(e) => setItem(idx, { unidade: e.target.value.toUpperCase() })} />
                       <Input
                         label="Origem"
-                        value={item.origem}
-                        onChange={(e) => setItem(idx, { origem: e.target.value })}
+                        value={maskDigits(item.origem, 1)}
+                        onChange={(e) => setItem(idx, { origem: maskDigits(e.target.value, 1) })}
                       />
                     </div>
                   </div>
@@ -370,8 +374,8 @@ export function NfePanel({ orderNumber }: { orderNumber: string }) {
 
         {phase === 'status' && status && (
           <div className="flex flex-col items-center gap-4 py-6 text-center">
-            <Badge tone={statusTone(status.status)} className="text-sm">
-              {statusLabel(status.status)}
+            <Badge tone={nfeStatusTone(status.status)} className="text-sm">
+              {nfeStatusLabel(status.status)}
             </Badge>
             {status.status === 'processing' && (
               <>

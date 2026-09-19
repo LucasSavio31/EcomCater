@@ -105,6 +105,24 @@ async def latest_for_order(db: AsyncSession, order_id: uuid.UUID) -> NfeDocument
     )
 
 
+async def latest_for_order_numbers(db: AsyncSession, numbers: list[str]) -> dict[str, NfeDocument]:
+    """Última `NfeDocument` de cada número de pedido, numa única consulta
+    (pro status em lote na listagem de pedidos, sem um SELECT por linha)."""
+    if not numbers:
+        return {}
+    rows = list(
+        await db.scalars(
+            select(NfeDocument)
+            .where(NfeDocument.order_number.in_(numbers))
+            .order_by(NfeDocument.order_number, NfeDocument.created_at.desc())
+        )
+    )
+    latest: dict[str, NfeDocument] = {}
+    for doc in rows:
+        latest.setdefault(doc.order_number, doc)  # primeira ocorrência = mais recente (já ordenado)
+    return latest
+
+
 async def _get_certificate(cfg: NfeConfig) -> bytes:
     from app.shared.storage import private_storage
 
@@ -196,6 +214,31 @@ async def request_emission(
     await db.flush()
     await _log_event(db, order, "nfe_requested", f"NF-e {chave} enviada — {doc.status_message or doc.status}")
     return doc
+
+
+async def bulk_emit(db: AsyncSession, order_numbers: list[str], admin_id: uuid.UUID | None) -> list[dict]:
+    """Emite vários pedidos de uma vez, sem revisão manual -- monta o
+    rascunho automático (mesmo default de `build_draft`) e envia direto.
+    Um erro num pedido não derruba os outros; resultado por pedido."""
+    from app.modules.orders.service import get_by_number
+
+    results: list[dict] = []
+    for number in order_numbers:
+        try:
+            order = await get_by_number(db, number)
+            if not order:
+                results.append({"number": number, "ok": False, "message": "Pedido não encontrado."})
+                continue
+            payload = await build_draft(db, order)
+            doc = await request_emission(db, order, payload, admin_id)
+            ok = doc.status not in ("rejected", "error")
+            results.append(
+                {"number": number, "ok": ok, "status": doc.status, "message": doc.status_message}
+            )
+        except Exception as exc:  # noqa: BLE001 -- um pedido ruim não pode travar o lote
+            logger.exception("Falha ao emitir NF-e em lote pro pedido %s", number)
+            results.append({"number": number, "ok": False, "message": str(exc)})
+    return results
 
 
 async def poll_pending(db: AsyncSession) -> int:
@@ -297,6 +340,41 @@ async def get_danfe(db: AsyncSession, order_number: str) -> tuple[bytes, str]:
     if not doc or not doc.danfe_key:
         raise NotFoundError("DANFE ainda não disponível.")
     return private_storage.read(doc.danfe_key), f"danfe-{order_number}.pdf"
+
+
+async def bulk_danfe_pdf(db: AsyncSession, order_numbers: list[str]) -> tuple[bytes, list[str]]:
+    """Junta o DANFE de vários pedidos num PDF só (cada DANFE já é gerado e
+    guardado por separado -- diferente do PDF de etiquetas do Melhor Envio,
+    que vem pronto combinado da API deles; aqui precisa concatenar de
+    verdade). Pedidos sem NF-e autorizada são pulados, não erram o lote --
+    retorna a lista de quem ficou de fora pra avisar o admin."""
+    import io
+
+    from pypdf import PdfReader, PdfWriter
+
+    from app.shared.storage import private_storage
+
+    latest = await latest_for_order_numbers(db, order_numbers)
+    writer = PdfWriter()
+    skipped: list[str] = []
+    for number in order_numbers:
+        doc = latest.get(number)
+        if not doc or doc.status != "authorized" or not doc.danfe_key:
+            skipped.append(number)
+            continue
+        try:
+            pdf_bytes = private_storage.read(doc.danfe_key)
+            writer.append(PdfReader(io.BytesIO(pdf_bytes)))
+        except Exception:
+            logger.exception("Falha ao ler DANFE do pedido %s pro PDF em lote", number)
+            skipped.append(number)
+
+    if len(writer.pages) == 0:
+        raise ValidationError("Nenhum dos pedidos selecionados tem NF-e autorizada com DANFE disponível.")
+
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue(), skipped
 
 
 # --------------------------------------------------------------- cancelamento

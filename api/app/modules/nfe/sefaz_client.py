@@ -76,6 +76,12 @@ class SefazClient:
 
         xml_etree = _to_etree(edoc_dataclass)
         xml_assinado = self._nfe.assina_raiz(xml_etree, doc_id)
+        # `assina_xml2` (erpbrasil.assinatura) às vezes devolve str em vez de
+        # bytes, dependendo do caminho interno -- normaliza aqui pra nunca
+        # quebrar quem grava isso no storage (bug real visto em produção:
+        # TypeError salvando o XML assinado com certificado de verdade).
+        if isinstance(xml_assinado, str):
+            xml_assinado = xml_assinado.encode("utf-8")
 
         raiz = retEnviNFe.TEnviNFe(
             versao="4.00",

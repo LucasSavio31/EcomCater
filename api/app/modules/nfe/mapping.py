@@ -181,6 +181,25 @@ def build_xml(payload: dict):
     totais = payload["totais"]
     pagamento = payload["pagamento"]
 
+    # o formulário do admin usa máscara (CPF/CNPJ/CEP com pontuação) -- a
+    # SEFAZ exige esses campos só com dígitos, então normaliza aqui, não
+    # confia que quem chamou já mandou limpo (defesa em profundidade: tanto
+    # o popup de emissão quanto uma eventual chamada direta da API caem aqui).
+    def _digits(v: str | None) -> str:
+        return "".join(ch for ch in (v or "") if ch.isdigit())
+
+    emit["cnpj"] = _digits(emit.get("cnpj"))
+    if emit.get("ie") and emit["ie"].strip().upper() != "ISENTO":
+        emit["ie"] = _digits(emit["ie"])
+    emit["endereco"]["cep"] = _digits(emit["endereco"].get("cep"))
+    dest["cpf"] = _digits(dest.get("cpf"))
+    dest["cnpj"] = _digits(dest.get("cnpj"))
+    dest["endereco"]["cep"] = _digits(dest["endereco"].get("cep"))
+    for it in payload["itens"]:
+        it["ncm"] = _digits(it.get("ncm"))
+        it["cfop"] = _digits(it.get("cfop"))
+        it["cest"] = _digits(it.get("cest"))
+
     faltando = []
     if not emit.get("cnpj"):
         faltando.append("CNPJ do emitente")

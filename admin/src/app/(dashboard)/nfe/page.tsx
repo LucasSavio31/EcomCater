@@ -9,6 +9,7 @@ import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { appearanceApi, type StoreSettings } from '@/modules/appearance/api';
 import { nfeApi, type NfeConfig } from '@/modules/nfe/api';
+import { maskCep, maskCnpj, maskDigits } from '@/lib/br-masks';
 
 const ADDR_FIELDS: Array<[keyof NonNullable<StoreSettings['address_json']>, string]> = [
   ['street', 'Rua'],
@@ -102,7 +103,7 @@ export default function NfePage() {
             <h3 className="text-sm font-semibold">Dados fiscais da empresa (emitente)</h3>
             <div className="grid gap-4 sm:grid-cols-2">
               <Input label="Razão social" value={store.legal_name ?? ''} onChange={(e) => setStore('legal_name', e.target.value)} />
-              <Input label="CNPJ" value={store.cnpj ?? ''} onChange={(e) => setStore('cnpj', e.target.value)} />
+              <Input label="CNPJ" value={maskCnpj(store.cnpj ?? '')} onChange={(e) => setStore('cnpj', maskCnpj(e.target.value))} />
               <Input label="Inscrição Estadual" value={store.ie ?? ''} onChange={(e) => setStore('ie', e.target.value)} />
               <Select
                 label="Regime tributário"
@@ -114,12 +115,16 @@ export default function NfePage() {
                 ]}
                 onChange={(e) => setStore('regime_tributario', e.target.value)}
               />
-              <Input label="CNAE fiscal" value={store.cnae_fiscal ?? ''} onChange={(e) => setStore('cnae_fiscal', e.target.value)} />
+              <Input
+                label="CNAE fiscal"
+                value={maskDigits(store.cnae_fiscal ?? '', 7)}
+                onChange={(e) => setStore('cnae_fiscal', maskDigits(e.target.value, 7))}
+              />
               <Input
                 label="Código IBGE do município (opcional)"
                 hint="Deixe em branco para detectar automaticamente pela cidade/UF do endereço."
-                value={store.municipio_ibge ?? ''}
-                onChange={(e) => setStore('municipio_ibge', e.target.value)}
+                value={maskDigits(store.municipio_ibge ?? '', 7)}
+                onChange={(e) => setStore('municipio_ibge', maskDigits(e.target.value, 7))}
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
@@ -127,8 +132,8 @@ export default function NfePage() {
                 <Input
                   key={key}
                   label={label}
-                  value={store.address_json?.[key] ?? ''}
-                  onChange={(e) => setAddr(key, e.target.value)}
+                  value={key === 'zip' ? maskCep(store.address_json?.[key] ?? '') : (store.address_json?.[key] ?? '')}
+                  onChange={(e) => setAddr(key, key === 'zip' ? maskCep(e.target.value) : e.target.value)}
                 />
               ))}
             </div>

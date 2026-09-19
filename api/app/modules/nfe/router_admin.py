@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -64,6 +64,7 @@ async def upload_certificate(
 def _doc_out(doc) -> dict:
     return {
         "id": str(doc.id),
+        "order_number": doc.order_number,
         "status": doc.status,
         "status_message": doc.status_message,
         "ambiente": doc.ambiente,
@@ -135,3 +136,44 @@ async def cancel(number: str, body: dict, db: DbDep, admin: EditorDep) -> dict:
         raise ValidationError("Nenhuma NF-e emitida pra este pedido.")
     doc = await service.cancel(db, doc, body.get("justificativa", ""), admin.id)
     return _doc_out(doc)
+
+
+# --------------------------------------------------------------- lote (seleção múltipla na listagem)
+
+
+@admin_router.post("/status-map")
+async def status_map(body: dict, db: DbDep, _: EditorDep) -> dict:
+    """Status da NF-e mais recente de vários pedidos de uma vez -- alimenta
+    a coluna "NF-e" na listagem sem um GET por linha."""
+    numbers = [str(n) for n in body.get("numbers", []) if n]
+    latest = await service.latest_for_order_numbers(db, numbers)
+    return {
+        "results": [
+            _doc_out(latest[number]) if number in latest else {"order_number": number, "status": "none"}
+            for number in numbers
+        ]
+    }
+
+
+@admin_router.post("/bulk-emit")
+async def bulk_emit(body: dict, db: DbDep, admin: EditorDep) -> dict:
+    """Emite vários pedidos de uma vez, sem tela de revisão -- usa o
+    rascunho automático. Um pedido com problema não impede os outros."""
+    numbers = [str(n) for n in body.get("numbers", []) if n]
+    results = await service.bulk_emit(db, numbers, admin.id)
+    return {"results": results}
+
+
+@admin_router.get("/bulk-danfe")
+async def bulk_danfe(
+    db: DbDep,
+    _: EditorDep,
+    numbers: str = Query(..., description="números de pedido separados por vírgula"),
+) -> Response:
+    nums = [n.strip() for n in numbers.split(",") if n.strip()]
+    pdf, skipped = await service.bulk_danfe_pdf(db, nums)
+    headers = {"Content-Disposition": 'inline; filename="danfes.pdf"'}
+    if skipped:
+        # nomes de pedido não contêm vírgula -- seguro juntar assim
+        headers["X-Nfe-Skipped"] = ",".join(skipped)
+    return Response(content=pdf, media_type="application/pdf", headers=headers)

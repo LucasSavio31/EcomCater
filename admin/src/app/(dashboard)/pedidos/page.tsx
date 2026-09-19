@@ -22,6 +22,7 @@ import { ADMIN_API_BASE_URL } from '@/lib/admin-api-client';
 import { getSession } from '@/lib/auth-storage';
 import { ordersApi } from '@/modules/orders/api';
 import type { OrderListItem, OrderStatus } from '@/modules/orders/types';
+import { nfeApi, nfeStatusLabel, type NfeDocumentOut } from '@/modules/nfe/api';
 
 const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: 'pending_payment', label: 'Aguardando pagamento' },
@@ -95,6 +96,26 @@ function PedidosPageInner() {
     pageSize,
   ]);
   const rows = data?.items ?? [];
+
+  // Status da NF-e por pedido (linhas da página atual, uma consulta em lote)
+  const [nfeStatus, setNfeStatus] = useState<Record<string, NfeDocumentOut['status']>>({});
+  useEffect(() => {
+    const numbers = rows.map((o) => o.number);
+    if (numbers.length === 0) return;
+    let cancelled = false;
+    void nfeApi.statusMap(numbers).then((res) => {
+      if (cancelled || !res.ok) return;
+      const map: Record<string, NfeDocumentOut['status']> = {};
+      for (const r of res.data.results) {
+        if (r.order_number) map[r.order_number] = r.status;
+      }
+      setNfeStatus(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.map((o) => o.number).join(',')]);
 
   // Atualização em tempo real: revalida a lista a cada 8s sem piscar a tela
   // (só troca os dados quando algo muda). Pausa fora de foco / durante ações.
@@ -259,6 +280,26 @@ function PedidosPageInner() {
         ),
     },
     {
+      key: 'nfe',
+      header: 'NF-e',
+      cell: (o) => {
+        const st = nfeStatus[o.number];
+        if (!st || st === 'none') return <span className="text-xs text-text-muted">—</span>;
+        const tone =
+          st === 'authorized' ? 'green' : st === 'processing' || st === 'pending' ? 'amber' : 'red';
+        const colors: Record<string, string> = {
+          green: 'bg-green-600/10 text-green-600',
+          amber: 'bg-amber-600/10 text-amber-600',
+          red: 'bg-red-600/10 text-red-600',
+        };
+        return (
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors[tone]}`}>
+            {nfeStatusLabel(st)}
+          </span>
+        );
+      },
+    },
+    {
       key: 'date',
       header: 'Data',
       cell: (o) => (
@@ -411,6 +452,45 @@ function PedidosPageInner() {
     } finally {
       setLabelBusy(false);
     }
+  }
+
+  const [nfeEmitBusy, setNfeEmitBusy] = useState(false);
+  async function bulkEmitNfe(numbers: string[]) {
+    if (!numbers.length) return;
+    setNfeEmitBusy(true);
+    const res = await nfeApi.bulkEmit(numbers);
+    setNfeEmitBusy(false);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return;
+    }
+    const fail = res.data.results.filter((r) => !r.ok);
+    const ok = res.data.results.length - fail.length;
+    if (ok) toast.success(`${ok} NF-e enviada(s) pra SEFAZ.`);
+    if (fail.length) {
+      toast.error(`${fail.length} não enviada(s).${fail[0]?.message ? ` ${fail[0].message}` : ''}`);
+    }
+    setSelected(new Set());
+    reload();
+  }
+
+  const [nfeDanfeBusy, setNfeDanfeBusy] = useState(false);
+  async function bulkDanfe(numbers: string[]) {
+    if (!numbers.length) return;
+    setNfeDanfeBusy(true);
+    const res = await nfeApi.openBulkDanfe(numbers);
+    setNfeDanfeBusy(false);
+    if (!res.ok) {
+      toast.error(res.message);
+      return;
+    }
+    if (res.skipped.length) {
+      toast.push(
+        `${res.skipped.length} pedido(s) sem NF-e autorizada ficaram de fora: ${res.skipped.join(', ')}`,
+        'info',
+      );
+    }
+    setSelected(new Set());
   }
 
   type SyncInfo = Extract<
@@ -570,6 +650,22 @@ function PedidosPageInner() {
             onClick={() => void downloadLabels(selectedList)}
           >
             <IconTag width={16} height={16} /> Baixar etiquetas (PDF)
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            loading={nfeEmitBusy}
+            onClick={() => void bulkEmitNfe(selectedList)}
+          >
+            Emitir NF-e em lote
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            loading={nfeDanfeBusy}
+            onClick={() => void bulkDanfe(selectedList)}
+          >
+            <IconPrinter width={16} height={16} /> Baixar DANFEs (PDF)
           </Button>
           <Button
             size="sm"

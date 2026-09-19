@@ -11,6 +11,7 @@ import { sizeChartsApi, type SizeChart } from '@/modules/size-charts/api';
 import { StatusBadge } from '@/components/status-badge';
 import { useToast } from '@/components/toast';
 import { centsToInput, inputToCents, slugify } from '@/lib/format';
+import { maskDigits } from '@/lib/br-masks';
 import { productsApi } from '@/modules/catalog/api';
 import type { Category, ProductDetail, ProductInput, ProductStatus } from '@/modules/catalog/types';
 import { VariantsTab } from './variants-tab';
@@ -457,26 +458,26 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
               <Input
                 label="NCM"
                 hint="Classificação fiscal (8 dígitos)"
-                value={state.ncm}
-                onChange={(e) => set('ncm', e.target.value)}
+                value={maskDigits(state.ncm, 8)}
+                onChange={(e) => set('ncm', maskDigits(e.target.value, 8))}
               />
               <Input
                 label="CFOP"
                 hint="Vazio = usa o padrão da config (dentro/fora UF)"
-                value={state.cfop}
-                onChange={(e) => set('cfop', e.target.value)}
+                value={maskDigits(state.cfop, 4)}
+                onChange={(e) => set('cfop', maskDigits(e.target.value, 4))}
               />
               <Input
                 label="CEST"
                 hint="Só produtos com Substituição Tributária"
-                value={state.cest}
-                onChange={(e) => set('cest', e.target.value)}
+                value={maskDigits(state.cest, 7)}
+                onChange={(e) => set('cest', maskDigits(e.target.value, 7))}
               />
               <Input
                 label="CSOSN / CST"
                 hint="Código de tributação do ICMS (Simples Nacional usa CSOSN)"
-                value={state.csosn_cst}
-                onChange={(e) => set('csosn_cst', e.target.value)}
+                value={maskDigits(state.csosn_cst, 3)}
+                onChange={(e) => set('csosn_cst', maskDigits(e.target.value, 3))}
               />
               <Select
                 label="Origem da mercadoria"

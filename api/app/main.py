@@ -101,6 +101,9 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # sem isso o JS do admin não enxerga headers de resposta custom
+        # (ex.: X-Nfe-Skipped, no PDF de DANFE em lote) em origem cruzada
+        expose_headers=["X-Nfe-Skipped"],
     )
     # Cache-Control em GET público (catálogo/tema/menus/mídia) — janela curta
     # p/ proxy/navegador/CDN; invalidação real é por tag no Next.
