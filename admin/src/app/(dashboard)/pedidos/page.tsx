@@ -475,11 +475,13 @@ function PedidosPageInner() {
   }
 
   const [nfeDanfeBusy, setNfeDanfeBusy] = useState(false);
-  async function bulkDanfe(numbers: string[]) {
+  const [nfeMiniDanfeBusy, setNfeMiniDanfeBusy] = useState(false);
+  async function bulkDanfe(numbers: string[], mini = false) {
     if (!numbers.length) return;
-    setNfeDanfeBusy(true);
-    const res = await nfeApi.openBulkDanfe(numbers);
-    setNfeDanfeBusy(false);
+    const setBusyFlag = mini ? setNfeMiniDanfeBusy : setNfeDanfeBusy;
+    setBusyFlag(true);
+    const res = await nfeApi.openBulkDanfe(numbers, mini);
+    setBusyFlag(false);
     if (!res.ok) {
       toast.error(res.message);
       return;
@@ -666,6 +668,14 @@ function PedidosPageInner() {
             onClick={() => void bulkDanfe(selectedList)}
           >
             <IconPrinter width={16} height={16} /> Baixar DANFEs (PDF)
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            loading={nfeMiniDanfeBusy}
+            onClick={() => void bulkDanfe(selectedList, true)}
+          >
+            <IconTag width={16} height={16} /> Etiquetas NF-e (10x15)
           </Button>
           <Button
             size="sm"

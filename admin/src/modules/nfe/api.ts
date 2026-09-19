@@ -213,6 +213,17 @@ export const nfeApi = {
     return { ok: true };
   },
 
+  /** DANFE Simplificado – Etiqueta (NT 2020.004), 10x15 — pra imprimir na
+   * térmica junto com a etiqueta de envio, igual Mercado Livre/Shopee. */
+  openMiniDanfe: async (orderNumber: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const res = await downloadFile(`/api/admin/nfe/orders/${orderNumber}/mini-danfe`);
+    if (!res.ok) return res;
+    const url = URL.createObjectURL(res.blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return { ok: true };
+  },
+
   // --------------------------------- lote (seleção múltipla na listagem)
 
   statusMap: (numbers: string[]): Promise<ApiResult<{ results: NfeDocumentOut[] }>> =>
@@ -228,8 +239,10 @@ export const nfeApi = {
 
   openBulkDanfe: async (
     numbers: string[],
+    mini = false,
   ): Promise<{ ok: true; skipped: string[] } | { ok: false; message: string }> => {
-    const res = await downloadFile(`/api/admin/nfe/bulk-danfe?numbers=${encodeURIComponent(numbers.join(','))}`);
+    const qs = `numbers=${encodeURIComponent(numbers.join(','))}${mini ? '&mini=true' : ''}`;
+    const res = await downloadFile(`/api/admin/nfe/bulk-danfe?${qs}`);
     if (!res.ok) return res;
     const url = URL.createObjectURL(res.blob);
     window.open(url, '_blank');

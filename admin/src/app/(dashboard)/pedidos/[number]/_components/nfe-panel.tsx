@@ -150,6 +150,14 @@ export function NfePanel({ orderNumber }: { orderNumber: string }) {
     if (!res.ok) toast.error(res.message);
   }
 
+  const [miniDanfeBusy, setMiniDanfeBusy] = useState(false);
+  async function doOpenMiniDanfe(): Promise<void> {
+    setMiniDanfeBusy(true);
+    const res = await nfeApi.openMiniDanfe(orderNumber);
+    setMiniDanfeBusy(false);
+    if (!res.ok) toast.error(res.message);
+  }
+
   function closeModal(): void {
     setModalOpen(false);
     setDraft(null);
@@ -180,6 +188,9 @@ export function NfePanel({ orderNumber }: { orderNumber: string }) {
             </Button>
             <Button size="sm" variant="outline" loading={danfeBusy} onClick={() => void doOpenDanfe()}>
               Baixar DANFE
+            </Button>
+            <Button size="sm" variant="outline" loading={miniDanfeBusy} onClick={() => void doOpenMiniDanfe()}>
+              Etiqueta NF (10x15)
             </Button>
             <Button size="sm" variant="ghost" className="text-danger" onClick={() => setCancelOpen(true)}>
               Cancelar NF-e
@@ -393,9 +404,12 @@ export function NfePanel({ orderNumber }: { orderNumber: string }) {
                   <br />
                   Protocolo: {status.protocolo_autorizacao}
                 </p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button loading={danfeBusy} onClick={() => void doOpenDanfe()}>
                     Imprimir DANFE
+                  </Button>
+                  <Button variant="outline" loading={miniDanfeBusy} onClick={() => void doOpenMiniDanfe()}>
+                    Etiqueta NF (10x15)
                   </Button>
                   <Button variant="outline" loading={xmlBusy} onClick={() => void doDownloadXml()}>
                     Baixar XML

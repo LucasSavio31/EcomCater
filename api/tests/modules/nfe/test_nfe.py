@@ -456,6 +456,51 @@ async def test_bulk_danfe_merges_and_reports_skipped(client, admin_token, auth_h
 
 
 @pytest.mark.asyncio
+async def test_mini_danfe_single_order(client, admin_token, auth_headers, db, monkeypatch):
+    """DANFE Simplificado – Etiqueta (NT 2020.004), 10x15 -- o layout
+    alternativo pra impressora térmica pedido pelo usuário."""
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    _pid, vid = await _make_product_with_fiscal(client, h)
+    number = await _make_order(client, vid)
+    await client.patch("/api/admin/orders/" + number, json={"cpf": VALID_CPF}, headers=h)
+    await _emit_authorized(client, h, db, monkeypatch, number)
+
+    r = await client.get(f"/api/admin/nfe/orders/{number}/mini-danfe", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/pdf"
+
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(r.content))
+    assert len(reader.pages) == 1
+    page = reader.pages[0]
+    # 100x150mm em pontos (1mm = 2.8346pt) -- confere que é mesmo formato etiqueta, não A4
+    assert round(float(page.mediabox.width) / 2.8346) == 100
+    assert round(float(page.mediabox.height) / 2.8346) == 150
+
+
+@pytest.mark.asyncio
+async def test_bulk_danfe_mini_layout(client, admin_token, auth_headers, db, monkeypatch):
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    _pid, vid = await _make_product_with_fiscal(client, h)
+    number = await _make_order(client, vid)
+    await client.patch("/api/admin/orders/" + number, json={"cpf": VALID_CPF}, headers=h)
+    await _emit_authorized(client, h, db, monkeypatch, number)
+
+    r = await client.get(f"/api/admin/nfe/bulk-danfe?numbers={number}&mini=true", headers=h)
+    assert r.status_code == 200, r.text
+    assert "etiquetas-nfe.pdf" in r.headers["content-disposition"]
+
+
+@pytest.mark.asyncio
 async def test_bulk_danfe_all_skipped_returns_error(client, admin_token, auth_headers):
     h = auth_headers(admin_token)
     _pid, vid = await _make_product_with_fiscal(client, h)

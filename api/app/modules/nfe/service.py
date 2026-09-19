@@ -342,16 +342,40 @@ async def get_danfe(db: AsyncSession, order_number: str) -> tuple[bytes, str]:
     return private_storage.read(doc.danfe_key), f"danfe-{order_number}.pdf"
 
 
-async def bulk_danfe_pdf(db: AsyncSession, order_numbers: list[str]) -> tuple[bytes, list[str]]:
-    """Junta o DANFE de vários pedidos num PDF só (cada DANFE já é gerado e
-    guardado por separado -- diferente do PDF de etiquetas do Melhor Envio,
-    que vem pronto combinado da API deles; aqui precisa concatenar de
-    verdade). Pedidos sem NF-e autorizada são pulados, não erram o lote --
-    retorna a lista de quem ficou de fora pra avisar o admin."""
+async def get_mini_danfe(db: AsyncSession, order_number: str) -> tuple[bytes, str]:
+    """DANFE Simplificado – Etiqueta (NT 2020.004), formato 10x15 pra
+    impressora térmica -- gerado na hora a partir do XML já assinado (não
+    precisa de um `_key` próprio guardado, é leve montar de novo)."""
+    from app.modules.nfe.mini_danfe import build_mini_danfe
+    from app.shared.storage import private_storage
+
+    doc = await db.scalar(
+        select(NfeDocument)
+        .where(NfeDocument.order_number == order_number, NfeDocument.status == "authorized")
+        .order_by(NfeDocument.created_at.desc())
+        .limit(1)
+    )
+    if not doc or not doc.xml_key:
+        raise NotFoundError("NF-e ainda não autorizada.")
+    xml_bytes = private_storage.read(doc.xml_key)
+    pdf = build_mini_danfe(xml_bytes, doc.protocolo_autorizacao)
+    return pdf, f"etiqueta-nfe-{order_number}.pdf"
+
+
+async def bulk_danfe_pdf(
+    db: AsyncSession, order_numbers: list[str], *, mini: bool = False
+) -> tuple[bytes, list[str]]:
+    """Junta o DANFE (ou o Simplificado – Etiqueta, se `mini=True`) de vários
+    pedidos num PDF só (cada DANFE já é gerado e guardado por separado --
+    diferente do PDF de etiquetas do Melhor Envio, que vem pronto combinado
+    da API deles; aqui precisa concatenar de verdade). Pedidos sem NF-e
+    autorizada são pulados, não erram o lote -- retorna a lista de quem
+    ficou de fora pra avisar o admin."""
     import io
 
     from pypdf import PdfReader, PdfWriter
 
+    from app.modules.nfe.mini_danfe import build_mini_danfe
     from app.shared.storage import private_storage
 
     latest = await latest_for_order_numbers(db, order_numbers)
@@ -359,11 +383,18 @@ async def bulk_danfe_pdf(db: AsyncSession, order_numbers: list[str]) -> tuple[by
     skipped: list[str] = []
     for number in order_numbers:
         doc = latest.get(number)
-        if not doc or doc.status != "authorized" or not doc.danfe_key:
+        if not doc or doc.status != "authorized" or not doc.xml_key:
             skipped.append(number)
             continue
         try:
-            pdf_bytes = private_storage.read(doc.danfe_key)
+            if mini:
+                xml_bytes = private_storage.read(doc.xml_key)
+                pdf_bytes = build_mini_danfe(xml_bytes, doc.protocolo_autorizacao)
+            else:
+                if not doc.danfe_key:
+                    skipped.append(number)
+                    continue
+                pdf_bytes = private_storage.read(doc.danfe_key)
             writer.append(PdfReader(io.BytesIO(pdf_bytes)))
         except Exception:
             logger.exception("Falha ao ler DANFE do pedido %s pro PDF em lote", number)

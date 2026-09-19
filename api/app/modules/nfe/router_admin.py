@@ -126,6 +126,18 @@ async def download_danfe(number: str, db: DbDep, _: EditorDep) -> Response:
     )
 
 
+@admin_router.get("/orders/{number}/mini-danfe")
+async def download_mini_danfe(number: str, db: DbDep, _: EditorDep) -> Response:
+    """DANFE Simplificado – Etiqueta (NT 2020.004), 10x15 -- pra imprimir na
+    térmica junto com a etiqueta de envio, igual Mercado Livre/Shopee."""
+    content, filename = await service.get_mini_danfe(db, number)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
 @admin_router.post("/orders/{number}/cancel")
 async def cancel(number: str, body: dict, db: DbDep, admin: EditorDep) -> dict:
     order = await get_by_number(db, number)
@@ -169,10 +181,12 @@ async def bulk_danfe(
     db: DbDep,
     _: EditorDep,
     numbers: str = Query(..., description="números de pedido separados por vírgula"),
+    mini: bool = Query(False, description="DANFE Simplificado – Etiqueta (10x15) em vez do DANFE cheio"),
 ) -> Response:
     nums = [n.strip() for n in numbers.split(",") if n.strip()]
-    pdf, skipped = await service.bulk_danfe_pdf(db, nums)
-    headers = {"Content-Disposition": 'inline; filename="danfes.pdf"'}
+    pdf, skipped = await service.bulk_danfe_pdf(db, nums, mini=mini)
+    filename = "etiquetas-nfe.pdf" if mini else "danfes.pdf"
+    headers = {"Content-Disposition": f'inline; filename="{filename}"'}
     if skipped:
         # nomes de pedido não contêm vírgula -- seguro juntar assim
         headers["X-Nfe-Skipped"] = ",".join(skipped)
