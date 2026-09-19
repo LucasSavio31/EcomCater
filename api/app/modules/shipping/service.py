@@ -981,23 +981,20 @@ async def _render_url_to_pdf(url: str, *, postal_card: bool, want_declaration: b
             await page.goto(url, wait_until="networkidle", timeout=60_000)
             await page.wait_for_timeout(3500)
 
-            # A geração da etiqueta no ME é assíncrona -- às vezes o link de
-            # impressão já existe mas o conteúdo ainda não terminou de
-            # processar do lado deles. Em vez de desistir na primeira
-            # tentativa (3.5s), recarrega e espera mais um pouco, algumas
-            # vezes, antes de reportar "ainda não saiu".
-            body = ""
-            for attempt in range(4):
-                body = (await page.inner_text("body")).lower()
-                if "destinat" in body or "recebedor" in body or "remetente" in body:
-                    break
-                if attempt < 3:
-                    await page.reload(wait_until="networkidle", timeout=60_000)
-                    await page.wait_for_timeout(4000 + attempt * 2000)
-            else:
+            # A geração da etiqueta no ME é assíncrona -- pode não estar
+            # pronta ainda. NÃO fica tentando de novo aqui dentro (isso é
+            # chamado de forma síncrona por um clique no admin -- ficar
+            # recarregando a página por dezenas de segundos faz o navegador
+            # desistir com "Failed to fetch" mesmo com o servidor terminando
+            # a operação em segundo plano). Falha rápido; quem tenta de novo
+            # automaticamente é a rotina periódica (`sync_reverse_tracking`/
+            # `poll_melhor_envio_tracking`), que roda em background e não tem
+            # esse limite de tempo.
+            body = (await page.inner_text("body")).lower()
+            if "destinat" not in body and "recebedor" not in body and "remetente" not in body:
                 raise DomainError(
                     "O Melhor Envio não renderizou a etiqueta (a etiqueta pode ainda "
-                    "estar sendo gerada — tente de novo em alguns segundos).",
+                    "estar sendo gerada — a sincronização automática tenta de novo sozinha).",
                     code="me_pdf_empty",
                 )
 
