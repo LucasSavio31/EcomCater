@@ -265,21 +265,24 @@ async def _check_appmax(db: AsyncSession) -> tuple[str, int, str]:
     from app.modules.payment.service import load_config as load_payment_config
 
     cfg = await load_payment_config(db)
-    if cfg.active_provider != "appmax":
-        return "degraded", 0, f"gateway ativo: {cfg.active_provider} (Appmax desligada)"
-    token = cfg.appmax_access_token or settings.appmax_access_token
+    entry = cfg.providers.get("appmax")
+    if not entry or not entry.enabled:
+        return "degraded", 0, "provedor Appmax desligado (menu Pagamento → Provedores)"
+    econfig = entry.config
+    token = econfig.get("access_token") or settings.appmax_access_token
+    sandbox = econfig.get("sandbox", True)
     base = settings.appmax_api_url
-    if not cfg.appmax_sandbox:
+    if not sandbox:
         base = base.replace("homolog.sandboxappmax.com.br", "admin.appmax.com.br")
-    amb = "sandbox" if cfg.appmax_sandbox else "produção"
+    amb = "sandbox" if sandbox else "produção"
     if not token:
-        return "degraded", 0, "sem token configurado (menu Pagamento)"
+        return "degraded", 0, "sem token configurado (menu Pagamento → Provedores)"
     try:
         t0 = time.perf_counter()
         async with httpx.AsyncClient(timeout=8) as c:
             # chamada leve: sem dados de cliente a Appmax responde erro de
             # validação — o que já prova que a API está no ar e o token foi aceito.
-            r = await c.post(f"{base}/customer", json={"access-token": token})
+            r = await c.post(f"{base}/customer", json={}, headers={"access-token": token})
         ms = int((time.perf_counter() - t0) * 1000)
     except Exception as exc:  # noqa: BLE001
         return "down", 0, f"sem resposta: {exc}"
