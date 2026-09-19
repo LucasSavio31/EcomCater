@@ -333,6 +333,24 @@ async def handle_webhook(
         logger.warning("webhook %s com assinatura inválida", provider)
         raise PaymentError("Assinatura de webhook inválida.", code="bad_signature")
 
+    effective_status = result.status
+    if gateway.requires_status_confirmation:
+        # provedor sem assinatura verificável (Appmax confirmada) -- o
+        # payload do webhook em si não é confiável, só dispara a reconsulta.
+        # Sem `provider_charge_id` ou se a reconsulta falhar, não aplica
+        # nada agora: fica pendente pro próximo retry do gateway em vez de
+        # marcar como pago/cancelado com base num payload não verificado.
+        confirmed = (
+            await gateway.confirm_status(result.provider_charge_id) if result.provider_charge_id else None
+        )
+        if confirmed is None:
+            logger.warning(
+                "webhook %s: não deu pra confirmar o status de verdade (order=%s) -- ignorando este evento por ora",
+                provider, result.provider_charge_id,
+            )
+            return {"matched": False, "unverified": True}
+        effective_status = confirmed
+
     order = None
     if result.order_number:
         order = await db.scalar(select(Order).where(Order.number == result.order_number))
@@ -358,16 +376,16 @@ async def handle_webhook(
         db.add(payment)
         await db.flush()
 
-    if result.status:
+    if effective_status:
         payment.provider_payload_json = {**(payment.provider_payload_json or {}), "webhook": body}
         await _apply_status(
-            db, order, payment, result.status, source="webhook", background=background
+            db, order, payment, effective_status, source="webhook", background=background
         )
 
     evt.order_id = order.id
     evt.processed_at = datetime.now(UTC)
     await db.flush()
-    await emit("payment.webhook_processed", {"order_id": str(order.id), "status": result.status})
+    await emit("payment.webhook_processed", {"order_id": str(order.id), "status": effective_status})
     return {"matched": True, "status": result.status}
 
 

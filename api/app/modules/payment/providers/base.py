@@ -63,6 +63,12 @@ class RefundResult:
 
 class PaymentGateway(ABC):
     slug: str = "base"
+    # True = o webhook deste provedor não é confiável sozinho (sem assinatura
+    # verificável) -- o caller (`payment.service.handle_webhook`) é OBRIGADO a
+    # chamar `confirm_status` e só agir com o resultado confirmado; se a
+    # reconsulta falhar, não aplica nada (mais seguro ficar pendente do que
+    # marcar pago com base num payload que qualquer um poderia forjar).
+    requires_status_confirmation: bool = False
 
     @abstractmethod
     async def create_charge(
@@ -84,3 +90,10 @@ class PaymentGateway(ABC):
 
     def verify_webhook(self, headers: dict[str, str], raw_body: bytes) -> bool:
         return True
+
+    async def confirm_status(self, provider_charge_id: str) -> NormalizedStatus | None:
+        """Reconsulta o status direto na API do provedor, pra não confiar cegamente
+        no corpo do webhook (alguns gateways -- Appmax confirmada -- não assinam
+        webhook, então o payload sozinho pode ser forjado). `None` = o gateway não
+        suporta reconsulta; o caller usa o status do próprio webhook."""
+        return None

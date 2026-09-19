@@ -9,6 +9,7 @@ import { useResource } from '@/lib/use-resource';
 import { appearanceApi, type StoreSettings } from '@/modules/appearance/api';
 import { lookupCep } from '@/lib/viacep';
 import { maskPhone } from '@/lib/phone';
+import { maskCep, maskCnpj } from '@/lib/br-masks';
 
 const ADDRESS_FIELDS: Array<{ key: string; label: string }> = [
   { key: 'zip', label: 'CEP' },
@@ -83,7 +84,13 @@ export function StoreTab() {
                 value={settings.legal_name ?? ''}
                 onChange={(e) => set('legal_name', e.target.value)}
               />
-              <Input label="CNPJ" value={settings.cnpj ?? ''} onChange={(e) => set('cnpj', e.target.value)} />
+              <Input
+                label="CNPJ"
+                inputMode="numeric"
+                placeholder="00.000.000/0000-00"
+                value={maskCnpj(settings.cnpj ?? '')}
+                onChange={(e) => set('cnpj', maskCnpj(e.target.value))}
+              />
               <Input
                 label="Telefone"
                 inputMode="numeric"
@@ -108,8 +115,15 @@ export function StoreTab() {
                 <Input
                   key={f.key}
                   label={f.label}
-                  value={settings.address_json?.[f.key] ?? ''}
-                  onChange={(e) => setAddress(f.key, e.target.value)}
+                  inputMode={f.key === 'zip' ? 'numeric' : undefined}
+                  value={
+                    f.key === 'zip'
+                      ? maskCep(settings.address_json?.[f.key] ?? '')
+                      : (settings.address_json?.[f.key] ?? '')
+                  }
+                  onChange={(e) =>
+                    setAddress(f.key, f.key === 'zip' ? maskCep(e.target.value) : e.target.value)
+                  }
                   onBlur={f.key === 'zip' ? () => void onCepBlur() : undefined}
                 />
               ))}

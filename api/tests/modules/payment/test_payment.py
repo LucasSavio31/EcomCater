@@ -340,3 +340,70 @@ async def test_refund_uses_payment_provider_not_current_method_providers(
 
     got = await client.get(f"/api/orders/{order['number']}", params={"email": "pay-refund-1@test.example"})
     assert got.json()["payment_status"] == "refunded"
+
+
+@pytest.mark.asyncio
+async def test_webhook_unconfirmable_status_does_not_change_order(client, variant, monkeypatch):
+    """Provedor sem assinatura verificável (ex.: Appmax de verdade -- não
+    assina webhook): se a reconsulta pra confirmar o status falhar, o
+    webhook NÃO pode aplicar nada -- fica pendente pro próximo retry em vez
+    de confiar cegamente no payload recebido (que qualquer um poderia
+    forjar sabendo a URL)."""
+    from app.modules.payment.providers.fake import FakeGateway
+
+    order = await _order(client, variant, "pay-unverified-1@test.example")
+    await _charge(client, order["number"], "pix")
+
+    monkeypatch.setattr(FakeGateway, "requires_status_confirmation", True)
+
+    async def _confirm_none(self, provider_charge_id):
+        return None
+
+    monkeypatch.setattr(FakeGateway, "confirm_status", _confirm_none)
+
+    wh = await client.post(
+        "/api/webhooks/payment/fake",
+        json={
+            "event_id": "evt-unverified-1",
+            "order_number": order["number"],
+            "charge_id": "fake_unverified_1",
+            "status": "paid",
+        },
+    )
+    assert wh.status_code == 200, wh.text
+    assert wh.json() == {"matched": False, "unverified": True}
+
+    got = await client.get(f"/api/orders/{order['number']}", params={"email": "pay-unverified-1@test.example"})
+    assert got.json()["payment_status"] != "paid"
+
+
+@pytest.mark.asyncio
+async def test_webhook_trusts_confirmed_status_not_raw_webhook_claim(client, variant, monkeypatch):
+    """O inverso do teste acima: quando a reconsulta CONFIRMA um status,
+    esse é o que vale -- mesmo que o corpo do webhook alegue outra coisa."""
+    from app.modules.payment.providers.fake import FakeGateway
+
+    order = await _order(client, variant, "pay-confirmed-1@test.example")
+    await _charge(client, order["number"], "pix")
+
+    monkeypatch.setattr(FakeGateway, "requires_status_confirmation", True)
+
+    async def _confirm_paid(self, provider_charge_id):
+        return "paid"
+
+    monkeypatch.setattr(FakeGateway, "confirm_status", _confirm_paid)
+
+    wh = await client.post(
+        "/api/webhooks/payment/fake",
+        json={
+            "event_id": "evt-confirmed-1",
+            "order_number": order["number"],
+            "charge_id": "fake_confirmed_1",
+            "status": "failed",  # o payload alega recusa...
+        },
+    )
+    assert wh.status_code == 200, wh.text
+    assert wh.json()["matched"] is True
+
+    got = await client.get(f"/api/orders/{order['number']}", params={"email": "pay-confirmed-1@test.example"})
+    assert got.json()["payment_status"] == "paid"  # ...mas o confirmado vence
