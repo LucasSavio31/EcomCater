@@ -141,6 +141,11 @@ async def test_order_appears_in_wc_shape(client, variant, wc_key):
     assert not wc_order["order_key"].startswith("wc")
     assert wc_order["billing"]["postcode"] == "20040002"
     assert wc_order["line_items"][0]["sku"] == "IT-40"
+    # `price` tem que ser STRING (schema oficial do WooCommerce) -- um
+    # número cru quebrava o parser da Frenet ("não foi possível importar
+    # os pedidos", causa raiz confirmada em produção).
+    assert wc_order["line_items"][0]["price"] == "70.00"
+    assert isinstance(wc_order["line_items"][0]["price"], str)
 
     single = await client.get(f"/wp-json/wc/v3/orders/{wc_order['id']}", auth=auth)
     assert single.status_code == 200

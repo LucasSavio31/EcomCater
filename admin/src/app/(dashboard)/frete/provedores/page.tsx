@@ -220,12 +220,17 @@ export default function ProvedoresFretePage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-sm font-semibold">Frenet</h3>
                 <Badge tone={cfg.has_frenet_token ? 'success' : 'neutral'}>
-                  {cfg.has_frenet_token ? 'Cotação conectada' : 'Não conectado'}
+                  {cfg.has_frenet_token ? 'Cotação conectada' : 'Cotação não conectada'}
                 </Badge>
               </div>
 
               <div className="flex flex-col gap-2 rounded-card bg-bg-subtle p-3 text-sm">
                 <p className="font-medium">Pedidos, etiqueta e rastreio: conecte pela integração WooCommerce da Frenet</p>
+                <p className="text-text-muted">
+                  Esse selo acima é só da cotação (abaixo). A conexão de pedidos/etiqueta/rastreio
+                  fica registrada no painel da própria Frenet — não temos como mostrar o status
+                  dela aqui.
+                </p>
                 <p className="text-text-muted">
                   A Frenet não emite etiqueta chamando a nossa API — ela puxa os pedidos direto da
                   loja (como um WooCommerce) e depois manda o status/rastreio de volta pra cá. No

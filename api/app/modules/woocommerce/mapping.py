@@ -80,7 +80,13 @@ def order_line_items(items: list[OrderItem], *, product_wc_ids: dict[str, int]) 
                 "variation_id": 0,
                 "quantity": it.quantity,
                 "sku": it.sku,
-                "price": it.unit_price_cents / 100,
+                # `price` é STRING na API real do WooCommerce ("249.90"), não
+                # número -- confirmado na doc oficial ("Any decimal monetary
+                # amount ... returned as strings with two decimal places").
+                # Um número cru aqui quebra parser de ERP mais rígido
+                # (confirmado: era a causa real de "não foi possível
+                # importar os pedidos" na integração da Frenet).
+                "price": _money(it.unit_price_cents),
                 "subtotal": _money(it.unit_price_cents * it.quantity),
                 "total": _money(it.total_cents),
                 "meta_data": (
