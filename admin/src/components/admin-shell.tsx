@@ -89,7 +89,15 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: 'Pagamento',
-    items: [{ href: '/pagamento', label: 'Pagamento', icon: IconPayment, moduleSlugs: ['payment'] }],
+    items: [
+      {
+        href: '/pagamento',
+        label: 'Pagamento',
+        icon: IconPayment,
+        moduleSlugs: ['payment'],
+        children: [{ href: '/pagamento/provedores', label: 'Provedores', icon: IconModules }],
+      },
+    ],
   },
   {
     title: 'Frete',
