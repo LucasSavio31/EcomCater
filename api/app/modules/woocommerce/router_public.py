@@ -31,16 +31,21 @@ async def wp_json_root() -> dict:
     que o site tem a REST API do WordPress/WooCommerce."""
     return {
         "name": "WooCommerce",
-        "namespaces": ["wc/v3"],
+        # "wc/v2" também é servido (idêntico ao v3) -- confirmado em produção
+        # que a Frenet valida a integração batendo primeiro em
+        # /wp-json/wc/v2/system_status, não v3.
+        "namespaces": ["wc/v3", "wc/v2"],
     }
 
 
 @router.get("/wc/v3")
+@router.get("/wc/v2")
 async def wc_namespace_index() -> dict:
     return {"namespace": "wc/v3"}
 
 
 @router.get("/wc/v3/system_status")
+@router.get("/wc/v2/system_status")
 async def system_status(_: WcAuthDep) -> dict:
     return {
         "environment": {"platform": "custom", "version": "1.0"},
@@ -49,6 +54,7 @@ async def system_status(_: WcAuthDep) -> dict:
 
 
 @router.get("/wc/v3/customers")
+@router.get("/wc/v2/customers")
 async def list_customers(_: WcAuthDep) -> list[dict]:
     # Pedidos aqui trazem o endereço/CPF direto no próprio recurso (guest
     # checkout) -- não temos um cadastro de "cliente WooCommerce" à parte.
@@ -70,6 +76,7 @@ def _paged(request_query: dict, items: list[dict], total: int, per_page: int) ->
 
 
 @router.get("/wc/v3/orders")
+@router.get("/wc/v2/orders")
 async def list_orders(
     db: DbDep,
     _key: WcAuthDep,
@@ -82,6 +89,7 @@ async def list_orders(
 
 
 @router.get("/wc/v3/orders/{wc_id}")
+@router.get("/wc/v2/orders/{wc_id}")
 async def get_order(wc_id: int, db: DbDep, _key: WcAuthDep) -> dict:
     order = await service.get_order_by_wc_id(db, wc_id)
     if not order:
@@ -90,6 +98,7 @@ async def get_order(wc_id: int, db: DbDep, _key: WcAuthDep) -> dict:
 
 
 @router.put("/wc/v3/orders/{wc_id}")
+@router.put("/wc/v2/orders/{wc_id}")
 async def update_order(wc_id: int, patch: dict, db: DbDep, _key: WcAuthDep) -> dict:
     order = await service.get_order_by_wc_id(db, wc_id)
     if not order:
@@ -106,6 +115,7 @@ async def update_order(wc_id: int, patch: dict, db: DbDep, _key: WcAuthDep) -> d
 # --------------------------------------------------------------- produtos
 
 @router.get("/wc/v3/products")
+@router.get("/wc/v2/products")
 async def list_products(
     db: DbDep,
     _key: WcAuthDep,
@@ -117,6 +127,7 @@ async def list_products(
 
 
 @router.get("/wc/v3/products/{wc_id}")
+@router.get("/wc/v2/products/{wc_id}")
 async def get_product(wc_id: int, db: DbDep, _key: WcAuthDep) -> dict:
     product = await service.get_product_by_wc_id(db, wc_id)
     if not product:
@@ -125,6 +136,7 @@ async def get_product(wc_id: int, db: DbDep, _key: WcAuthDep) -> dict:
 
 
 @router.put("/wc/v3/products/{wc_id}")
+@router.put("/wc/v2/products/{wc_id}")
 async def update_product(wc_id: int, patch: dict, db: DbDep, _key: WcAuthDep) -> dict:
     product = await service.get_product_by_wc_id(db, wc_id)
     if not product:
@@ -135,6 +147,7 @@ async def update_product(wc_id: int, patch: dict, db: DbDep, _key: WcAuthDep) ->
 
 
 @router.get("/wc/v3/products/{wc_id}/variations")
+@router.get("/wc/v2/products/{wc_id}/variations")
 async def list_variations(wc_id: int, db: DbDep, _key: WcAuthDep) -> list[dict]:
     product = await service.get_product_by_wc_id(db, wc_id)
     if not product:
@@ -143,6 +156,7 @@ async def list_variations(wc_id: int, db: DbDep, _key: WcAuthDep) -> list[dict]:
 
 
 @router.get("/wc/v3/products/{wc_id}/variations/{variation_id}")
+@router.get("/wc/v2/products/{wc_id}/variations/{variation_id}")
 async def get_variation(wc_id: int, variation_id: int, db: DbDep, _key: WcAuthDep) -> dict:
     product = await service.get_product_by_wc_id(db, wc_id)
     if not product:
@@ -154,6 +168,7 @@ async def get_variation(wc_id: int, variation_id: int, db: DbDep, _key: WcAuthDe
 
 
 @router.put("/wc/v3/products/{wc_id}/variations/{variation_id}")
+@router.put("/wc/v2/products/{wc_id}/variations/{variation_id}")
 async def update_variation(
     wc_id: int, variation_id: int, patch: dict, db: DbDep, _key: WcAuthDep
 ) -> dict:
@@ -171,6 +186,7 @@ async def update_variation(
 # --------------------------------------------------------------- webhooks
 
 @router.post("/wc/v3/webhooks")
+@router.post("/wc/v2/webhooks")
 async def create_webhook(payload: dict, db: DbDep, _key: WcAuthDep) -> dict:
     row = await service.create_webhook(db, payload)
     await db.commit()
@@ -178,18 +194,21 @@ async def create_webhook(payload: dict, db: DbDep, _key: WcAuthDep) -> dict:
 
 
 @router.get("/wc/v3/webhooks")
+@router.get("/wc/v2/webhooks")
 async def list_webhooks(db: DbDep, _key: WcAuthDep) -> list[dict]:
     rows = await service.list_webhooks(db)
     return [service.webhook_out(r) for r in rows]
 
 
 @router.get("/wc/v3/webhooks/{webhook_id}")
+@router.get("/wc/v2/webhooks/{webhook_id}")
 async def get_webhook(webhook_id: int, db: DbDep, _key: WcAuthDep) -> dict:
     row = await service.get_webhook(db, webhook_id)
     return service.webhook_out(row)
 
 
 @router.put("/wc/v3/webhooks/{webhook_id}")
+@router.put("/wc/v2/webhooks/{webhook_id}")
 async def update_webhook(webhook_id: int, patch: dict, db: DbDep, _key: WcAuthDep) -> dict:
     row = await service.update_webhook(db, webhook_id, patch)
     await db.commit()
@@ -197,6 +216,7 @@ async def update_webhook(webhook_id: int, patch: dict, db: DbDep, _key: WcAuthDe
 
 
 @router.delete("/wc/v3/webhooks/{webhook_id}")
+@router.delete("/wc/v2/webhooks/{webhook_id}")
 async def delete_webhook(webhook_id: int, db: DbDep, _key: WcAuthDep) -> dict:
     row = await service.get_webhook(db, webhook_id)
     out = service.webhook_out(row)

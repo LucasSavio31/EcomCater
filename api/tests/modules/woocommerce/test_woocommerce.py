@@ -112,6 +112,19 @@ async def test_root_discovery(client):
     assert "wc/v3" in r.json()["namespaces"]
 
 
+@pytest.mark.asyncio
+async def test_wc_v2_alias_works_same_as_v3(client, wc_key):
+    """A Frenet (confirmado em produção) valida a integração batendo em
+    `/wp-json/wc/v2/system_status` com as credenciais na querystring, não
+    v3 -- prova que o alias v2 responde igual ao v3 nos pontos que ela usa."""
+    params = {"consumer_key": wc_key["consumer_key"], "consumer_secret": wc_key["consumer_secret"]}
+    r = await client.get("/wp-json/wc/v2/system_status", params=params)
+    assert r.status_code == 200, r.text
+
+    r2 = await client.get("/wp-json/wc/v2/orders", params={**params, "per_page": 1})
+    assert r2.status_code == 200, r2.text
+
+
 # ----------------------------------------------------------------- pedidos
 
 @pytest.mark.asyncio
