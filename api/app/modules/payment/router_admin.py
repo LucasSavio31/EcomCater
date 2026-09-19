@@ -13,7 +13,7 @@ from app.core.deps import get_current_admin, require_role
 from app.modules.admin.models import AdminUser
 from app.modules.payment import service
 from app.modules.payment.models import Payment, PaymentWebhookEvent
-from app.modules.payment.schemas import PaymentConfigIn, RefundIn
+from app.modules.payment.schemas import MethodProvidersIn, ProviderConfigIn, RefundIn
 
 router = APIRouter()
 
@@ -22,25 +22,49 @@ AdminDep = Annotated[AdminUser, Depends(get_current_admin)]
 AdminRoleDep = Annotated[AdminUser, Depends(require_role("admin"))]
 
 
-@router.get("/config")
-async def get_config(db: DbDep, _: AdminDep) -> dict:
-    cfg = await service.load_config(db)
+def _config_out(cfg) -> dict:
     base = settings.public_api_url.rstrip("/")
+    providers_out: dict = {}
+    for slug, entry in cfg.providers.items():
+        out: dict = {"enabled": entry.enabled}
+        if slug == "appmax":
+            out["sandbox"] = entry.config.get("sandbox", True)
+            out["has_token"] = bool(entry.config.get("access_token"))
+            out["has_webhook_secret"] = bool(entry.config.get("webhook_secret"))
+        providers_out[slug] = out
     return {
-        "active_provider": cfg.active_provider,
-        "appmax_sandbox": cfg.appmax_sandbox,
-        "has_token": bool(cfg.appmax_access_token),
-        "methods": cfg.methods.model_dump(),
+        "providers": providers_out,
+        "method_providers": cfg.method_providers,
         "max_installments": cfg.max_installments,
-        # URL que o lojista cadastra no painel do gateway
-        "webhook_url": f"{base}/api/webhooks/payment/{cfg.active_provider}",
+        # URL que o lojista cadastra no painel de cada gateway ativo
+        "webhook_urls": {
+            slug: f"{base}/api/webhooks/payment/{slug}"
+            for slug, entry in cfg.providers.items()
+            if entry.enabled
+        },
     }
 
 
-@router.put("/config")
-async def update_config(body: PaymentConfigIn, db: DbDep, _: AdminRoleDep) -> dict:
-    cfg = await service.save_config(db, body.model_dump(exclude_unset=True))
-    return {"active_provider": cfg.active_provider, "has_token": bool(cfg.appmax_access_token)}
+@router.get("/config")
+async def get_config(db: DbDep, _: AdminDep) -> dict:
+    return _config_out(await service.load_config(db))
+
+
+@router.put("/config/providers/{slug}")
+async def update_provider(slug: str, body: ProviderConfigIn, db: DbDep, _: AdminRoleDep) -> dict:
+    cfg = await service.update_provider(db, slug, enabled=body.enabled, config_patch=body.config or {})
+    return _config_out(cfg)
+
+
+@router.put("/config/method-providers")
+async def update_method_providers(body: MethodProvidersIn, db: DbDep, _: AdminRoleDep) -> dict:
+    mapping = {
+        "credit_card": body.credit_card,
+        "pix": body.pix,
+        "boleto": body.boleto,
+    }
+    cfg = await service.update_method_providers(db, mapping, body.max_installments)
+    return _config_out(cfg)
 
 
 @router.get("/payments")

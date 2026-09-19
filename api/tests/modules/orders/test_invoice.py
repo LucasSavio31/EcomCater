@@ -40,7 +40,12 @@ async def paid_order(client, admin_token, auth_headers, db):
         json={"sku": "PF-M", "option_value_ids": [vid], "stock_qty": 10},
         headers=h,
     )
-    await client.put("/api/admin/payment/config", json={"active_provider": "fake"}, headers=h)
+    await client.put("/api/admin/payment/config/providers/fake", json={"enabled": True}, headers=h)
+    await client.put(
+        "/api/admin/payment/config/method-providers",
+        json={"credit_card": "fake", "pix": "fake", "boleto": "fake"},
+        headers=h,
+    )
     variant_id = (await client.get(f"/api/products/{p['slug']}")).json()["variants"][0]["id"]
     await client.post("/api/cart/items", json={"variant_id": variant_id, "quantity": 2})
     order = (

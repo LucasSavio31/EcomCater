@@ -1,19 +1,23 @@
-"""Gateway Appmax (API v2/v3).
+"""Gateway Appmax (API v3).
 
 Docs: https://docs.appmax.com.br/api-reference/introduction
-Autenticação: `access-token` da conta Appmax enviado no corpo de cada requisição.
+Conferido contra o plugin oficial WooCommerce da Appmax (`includes/class-awc-api.php`
+e afins) — é a única fonte confiável do formato real da API que temos.
+Autenticação: `access-token` da conta Appmax enviado no HEADER (não no corpo).
+`settings.appmax_api_url` já termina em `/api/v3` — os paths aqui são relativos
+a isso (`/customer`, não `/api/v3/customer`; dobrar o prefixo 404a tudo).
 Fluxo: cria cliente -> cria pedido (order) -> cria pagamento (pix | credit-card | boleto).
 Confirmação real vem por webhook.
 
-Eventos de webhook -> status normalizado (usuário: PAGO / AGUARDANDO PAGAMENTO / CANCELADO):
-  OrderApproved, OrderPaid, OrderPaidByPix, PaymentApproved      -> paid
-  OrderIntegrated, OrderPending, PixGenerated, BoletoGenerated   -> pending
-  OrderRefund, OrderChargeback                                   -> refunded / chargeback
-  PaymentNotAuthorized, OrderBilletOverdue, PixExpired, OrderCancelled -> failed / canceled
+Status real da Appmax (`data.status` do webhook, plugin oficial `AWC_Status_Appmax`):
+  autorizado, aprovado -> paid | integrado -> pending
+Nome de evento é só um heurístico de reserva pros casos que a Appmax não
+manda `data.status` (refund/chargeback/cancelamento não estão no enum acima).
 """
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -29,13 +33,19 @@ from app.modules.payment.providers.base import (
 
 logger = logging.getLogger("payment.appmax")
 
+# nome de evento (após normalizar: minúsculo, sem "_"/".") -> heurística de
+# reserva, só usada quando o webhook não vem com `data.status` (a lista
+# oficial de 21 eventos da Appmax usa snake_case, ex. "order_paid",
+# "order_authorized", "order_pix_created" -- confirmado na doc appmax.readme.io).
 _EVENT_MAP: dict[str, str] = {
     "orderapproved": "paid",
+    "orderauthorized": "paid",
     "orderpaid": "paid",
     "orderpaidbypix": "paid",
     "orderpaidbycreditcard": "paid",
     "paymentapproved": "paid",
     "orderintegrated": "pending",
+    "orderpendingintegration": "pending",
     "orderpending": "pending",
     "orderpixcreated": "pending",
     "pixgenerated": "pending",
@@ -48,6 +58,14 @@ _EVENT_MAP: dict[str, str] = {
     "pixexpired": "canceled",
     "ordercancelled": "canceled",
     "ordercanceled": "canceled",
+}
+
+# `data.status` real da Appmax (plugin oficial `AWC_Status_Appmax`) -- quando
+# presente, tem prioridade sobre o nome do evento.
+_STATUS_MAP: dict[str, str] = {
+    "autorizado": "paid",
+    "aprovado": "paid",
+    "integrado": "pending",
 }
 
 
@@ -65,11 +83,11 @@ class AppmaxGateway(PaymentGateway):
                 "Pagamento não configurado: informe o token da Appmax no admin.",
                 code="payment_not_configured",
             )
-        body = {"access-token": self.access_token, **payload}
         url = f"{self.base_url}{path}"
+        headers = {"Content-Type": "application/json", "access-token": self.access_token}
         try:
             async with httpx.AsyncClient(timeout=20) as c:
-                resp = await c.post(url, json=body, headers={"Content-Type": "application/json"})
+                resp = await c.post(url, json=payload, headers=headers)
             data = resp.json()
         except httpx.HTTPError as exc:
             logger.warning("Appmax indisponível: %s", exc)
@@ -83,8 +101,9 @@ class AppmaxGateway(PaymentGateway):
         addr = order.shipping_address_json or {}
         name = addr.get("recipient_name", order.email.split("@")[0])
         first, _, last = name.partition(" ")
+        marketing = order.marketing_json or {}
         data = await self._post(
-            "/api/v3/customer",
+            "/customer",
             {
                 "firstname": first or name,
                 "lastname": last or ".",
@@ -97,7 +116,14 @@ class AppmaxGateway(PaymentGateway):
                 "address_street_district": addr.get("district", ""),
                 "address_city": addr.get("city", ""),
                 "address_state": addr.get("state", ""),
-                "document": order.cpf or "",
+                "ip": marketing.get("client_ip", ""),
+                "tracking": {
+                    "utm_source": marketing.get("utm_source", ""),
+                    "utm_medium": marketing.get("utm_medium", ""),
+                    "utm_campaign": marketing.get("utm_campaign", ""),
+                    "utm_term": marketing.get("utm_term", ""),
+                    "utm_content": marketing.get("utm_content", ""),
+                },
             },
         )
         return str(data.get("id") or data.get("customer_id"))
@@ -109,18 +135,20 @@ class AppmaxGateway(PaymentGateway):
                 "name": it.name,
                 "qty": it.quantity,
                 "price": round(it.unit_price_cents / 100, 2),
+                "description": it.name,
             }
             for it in order.items
         ]
+        marketing = order.marketing_json or {}
         data = await self._post(
-            "/api/v3/order",
+            "/order",
             {
                 "customer_id": customer_id,
                 "products": products,
                 "shipping": round(order.shipping_cents / 100, 2),
                 "discount": round(order.discount_cents / 100, 2),
-                "total": round(order.grand_total_cents / 100, 2),
-                "external_id": order.number,
+                "freight_type": order.shipping_method or "",
+                "ip": marketing.get("client_ip", ""),
             },
         )
         return str(data.get("id") or data.get("order_id"))
@@ -139,8 +167,12 @@ class AppmaxGateway(PaymentGateway):
 
         if method == "pix":
             data = await self._post(
-                "/api/v3/payment/pix",
-                {"cart": {"order_id": appmax_order_id}, "customer": {"customer_id": customer_id}},
+                "/payment/pix",
+                {
+                    "cart": {"order_id": appmax_order_id},
+                    "customer": {"customer_id": customer_id},
+                    "payment": {"pix": {"document_number": order.cpf or ""}},
+                },
             )
             return Charge(
                 provider=self.slug,
@@ -154,9 +186,14 @@ class AppmaxGateway(PaymentGateway):
             )
 
         if method == "boleto":
+            due_date = (datetime.now(UTC) + timedelta(days=3)).strftime("%Y-%m-%d")
             data = await self._post(
-                "/api/v3/payment/boleto",
-                {"cart": {"order_id": appmax_order_id}, "customer": {"customer_id": customer_id}},
+                "/payment/boleto",
+                {
+                    "cart": {"order_id": appmax_order_id},
+                    "customer": {"customer_id": customer_id},
+                    "payment": {"Boleto": {"document_number": order.cpf or "", "due_date": due_date}},
+                },
             )
             return Charge(
                 provider=self.slug,
@@ -172,7 +209,7 @@ class AppmaxGateway(PaymentGateway):
         if not card:
             raise PaymentError("Dados do cartão ausentes.")
         data = await self._post(
-            "/api/v3/payment/credit-card",
+            "/payment/credit-card",
             {
                 "cart": {"order_id": appmax_order_id},
                 "customer": {"customer_id": customer_id},
@@ -189,12 +226,15 @@ class AppmaxGateway(PaymentGateway):
                 },
             },
         )
-        status = "paid" if str(data.get("status", "")).lower() in ("aprovado", "approved", "paid") else "pending"
+        # o plugin oficial nunca lê status na resposta síncrona de criação do
+        # pagamento -- só confirma via webhook (`data.status` == autorizado/
+        # aprovado). Reportar "paid" aqui sem essa confirmação arriscava marcar
+        # pedido como pago com base num campo que a resposta pode nem ter.
         return Charge(
             provider=self.slug,
             provider_charge_id=str(data.get("id") or appmax_order_id),
             method="credit_card",
-            status=status,  # type: ignore[arg-type]
+            status="pending",
             amount_cents=amount,
             installments=card.installments or installments,
             raw=data,
@@ -217,7 +257,12 @@ class AppmaxGateway(PaymentGateway):
     def parse_webhook(self, headers: dict[str, str], body: dict) -> WebhookResult | None:
         event = str(body.get("event") or body.get("type") or "").replace("_", "").replace(".", "").lower()
         data = body.get("data") or body
-        status = _EVENT_MAP.get(event)
+        # `data.status` (vocabulário real confirmado: autorizado/aprovado/
+        # integrado) tem prioridade -- o nome do evento é só reserva pros
+        # casos sem esse campo (refund/chargeback/cancelamento).
+        status = _STATUS_MAP.get(str(data.get("status") or "").strip().lower())
+        if status is None:
+            status = _EVENT_MAP.get(event)
         if status is None:
             for k, v in _EVENT_MAP.items():
                 if k in event:
@@ -233,9 +278,15 @@ class AppmaxGateway(PaymentGateway):
         )
 
     async def refund(self, *, payment, amount_cents: int | None = None) -> RefundResult:
+        # ATENÇÃO: não há endpoint de reembolso no plugin oficial da Appmax --
+        # lá, reembolso só chega passivamente via webhook `order_refund`, nunca
+        # é disparado pela loja. Este path/formato não está confirmado contra
+        # a API real; se a Appmax não oferecer refund via API, isto vai falhar
+        # (ou pior, 404 silencioso) -- reembolso real pode precisar ser feito
+        # manualmente no painel da Appmax até confirmar isso com o suporte deles.
         try:
             data = await self._post(
-                "/api/v3/refund",
+                "/refund",
                 {"order_id": payment.provider_charge_id, "amount": round((amount_cents or payment.amount_cents) / 100, 2)},
             )
         except PaymentError as exc:

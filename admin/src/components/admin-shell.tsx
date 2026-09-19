@@ -18,6 +18,7 @@ import {
   IconAppearance,
   IconCategories,
   IconCheckout,
+  IconChevron,
   IconCustomers,
   IconCart,
   IconDashboard,
@@ -51,6 +52,9 @@ interface NavItem {
    * a página atende mais de um módulo (ex.: /integracoes tem WooCommerce
    * e UP Seller); some só se os dois estiverem desativados. */
   moduleSlugs?: string[];
+  /** Sub-itens em dropdown (recolhido por padrão, abre sozinho se a rota
+   * ativa for um deles) — pra encurtar a barra lateral sem tirar acesso. */
+  children?: NavItem[];
 }
 interface NavGroup {
   title: string;
@@ -80,40 +84,66 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Vendas',
     items: [
       { href: '/pedidos', label: 'Pedidos', icon: IconOrders },
-      { href: '/recuperacao-carrinho', label: 'Recuperação de carrinho', icon: IconCart, moduleSlugs: ['cart_recovery'] },
-      { href: '/clientes', label: 'Clientes', icon: IconCustomers },
-      { href: '/promocoes', label: 'Promoções', icon: IconPromotions, moduleSlugs: ['promotions'] },
-      { href: '/pagamento', label: 'Pagamento', icon: IconPayment, moduleSlugs: ['payment'] },
-      { href: '/frete', label: 'Frete', icon: IconShipping, moduleSlugs: ['shipping'] },
       { href: '/nfe', label: 'NF-e', icon: IconInvoice, moduleSlugs: ['nfe'] },
+    ],
+  },
+  {
+    title: 'Pagamento',
+    items: [{ href: '/pagamento', label: 'Pagamento', icon: IconPayment, moduleSlugs: ['payment'] }],
+  },
+  {
+    title: 'Frete',
+    items: [{ href: '/frete', label: 'Frete', icon: IconShipping, moduleSlugs: ['shipping'] }],
+  },
+  {
+    title: 'Integrações',
+    items: [
       { href: '/integracoes', label: 'Integrações', icon: IconIntegrations, moduleSlugs: ['woocommerce', 'upseller'] },
     ],
   },
   {
     title: 'Marketing',
     items: [
+      { href: '/recuperacao-carrinho', label: 'Recuperação de carrinho', icon: IconCart, moduleSlugs: ['cart_recovery'] },
+      { href: '/clientes', label: 'Clientes', icon: IconCustomers },
+      { href: '/promocoes', label: 'Promoções', icon: IconPromotions, moduleSlugs: ['promotions'] },
       { href: '/rastreamento', label: 'Rastreamento e anúncios', icon: IconAnalytics },
-      { href: '/newsletter', label: 'Newsletter e popup', icon: IconMail, moduleSlugs: ['newsletter'] },
       { href: '/leads', label: 'Leads', icon: IconLeads },
     ],
   },
   {
     title: 'Loja',
     items: [
-      { href: '/aparencia', label: 'Aparência', icon: IconAppearance },
-      { href: '/checkout-modelo', label: 'Checkout', icon: IconCheckout },
-      { href: '/selos-rodape', label: 'Selos do rodapé', icon: IconSeals },
-      { href: '/menus', label: 'Menus', icon: IconMenus },
+      {
+        href: '/aparencia',
+        label: 'Aparência',
+        icon: IconAppearance,
+        children: [
+          { href: '/checkout-modelo', label: 'Checkout', icon: IconCheckout },
+          { href: '/selos-rodape', label: 'Selos do rodapé', icon: IconSeals },
+          { href: '/menus', label: 'Menus', icon: IconMenus },
+        ],
+      },
     ],
   },
   {
     title: 'Sistema',
     items: [
-      { href: '/minha-conta', label: 'Minha conta', icon: IconShield },
-      { href: '/infraestrutura', label: 'Infraestrutura', icon: IconServer },
-      { href: '/modulos', label: 'Módulos', icon: IconModules },
-      { href: '/smtp', label: 'E-mail (SMTP)', icon: IconMail },
-      { href: '/usuarios', label: 'Usuários', icon: IconUsers },
+      {
+        href: '/minha-conta',
+        label: 'Minha conta',
+        icon: IconShield,
+        children: [{ href: '/usuarios', label: 'Usuários', icon: IconUsers }],
+      },
+      {
+        href: '/infraestrutura',
+        label: 'Infraestrutura',
+        icon: IconServer,
+        children: [
+          { href: '/modulos', label: 'Módulos', icon: IconModules },
+          { href: '/smtp', label: 'E-mail (SMTP)', icon: IconMail },
+        ],
+      },
     ],
   },
 ];
@@ -146,15 +176,111 @@ function useDisabledModuleSlugs(): Set<string> {
   return disabled;
 }
 
+function filterByModules(items: NavItem[], disabledSlugs: Set<string>): NavItem[] {
+  return items.filter((item) => !item.moduleSlugs || item.moduleSlugs.some((slug) => !disabledSlugs.has(slug)));
+}
+
+function NavLink({
+  item,
+  pathname,
+  onNavigate,
+  nested,
+}: {
+  item: NavItem;
+  pathname: string;
+  onNavigate?: () => void;
+  nested?: boolean;
+}) {
+  const active = isActive(pathname, item.href);
+  // só a rota EXATA (não uma sub-rota, ex.: /pedidos/2026-000001) conta como
+  // "já estou aqui" — senão clicar em "Pedidos" a partir do detalhe de um
+  // pedido só recarregaria o detalhe, sem voltar pra lista.
+  const exact = pathname === item.href;
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      onClick={(e) => {
+        if (exact) {
+          e.preventDefault();
+          window.location.reload();
+          return;
+        }
+        onNavigate?.();
+      }}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'flex min-h-touch items-center gap-2.5 rounded-card px-3 text-sm font-medium transition',
+        nested && 'text-[13px]',
+        active ? 'bg-primary text-primary-fg' : 'text-text hover:bg-bg-subtle',
+      )}
+    >
+      <Icon className="shrink-0 opacity-80" />
+      {item.label}
+    </Link>
+  );
+}
+
+/** Item com dropdown: a própria página continua um link normal; a seta ao
+ * lado só recolhe/expande os sub-itens, sem navegar. Abre sozinho quando a
+ * rota ativa é um dos filhos, senão começa recolhido. */
+function NavDropdownItem({
+  item,
+  pathname,
+  onNavigate,
+  disabledSlugs,
+}: {
+  item: NavItem;
+  pathname: string;
+  onNavigate?: () => void;
+  disabledSlugs: Set<string>;
+}) {
+  const children = filterByModules(item.children ?? [], disabledSlugs);
+  const childActive = children.some((c) => isActive(pathname, c.href));
+  const [open, setOpen] = useState(childActive);
+
+  useEffect(() => {
+    if (childActive) setOpen(true);
+  }, [childActive]);
+
+  if (children.length === 0) {
+    return <NavLink item={item} pathname={pathname} onNavigate={onNavigate} />;
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-0.5">
+        <div className="min-w-0 flex-1">
+          <NavLink item={item} pathname={pathname} onNavigate={onNavigate} />
+        </div>
+        <button
+          type="button"
+          aria-label={open ? `Recolher ${item.label}` : `Expandir ${item.label}`}
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="flex min-h-touch w-7 shrink-0 items-center justify-center rounded-card text-text-muted transition hover:bg-bg-subtle"
+        >
+          <IconChevron className={cn('shrink-0 transition-transform', open && 'rotate-90')} />
+        </button>
+      </div>
+      {open && (
+        <div className="ml-3 flex flex-col gap-0.5 border-l border-surface-border pl-2">
+          {children.map((c) => (
+            <NavLink key={c.href} item={c} pathname={pathname} onNavigate={onNavigate} nested />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const disabledSlugs = useDisabledModuleSlugs();
   return (
     <nav aria-label="Menu administrativo" className="flex flex-col">
       {NAV_GROUPS.map((group, gi) => {
-        const items = group.items.filter(
-          (item) => !item.moduleSlugs || item.moduleSlugs.some((slug) => !disabledSlugs.has(slug)),
-        );
+        const items = filterByModules(group.items, disabledSlugs);
         if (items.length === 0) return null;
         return (
         <div
@@ -167,37 +293,19 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             {group.title}
           </p>
-          {items.map((item) => {
-            const active = isActive(pathname, item.href);
-            // só a rota EXATA (não uma sub-rota, ex.: /pedidos/2026-000001)
-            // conta como "já estou aqui" — senão clicar em "Pedidos" a partir
-            // do detalhe de um pedido só recarregaria o detalhe, sem voltar
-            // pra lista.
-            const exact = pathname === item.href;
-            const Icon = item.icon;
-            return (
-              <Link
+          {items.map((item) =>
+            item.children ? (
+              <NavDropdownItem
                 key={item.href}
-                href={item.href}
-                onClick={(e) => {
-                  if (exact) {
-                    e.preventDefault();
-                    window.location.reload();
-                    return;
-                  }
-                  onNavigate?.();
-                }}
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'flex min-h-touch items-center gap-2.5 rounded-card px-3 text-sm font-medium transition',
-                  active ? 'bg-primary text-primary-fg' : 'text-text hover:bg-bg-subtle',
-                )}
-              >
-                <Icon className="shrink-0 opacity-80" />
-                {item.label}
-              </Link>
-            );
-          })}
+                item={item}
+                pathname={pathname}
+                onNavigate={onNavigate}
+                disabledSlugs={disabledSlugs}
+              />
+            ) : (
+              <NavLink key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
+            ),
+          )}
         </div>
         );
       })}

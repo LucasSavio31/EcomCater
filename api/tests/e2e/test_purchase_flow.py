@@ -32,9 +32,12 @@ async def catalog(client, admin_token, auth_headers):
             headers=h,
         )
     ).json()
-    # provider de pagamento = fake
+    # provider de pagamento = fake (liga o provedor + vincula os 3 métodos)
+    await client.put("/api/admin/payment/config/providers/fake", json={"enabled": True}, headers=h)
     await client.put(
-        "/api/admin/payment/config", json={"active_provider": "fake"}, headers=h
+        "/api/admin/payment/config/method-providers",
+        json={"credit_card": "fake", "pix": "fake", "boleto": "fake"},
+        headers=h,
     )
     return {"product": p, "variant_id": v["id"], "slug": p["slug"]}
 

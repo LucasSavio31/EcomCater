@@ -41,20 +41,23 @@ class PaymentStatusOut(BaseModel):
     updated_at: str | None
 
 
-class PaymentConfigOut(BaseModel):
-    active_provider: str
-    appmax_sandbox: bool
-    has_token: bool
-    methods: dict
-    max_installments: int
+class ProviderConfigIn(BaseModel):
+    """Body de `PUT /config/providers/{slug}` -- campos livres em `config`
+    (cada provedor usa as chaves que precisa; texto em branco = mantém o
+    valor já salvo, mesmo padrão de segredo mascarado do resto do projeto)."""
+
+    enabled: bool | None = None
+    config: dict | None = None
 
 
-class PaymentConfigIn(BaseModel):
-    active_provider: str | None = None
-    appmax_access_token: str | None = None
-    appmax_sandbox: bool | None = None
-    appmax_webhook_secret: str | None = None
-    methods: dict | None = None
+class MethodProvidersIn(BaseModel):
+    """Body de `PUT /config/method-providers` -- vínculo método -> provedor.
+    Valor vazio/None num método = método desligado (nenhum provedor
+    atende)."""
+
+    credit_card: str | None = None
+    pix: str | None = None
+    boleto: str | None = None
     max_installments: int | None = None
 
 

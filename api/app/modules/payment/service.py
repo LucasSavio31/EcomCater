@@ -15,7 +15,7 @@ from app.core.errors import DomainError, NotFoundError, PaymentError, Validation
 from app.core.events import emit
 from app.modules.orders import service as orders_service
 from app.modules.orders.models import Order
-from app.modules.payment.config import PaymentConfig
+from app.modules.payment.config import PaymentConfig, ProviderEntry
 from app.modules.payment.models import Payment, PaymentWebhookEvent
 from app.modules.payment.providers.appmax import AppmaxGateway
 from app.modules.payment.providers.base import CardInput, PaymentGateway
@@ -36,12 +36,46 @@ _ORDER_ACTION = {
 }
 
 
+def _migrate_legacy_config(raw: dict) -> dict:
+    """Converte o formato antigo (`active_provider` único + `methods.*`
+    booleanos) pro novo (`providers` com credenciais por provedor +
+    `method_providers` por método) -- só na leitura, não grava sozinho (a
+    primeira vez que o admin salvar algo já persiste no formato novo).
+    Idempotente: se já está no formato novo, devolve como veio."""
+    if "providers" in raw or "method_providers" in raw:
+        return raw
+    if "active_provider" not in raw and "appmax_access_token" not in raw:
+        return raw  # config nova, nunca configurada -- usa os defaults do schema
+
+    active = raw.get("active_provider") or "appmax"
+    methods_raw = raw.get("methods") or {}
+    providers = {
+        "appmax": {
+            "enabled": True,
+            "config": {
+                "access_token": raw.get("appmax_access_token", ""),
+                "sandbox": raw.get("appmax_sandbox", True),
+                "webhook_secret": raw.get("appmax_webhook_secret", ""),
+            },
+        },
+        "fake": {"enabled": True, "config": {}},
+    }
+    method_providers = {
+        m: active for m in ("credit_card", "pix", "boleto") if methods_raw.get(m, True)
+    }
+    return {
+        "providers": providers,
+        "method_providers": method_providers,
+        "max_installments": raw.get("max_installments", 12),
+    }
+
+
 async def load_config(db: AsyncSession) -> PaymentConfig:
     from app.modules.admin.models import ModuleRow
 
     row = await db.get(ModuleRow, "payment")
     raw = dict(row.config_json) if row and row.config_json else {}
-    return PaymentConfig(**raw)
+    return PaymentConfig(**_migrate_legacy_config(raw))
 
 
 async def save_config(db: AsyncSession, patch: dict) -> PaymentConfig:
@@ -49,6 +83,7 @@ async def save_config(db: AsyncSession, patch: dict) -> PaymentConfig:
 
     row = await db.get(ModuleRow, "payment")
     current = dict(row.config_json) if row and row.config_json else {}
+    current = _migrate_legacy_config(current)
     for k, v in patch.items():
         if v is not None:
             current[k] = v
@@ -63,19 +98,62 @@ async def save_config(db: AsyncSession, patch: dict) -> PaymentConfig:
     return cfg
 
 
-def _gateway(cfg: PaymentConfig) -> PaymentGateway:
-    if cfg.active_provider == "fake":
+async def update_provider(db: AsyncSession, slug: str, *, enabled: bool | None, config_patch: dict) -> PaymentConfig:
+    """Atualiza SÓ um provedor (liga/desliga + credenciais), sem mexer nos
+    outros nem em `method_providers`. Campo de texto em branco = mantém o
+    valor já salvo (mesmo padrão de segredo mascarado usado no resto do
+    projeto) -- só sobrescreve o que veio preenchido de verdade."""
+    if slug not in ("appmax", "fake"):
+        raise ValidationError(f"Provedor de pagamento desconhecido: {slug}")
+    cfg = await load_config(db)
+    entry = cfg.providers.get(slug) or ProviderEntry()
+    if enabled is not None:
+        entry.enabled = enabled
+    new_config = dict(entry.config)
+    for k, v in (config_patch or {}).items():
+        if v is not None and v != "":
+            new_config[k] = v
+    entry.config = new_config
+    providers = {s: e.model_dump() for s, e in cfg.providers.items()}
+    providers[slug] = entry.model_dump()
+    return await save_config(db, {"providers": providers})
+
+
+async def update_method_providers(db: AsyncSession, mapping: dict, max_installments: int | None) -> PaymentConfig:
+    """Substitui o vínculo método -> provedor por inteiro (o formulário do
+    admin sempre manda os 3 métodos de uma vez, não precisa de merge
+    parcial). Valor vazio/None pro método = método desligado."""
+    method_providers = {m: slug for m, slug in mapping.items() if slug}
+    patch: dict = {"method_providers": method_providers}
+    if max_installments is not None:
+        patch["max_installments"] = max_installments
+    return await save_config(db, patch)
+
+
+def _build_gateway(cfg: PaymentConfig, slug: str) -> PaymentGateway:
+    entry = cfg.providers.get(slug)
+    if not entry or not entry.enabled:
+        raise DomainError(f"Provedor de pagamento '{slug}' não está ativo.")
+    if slug == "fake":
         return FakeGateway()
-    if cfg.active_provider == "appmax":
+    if slug == "appmax":
+        c = entry.config
         base = settings.appmax_api_url
-        if not cfg.appmax_sandbox:
+        if not c.get("sandbox", True):
             base = base.replace("homolog.sandboxappmax.com.br", "admin.appmax.com.br")
         return AppmaxGateway(
-            access_token=cfg.appmax_access_token or settings.appmax_access_token,
+            access_token=c.get("access_token") or settings.appmax_access_token,
             base_url=base,
-            webhook_secret=cfg.appmax_webhook_secret or settings.appmax_webhook_secret,
+            webhook_secret=c.get("webhook_secret") or settings.appmax_webhook_secret,
         )
-    raise DomainError(f"Provedor de pagamento desconhecido: {cfg.active_provider}")
+    raise DomainError(f"Provedor de pagamento desconhecido: {slug}")
+
+
+def _gateway_for_method(cfg: PaymentConfig, method: str) -> PaymentGateway:
+    slug = cfg.method_providers.get(method)
+    if not slug:
+        raise ValidationError(f"Método '{method}' não está habilitado.")
+    return _build_gateway(cfg, slug)
 
 
 async def create_charge(
@@ -85,8 +163,6 @@ async def create_charge(
     cfg = await load_config(db)
     if method not in ("credit_card", "pix", "boleto"):
         raise ValidationError("Método de pagamento inválido.")
-    if not getattr(cfg.methods, method, False):
-        raise ValidationError(f"Método '{method}' não está habilitado.")
 
     order = await orders_service.get_by_number(db, order_number)
     if order.status not in ("pending_payment",):
@@ -98,7 +174,7 @@ async def create_charge(
     if existing and existing.status == "paid":
         return existing
 
-    gateway = _gateway(cfg)
+    gateway = _gateway_for_method(cfg, method)
     card_input = CardInput(**card) if card else None
     charge = await gateway.create_charge(order=order, method=method, card=card_input)
 
@@ -197,9 +273,12 @@ async def handle_webhook(
     *, background: BackgroundTasks | None = None,
 ) -> dict:
     cfg = await load_config(db)
-    gateway = _gateway(cfg)
-    if gateway.slug != provider and provider not in _PROVIDERS:
+    if provider not in _PROVIDERS:
         raise NotFoundError("Provedor de webhook desconhecido.")
+    # usa o gateway do PRÓPRIO provedor que mandou o webhook (URL já carrega
+    # o slug) -- antes usava sempre o "provedor ativo" global, que dava
+    # errado assim que um método passasse a usar um provedor diferente.
+    gateway = _build_gateway(cfg, provider)
 
     signature_valid = gateway.verify_webhook(headers, raw_body)
     result = gateway.parse_webhook(headers, body)
@@ -317,7 +396,10 @@ async def refund(
     )
     if not payment:
         raise ValidationError("Não há pagamento confirmado para reembolsar.")
-    res = await _gateway(cfg).refund(payment=payment, amount_cents=amount_cents)
+    # reembolsa pelo provedor que processou ESSE pagamento (gravado na hora
+    # da cobrança), não pelo "provedor ativo" atual -- podem ser diferentes
+    # se o vínculo do método mudou depois.
+    res = await _build_gateway(cfg, payment.provider).refund(payment=payment, amount_cents=amount_cents)
     if not res.ok:
         raise PaymentError(res.message or "Reembolso recusado pelo gateway.")
     payment.status = "refunded"

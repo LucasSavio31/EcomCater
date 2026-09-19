@@ -46,7 +46,12 @@ async def product(client, admin_token, auth_headers):
             headers=h,
         )
     ).json()
-    await client.put("/api/admin/payment/config", json={"active_provider": "fake"}, headers=h)
+    await client.put("/api/admin/payment/config/providers/fake", json={"enabled": True}, headers=h)
+    await client.put(
+        "/api/admin/payment/config/method-providers",
+        json={"credit_card": "fake", "pix": "fake", "boleto": "fake"},
+        headers=h,
+    )
     return {"variant_id": v["id"], "slug": p["slug"]}
 
 

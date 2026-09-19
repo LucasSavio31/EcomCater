@@ -68,19 +68,20 @@ export interface ShippingQuoteRate {
 
 /* ------------------------------ Pagamento ----------------------------- */
 
+export interface PaymentProviderOut {
+  enabled: boolean;
+  sandbox?: boolean;
+  has_token?: boolean;
+  has_webhook_secret?: boolean;
+}
+
 export interface PaymentConfig {
-  active_provider: 'appmax' | 'fake';
-  appmax_access_token: string;
-  appmax_sandbox: boolean;
-  appmax_webhook_secret: string;
-  methods: {
-    credit_card: boolean;
-    pix: boolean;
-    boleto: boolean;
-  };
+  providers: Record<string, PaymentProviderOut>;
+  /** método -> slug do provedor que atende (ausente = método desligado) */
+  method_providers: Record<string, string>;
   max_installments: number;
-  /** URL de webhook que o lojista cadastra no painel do gateway (read-only). */
-  webhook_url?: string;
+  /** URL de webhook por provedor ativo, pra cadastrar no painel do gateway. */
+  webhook_urls: Record<string, string>;
 }
 
 export interface PaymentRecord {
@@ -123,8 +124,14 @@ export const configApi = {
     }),
 
   getPayment: () => adminFetch<PaymentConfig>('/api/admin/payment/config'),
-  putPayment: (body: Partial<PaymentConfig>) =>
-    adminFetch<PaymentConfig>('/api/admin/payment/config', { method: 'PUT', body }),
+  putPaymentProvider: (slug: string, body: { enabled?: boolean; config?: Record<string, unknown> }) =>
+    adminFetch<PaymentConfig>(`/api/admin/payment/config/providers/${slug}`, { method: 'PUT', body }),
+  putPaymentMethodProviders: (body: {
+    credit_card?: string | null;
+    pix?: string | null;
+    boleto?: string | null;
+    max_installments?: number;
+  }) => adminFetch<PaymentConfig>('/api/admin/payment/config/method-providers', { method: 'PUT', body }),
   listPayments: () => adminFetch<PaymentRecord[]>('/api/admin/payment/payments'),
   refund: (orderNumber: string, amountCents?: number) =>
     adminFetch<void>(`/api/admin/payment/refund/${orderNumber}`, {

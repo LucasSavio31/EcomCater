@@ -42,11 +42,19 @@ async def status(order_number: str, db: DbDep):
 
 @router.get("/methods")
 async def methods(db: DbDep) -> dict:
-    """Métodos de pagamento habilitados — consumido pelo checkout da loja."""
+    """Métodos de pagamento habilitados — consumido pelo checkout da loja.
+    Um método só está disponível se tiver um provedor vinculado E esse
+    provedor estiver ativo (Sistema → Pagamento → Provedores)."""
     cfg = await service.load_config(db)
+
+    def _available(method: str) -> bool:
+        slug = cfg.method_providers.get(method)
+        entry = cfg.providers.get(slug) if slug else None
+        return bool(entry and entry.enabled)
+
     return {
-        "credit_card": cfg.methods.credit_card,
-        "pix": cfg.methods.pix,
-        "boleto": cfg.methods.boleto,
+        "credit_card": _available("credit_card"),
+        "pix": _available("pix"),
+        "boleto": _available("boleto"),
         "max_installments": cfg.max_installments,
     }
