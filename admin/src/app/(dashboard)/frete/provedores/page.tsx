@@ -9,7 +9,10 @@ import { Checkbox } from '@/components/form-controls';
 import { WebhookUrlBox } from '@/components/webhook-url';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
+import { ADMIN_API_BASE_URL } from '@/lib/admin-api-client';
 import { configApi, type ShippingConfig } from '@/modules/config/api';
+
+const STORE_URL = ADMIN_API_BASE_URL.replace(/\/$/, '');
 
 export default function ProvedoresFretePage() {
   const toast = useToast();
@@ -217,44 +220,84 @@ export default function ProvedoresFretePage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-sm font-semibold">Frenet</h3>
                 <Badge tone={cfg.has_frenet_token ? 'success' : 'neutral'}>
-                  {cfg.has_frenet_token ? 'Conectado' : 'Não conectado'}
+                  {cfg.has_frenet_token ? 'Cotação conectada' : 'Não conectado'}
                 </Badge>
               </div>
+
+              <div className="flex flex-col gap-2 rounded-card bg-bg-subtle p-3 text-sm">
+                <p className="font-medium">Pedidos, etiqueta e rastreio: conecte pela integração WooCommerce da Frenet</p>
+                <p className="text-text-muted">
+                  A Frenet não emite etiqueta chamando a nossa API — ela puxa os pedidos direto da
+                  loja (como um WooCommerce) e depois manda o status/rastreio de volta pra cá. No
+                  painel da Frenet, vá em <b>Meios de Envio → Integração de pedidos</b>, escolha a
+                  plataforma <b>WooCommerce</b> e cole:
+                </p>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-text-muted">Link da sua loja</span>
+                  <code className="break-all rounded-card border border-surface-border bg-surface px-2 py-1 text-xs">
+                    {STORE_URL}
+                  </code>
+                </div>
+                <p className="text-text-muted">
+                  Consumer Key/Secret: gere um par novo (descrição “Frenet”, permissão{' '}
+                  <b>Ler e escrever</b>) em{' '}
+                  <Link href="/integracoes" className="text-accent hover:underline">
+                    Integrações → WooCommerce API
+                  </Link>{' '}
+                  e cole os dois campos lá na Frenet.
+                </p>
+              </div>
+
               <Input
                 label="Token da Frenet"
-                hint="Painel da Frenet → Configurações → Integrações/API."
+                hint="Painel da Frenet → Configurações → Integrações/API. Usado só pra cotação em tempo real no checkout (a etiqueta/rastreio vão pela integração WooCommerce acima)."
                 value={cfg.frenet_token ?? ''}
                 placeholder={cfg.has_frenet_token ? '•••••••• configurado (deixe em branco p/ manter)' : ''}
                 onChange={(e) => set('frenet_token', e.target.value)}
               />
-              <Input
-                label="Token de parceiro (whitelabel)"
-                hint="Só necessário pra emitir etiqueta pela API — nem toda conta Frenet tem esse acesso liberado; se faltar, solicite ao suporte comercial da Frenet. Cotação e rastreio funcionam sem ele."
-                value={cfg.frenet_partner_token ?? ''}
-                placeholder={cfg.has_frenet_partner_token ? '•••••••• configurado (deixe em branco p/ manter)' : ''}
-                onChange={(e) => set('frenet_partner_token', e.target.value)}
-              />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  label="Nome do header do webhook"
-                  hint="Escolha um nome (ex.: X-Loja-Token) e cadastre no painel da Frenet."
-                  value={cfg.frenet_webhook_header_name ?? ''}
-                  onChange={(e) => set('frenet_webhook_header_name', e.target.value)}
-                />
-                <Input
-                  label="Valor do header do webhook"
-                  value={cfg.frenet_webhook_header_value ?? ''}
-                  placeholder={cfg.has_frenet_webhook_header_value ? '•••••••• configurado (deixe em branco p/ manter)' : ''}
-                  onChange={(e) => set('frenet_webhook_header_value', e.target.value)}
-                />
-              </div>
-              <WebhookUrlBox
-                url={cfg.frenet_webhook_url}
-                note="Cadastre no painel da Frenet junto com o nome/valor do header acima. Sem assinatura própria — a Frenet só verifica por esse header customizado."
-              />
               <Button loading={savingFrenet} onClick={() => void saveFrenet()} className="self-start">
                 Salvar Frenet
               </Button>
+
+              <details className="rounded-card bg-bg-subtle p-2 text-xs text-text-muted">
+                <summary className="cursor-pointer font-medium">
+                  Avançado — emitir etiqueta direto pela API da Frenet (whitelabel)
+                </summary>
+                <div className="flex flex-col gap-3 pt-3">
+                  <p>
+                    Só funciona se a sua conta tiver o token de parceiro liberado pelo suporte
+                    comercial da Frenet — a maioria das contas usa a integração WooCommerce acima
+                    em vez disso.
+                  </p>
+                  <Input
+                    label="Token de parceiro (whitelabel)"
+                    value={cfg.frenet_partner_token ?? ''}
+                    placeholder={cfg.has_frenet_partner_token ? '•••••••• configurado (deixe em branco p/ manter)' : ''}
+                    onChange={(e) => set('frenet_partner_token', e.target.value)}
+                  />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      label="Nome do header do webhook"
+                      hint="Escolha um nome (ex.: X-Loja-Token) e cadastre no painel da Frenet."
+                      value={cfg.frenet_webhook_header_name ?? ''}
+                      onChange={(e) => set('frenet_webhook_header_name', e.target.value)}
+                    />
+                    <Input
+                      label="Valor do header do webhook"
+                      value={cfg.frenet_webhook_header_value ?? ''}
+                      placeholder={cfg.has_frenet_webhook_header_value ? '•••••••• configurado (deixe em branco p/ manter)' : ''}
+                      onChange={(e) => set('frenet_webhook_header_value', e.target.value)}
+                    />
+                  </div>
+                  <WebhookUrlBox
+                    url={cfg.frenet_webhook_url}
+                    note="Cadastre no painel da Frenet junto com o nome/valor do header acima. Sem assinatura própria — a Frenet só verifica por esse header customizado."
+                  />
+                  <Button loading={savingFrenet} variant="outline" onClick={() => void saveFrenet()} className="self-start">
+                    Salvar avançado
+                  </Button>
+                </div>
+              </details>
             </Card>
           </div>
         )}

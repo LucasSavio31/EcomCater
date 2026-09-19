@@ -108,6 +108,16 @@ async def order_out(db: AsyncSession, order: Order) -> dict:
     return await _order_out(db, order)
 
 
+
+# Régua de avanço (nunca retrocede), mesmo espírito de `_ORDER_STATUS_RANK`
+# em `shipping/service.py` -- duplicada aqui de propósito (módulo
+# independente, sem acoplar num helper privado de outro módulo).
+_STATUS_RANK = {
+    "pending_payment": 0, "paid": 1, "processing": 2,
+    "tracking_available": 3, "shipped": 4, "delivered": 5,
+}
+
+
 async def update_order(db: AsyncSession, order: Order, patch: dict) -> Order:
     status = patch.get("status")
     if status:
@@ -119,16 +129,34 @@ async def update_order(db: AsyncSession, order: Order, patch: dict) -> Order:
             message="Atualizado via integração WooCommerce (ERP).",
         )
     # rastreio, se vier em meta_data (_tracking_number / _tracking_url) --
-    # convenção do plugin de rastreio mais comum no ecossistema WooCommerce.
+    # convenção do plugin de rastreio mais comum no ecossistema WooCommerce
+    # (é assim que a Frenet, por exemplo, devolve o rastreio pra loja depois
+    # de puxar o pedido por aqui -- ela não tem uma API própria de etiqueta
+    # pra contas comuns, integra via WooCommerce mesmo).
     meta = {m.get("key"): m.get("value") for m in patch.get("meta_data") or []}
     tracking = meta.get("_tracking_number")
     if tracking:
         svc = dict(order.shipping_service_json or {})
+        changed = svc.get("tracking_code") != tracking
         svc["tracking_code"] = tracking
         if meta.get("_tracking_url"):
             svc["tracking_url"] = meta["_tracking_url"]
         order.shipping_service_json = svc
         await db.flush()
+        # rastreio chegou = "rastreio disponível" pro cliente -- mesma régua
+        # de avanço automático que o Melhor Envio/Frenet nativos usam (nunca
+        # regride um pedido que já está mais avançado, ex. já "shipped"; e só
+        # mexe em pedido já pago -- rastreio num pedido ainda não pago não
+        # deveria empurrar status nenhum).
+        if (
+            changed
+            and order.status in {"paid", "processing"}
+            and _STATUS_RANK.get("tracking_available", 0) > _STATUS_RANK.get(order.status, 99)
+        ):
+            await orders_service.transition(
+                db, order, "tracking_available", actor_type="admin",
+                message="Rastreio recebido via integração WooCommerce (ERP).",
+            )
     return order
 
 

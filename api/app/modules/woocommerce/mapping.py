@@ -101,6 +101,11 @@ def order_to_wc(order: Order, *, product_wc_ids: dict[str, int] | None = None) -
     if order.cpf:
         meta_data.append({"key": "_billing_persontype", "value": "1"})
         meta_data.append({"key": "_billing_cpf", "value": order.cpf})
+    svc = order.shipping_service_json or {}
+    if svc.get("tracking_code"):
+        meta_data.append({"key": "_tracking_number", "value": svc["tracking_code"]})
+        if svc.get("tracking_url"):
+            meta_data.append({"key": "_tracking_url", "value": svc["tracking_url"]})
     return {
         "id": order.wc_id,
         "parent_id": 0,

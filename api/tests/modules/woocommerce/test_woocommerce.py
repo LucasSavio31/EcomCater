@@ -176,6 +176,75 @@ async def test_wc_tracking_meta_saves_on_order(client, variant, wc_key):
     assert single.status_code == 200
 
 
+@pytest.mark.asyncio
+async def test_wc_tracking_meta_round_trips_on_read(client, variant, wc_key):
+    """O rastreio gravado via PUT tem que voltar em GET (senão o ERP não
+    consegue conferir o que ele mesmo escreveu)."""
+    await _order(client, variant["variant_id"])
+    auth = (wc_key["consumer_key"], wc_key["consumer_secret"])
+    wc_order = (await client.get("/wp-json/wc/v3/orders", auth=auth)).json()[0]
+
+    await client.put(
+        f"/wp-json/wc/v3/orders/{wc_order['id']}",
+        json={
+            "meta_data": [
+                {"key": "_tracking_number", "value": "BR123456789"},
+                {"key": "_tracking_url", "value": "https://rastreio.test/BR123456789"},
+            ]
+        },
+        auth=auth,
+    )
+
+    single = (await client.get(f"/wp-json/wc/v3/orders/{wc_order['id']}", auth=auth)).json()
+    meta = {m["key"]: m["value"] for m in single["meta_data"]}
+    assert meta["_tracking_number"] == "BR123456789"
+    assert meta["_tracking_url"] == "https://rastreio.test/BR123456789"
+
+
+@pytest.mark.asyncio
+async def test_wc_tracking_advances_status_to_tracking_available(
+    client, variant, wc_key, admin_token, auth_headers
+):
+    """Rastreio chegando via integração (ex.: Frenet puxando/atualizando
+    pedido pela ponte WooCommerce) avança o pedido pra "rastreio disponível"
+    de verdade -- mesmo efeito (e-mail ao cliente) do Melhor Envio nativo."""
+    order = await _order(client, variant["variant_id"])
+    auth = (wc_key["consumer_key"], wc_key["consumer_secret"])
+    wc_order = (await client.get("/wp-json/wc/v3/orders", auth=auth)).json()[0]
+
+    # precisa estar pago antes -- rastreio não pula pagamento
+    await client.put(f"/wp-json/wc/v3/orders/{wc_order['id']}", json={"status": "processing"}, auth=auth)
+
+    r = await client.put(
+        f"/wp-json/wc/v3/orders/{wc_order['id']}",
+        json={"meta_data": [{"key": "_tracking_number", "value": "BR999888777"}]},
+        auth=auth,
+    )
+    assert r.status_code == 200, r.text
+
+    h = auth_headers(admin_token)
+    detail = (await client.get(f"/api/admin/orders/{order['number']}", headers=h)).json()
+    assert detail["status"] == "tracking_available"
+
+
+@pytest.mark.asyncio
+async def test_wc_tracking_does_not_advance_unpaid_order(client, variant, wc_key, admin_token, auth_headers):
+    order = await _order(client, variant["variant_id"])
+    auth = (wc_key["consumer_key"], wc_key["consumer_secret"])
+    wc_order = (await client.get("/wp-json/wc/v3/orders", auth=auth)).json()[0]
+
+    r = await client.put(
+        f"/wp-json/wc/v3/orders/{wc_order['id']}",
+        json={"meta_data": [{"key": "_tracking_number", "value": "BR111222333"}]},
+        auth=auth,
+    )
+    assert r.status_code == 200, r.text
+
+    h = auth_headers(admin_token)
+    detail = (await client.get(f"/api/admin/orders/{order['number']}", headers=h)).json()
+    assert detail["status"] == "pending_payment"
+
+
 # ---------------------------------------------------------------- produtos
 
 @pytest.mark.asyncio
