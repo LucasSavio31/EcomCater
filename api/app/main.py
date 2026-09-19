@@ -13,7 +13,7 @@ mimetypes.add_type("image/webp", ".webp")
 mimetypes.add_type("image/avif", ".avif")
 mimetypes.add_type("image/svg+xml", ".svg")
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -117,10 +117,19 @@ def create_app() -> FastAPI:
     register_all(app)
 
     # REST API do WooCommerce (`/wp-json/wc/v3/...`) -- caminho fixo por
-    # convenção do WordPress, fora do prefixo `/api/...` dos demais módulos.
+    # convenção do WordPress, fora do prefixo `/api/...` dos demais módulos,
+    # por isso montada à parte -- mas ainda tranca pelo mesmo toggle do
+    # módulo (Sistema → Módulos), senão desativar lá não desligaria a API de
+    # verdade que os ERPs batem.
+    from app.core.deps import require_module_enabled
     from app.modules.woocommerce.router_public import router as woocommerce_router
 
-    app.include_router(woocommerce_router, prefix="/wp-json", tags=["woocommerce"])
+    app.include_router(
+        woocommerce_router,
+        prefix="/wp-json",
+        tags=["woocommerce"],
+        dependencies=[Depends(require_module_enabled("woocommerce"))],
+    )
 
     @app.get("/health", tags=["meta"])
     async def health() -> dict:

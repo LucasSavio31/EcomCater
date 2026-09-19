@@ -1,12 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ComponentType, SVGProps } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button, Drawer, cn } from '@ecom/ui';
 import { useAdminAuth } from '@/modules/auth';
+import { configApi } from '@/modules/config/api';
 import { NotificationBell } from './notification-bell';
+
+/** Nome do evento disparado (em `window`) sempre que um módulo é
+ * ativado/desativado em Sistema → Módulos, pra sumir/reaparecer no menu na
+ * hora, sem precisar recarregar a página. */
+export const MODULES_CHANGED_EVENT = 'ecom:modules-changed';
 import {
   IconAnalytics,
   IconAppearance,
@@ -40,6 +46,11 @@ interface NavItem {
   href: string;
   label: string;
   icon: Icon;
+  /** Slugs de módulo (Sistema → Módulos) que dão acesso a este item — some
+   * do menu quando NENHUM dos módulos listados está ativo. Vários slugs =
+   * a página atende mais de um módulo (ex.: /integracoes tem WooCommerce
+   * e UP Seller); some só se os dois estiverem desativados. */
+  moduleSlugs?: string[];
 }
 interface NavGroup {
   title: string;
@@ -61,7 +72,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/produtos', label: 'Produtos', icon: IconProducts },
       { href: '/categorias', label: 'Categorias', icon: IconCategories },
       { href: '/filtros', label: 'Filtros', icon: IconFilters },
-      { href: '/tabelas-medidas', label: 'Tabelas de medidas', icon: IconRuler },
+      { href: '/tabelas-medidas', label: 'Tabelas de medidas', icon: IconRuler, moduleSlugs: ['size_charts'] },
       { href: '/avaliacoes', label: 'Avaliações', icon: IconStar },
     ],
   },
@@ -69,20 +80,20 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Vendas',
     items: [
       { href: '/pedidos', label: 'Pedidos', icon: IconOrders },
-      { href: '/recuperacao-carrinho', label: 'Recuperação de carrinho', icon: IconCart },
+      { href: '/recuperacao-carrinho', label: 'Recuperação de carrinho', icon: IconCart, moduleSlugs: ['cart_recovery'] },
       { href: '/clientes', label: 'Clientes', icon: IconCustomers },
-      { href: '/promocoes', label: 'Promoções', icon: IconPromotions },
-      { href: '/pagamento', label: 'Pagamento', icon: IconPayment },
-      { href: '/frete', label: 'Frete', icon: IconShipping },
-      { href: '/nfe', label: 'NF-e', icon: IconInvoice },
-      { href: '/integracoes', label: 'Integrações', icon: IconIntegrations },
+      { href: '/promocoes', label: 'Promoções', icon: IconPromotions, moduleSlugs: ['promotions'] },
+      { href: '/pagamento', label: 'Pagamento', icon: IconPayment, moduleSlugs: ['payment'] },
+      { href: '/frete', label: 'Frete', icon: IconShipping, moduleSlugs: ['shipping'] },
+      { href: '/nfe', label: 'NF-e', icon: IconInvoice, moduleSlugs: ['nfe'] },
+      { href: '/integracoes', label: 'Integrações', icon: IconIntegrations, moduleSlugs: ['woocommerce', 'upseller'] },
     ],
   },
   {
     title: 'Marketing',
     items: [
       { href: '/rastreamento', label: 'Rastreamento e anúncios', icon: IconAnalytics },
-      { href: '/newsletter', label: 'Newsletter e popup', icon: IconMail },
+      { href: '/newsletter', label: 'Newsletter e popup', icon: IconMail, moduleSlugs: ['newsletter'] },
       { href: '/leads', label: 'Leads', icon: IconLeads },
     ],
   },
@@ -112,11 +123,40 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/** Slugs de módulo DESATIVADO (toggleable + enabled=false). Carrega ao
+ * montar e de novo sempre que `MODULES_CHANGED_EVENT` dispara (a tela de
+ * Módulos avisa assim que salva um toggle) — sem isso o menu só atualizaria
+ * num F5. Começa vazio (nada escondido) pra não piscar item sumindo/
+ * reaparecendo enquanto a primeira busca ainda não voltou. */
+function useDisabledModuleSlugs(): Set<string> {
+  const [disabled, setDisabled] = useState<Set<string>>(new Set());
+
+  const load = useCallback(async () => {
+    const res = await configApi.listModules();
+    if (!res.ok) return;
+    setDisabled(new Set(res.data.filter((m) => m.toggleable && !m.enabled).map((m) => m.slug)));
+  }, []);
+
+  useEffect(() => {
+    void load();
+    window.addEventListener(MODULES_CHANGED_EVENT, load);
+    return () => window.removeEventListener(MODULES_CHANGED_EVENT, load);
+  }, [load]);
+
+  return disabled;
+}
+
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const disabledSlugs = useDisabledModuleSlugs();
   return (
     <nav aria-label="Menu administrativo" className="flex flex-col">
-      {NAV_GROUPS.map((group, gi) => (
+      {NAV_GROUPS.map((group, gi) => {
+        const items = group.items.filter(
+          (item) => !item.moduleSlugs || item.moduleSlugs.some((slug) => !disabledSlugs.has(slug)),
+        );
+        if (items.length === 0) return null;
+        return (
         <div
           key={group.title}
           className={cn(
@@ -127,7 +167,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             {group.title}
           </p>
-          {group.items.map((item) => {
+          {items.map((item) => {
             const active = isActive(pathname, item.href);
             // só a rota EXATA (não uma sub-rota, ex.: /pedidos/2026-000001)
             // conta como "já estou aqui" — senão clicar em "Pedidos" a partir
@@ -159,7 +199,8 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             );
           })}
         </div>
-      ))}
+        );
+      })}
     </nav>
   );
 }

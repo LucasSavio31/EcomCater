@@ -13,7 +13,7 @@ import {
   PageSizeSelect,
   DEFAULT_PAGE_SIZE,
 } from '@/components/date-range-filter';
-import { IconPrinter, IconTag, IconTrash } from '@/components/nav-icons';
+import { IconEdit, IconInvoice, IconPrinter, IconShipping, IconTag, IconTrash } from '@/components/nav-icons';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
@@ -615,75 +615,93 @@ function PedidosPageInner() {
 
       {/* Barra de ações em massa */}
       {someChecked && (
-        <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-card border border-surface-border bg-surface p-3 shadow-sm">
-          <span className="text-sm font-medium">{selected.size} selecionado(s)</span>
-          <select
-            aria-label="Mudar status dos selecionados"
-            value=""
-            onChange={(e) => {
-              const v = e.target.value as OrderStatus;
-              if (v) setBulkStatusTo(v);
-              e.currentTarget.value = '';
-            }}
-            className="min-h-touch rounded-card border border-surface-border bg-surface px-3 text-sm"
-          >
-            <option value="">Mudar status para…</option>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+        <div className="sticky top-2 z-10 flex flex-wrap items-center gap-1.5 rounded-card border border-surface-border bg-surface p-2.5 text-sm shadow-sm">
+          <span className="mr-1 font-medium">{selected.size} selecionado(s)</span>
+          <div className="relative">
+            <IconEdit
+              width={13}
+              height={13}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted"
+            />
+            <select
+              aria-label="Mudar status dos selecionados"
+              value=""
+              onChange={(e) => {
+                const v = e.target.value as OrderStatus;
+                if (v) setBulkStatusTo(v);
+                e.currentTarget.value = '';
+              }}
+              className="min-h-touch rounded-card border border-surface-border bg-surface py-1.5 pl-7 pr-2 text-xs"
+            >
+              <option value="">Mudar status…</option>
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <Button
             size="sm"
             variant="outline"
+            className="!gap-1.5 !px-2.5 !text-xs"
             loading={xlsBusy}
             onClick={() => void downloadSupplierXlsx(selectedList)}
           >
-            <IconPrinter width={16} height={16} /> Baixar xlsx
-          </Button>
-          <Button size="sm" variant="outline" loading={busy} onClick={() => void sendToME()}>
-            Gerar Etiquetas
+            <IconPrinter width={14} height={14} /> Baixar xlsx
           </Button>
           <Button
             size="sm"
             variant="outline"
+            className="!gap-1.5 !px-2.5 !text-xs"
+            loading={busy}
+            onClick={() => void sendToME()}
+          >
+            <IconShipping width={14} height={14} /> Gerar Etiquetas
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="!gap-1.5 !px-2.5 !text-xs"
             loading={labelBusy}
             onClick={() => void downloadLabels(selectedList)}
           >
-            <IconTag width={16} height={16} /> Baixar Etiquetas
+            <IconTag width={14} height={14} /> Baixar Etiquetas
           </Button>
           <Button
             size="sm"
             variant="outline"
+            className="!gap-1.5 !px-2.5 !text-xs"
             loading={nfeEmitBusy}
             onClick={() => void bulkEmitNfe(selectedList)}
           >
-            Emitir NF-e
+            <IconInvoice width={14} height={14} /> Emitir NF-e
           </Button>
           <Button
             size="sm"
             variant="outline"
+            className="!gap-1.5 !px-2.5 !text-xs"
             loading={nfeDanfeBusy}
             onClick={() => void bulkDanfe(selectedList)}
           >
-            <IconPrinter width={16} height={16} /> Baixar DANFEs
+            <IconPrinter width={14} height={14} /> Baixar DANFEs
           </Button>
           <Button
             size="sm"
             variant="outline"
+            className="!gap-1.5 !px-2.5 !text-xs"
             loading={nfeMiniDanfeBusy}
             onClick={() => void bulkDanfe(selectedList, true)}
           >
-            <IconTag width={16} height={16} /> Baixar DANFEs Simples
+            <IconTag width={14} height={14} /> DANFEs Simples
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            className="text-danger"
+            className="!gap-1.5 !px-2.5 !text-xs text-danger"
             onClick={() => setDeleting(selectedList)}
           >
-            Excluir selecionados
+            <IconTrash width={14} height={14} /> Excluir
           </Button>
         </div>
       )}

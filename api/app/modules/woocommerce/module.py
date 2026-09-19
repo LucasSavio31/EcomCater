@@ -15,9 +15,9 @@ from app.modules.woocommerce.router_admin import admin_router
 spec = register(
     ModuleSpec(
         slug="woocommerce",
-        label="Integrações (WooCommerce API)",
+        label="Integrações (API para ERP)",
         kind="feature",
-        toggleable=False,
+        toggleable=True,
         default_enabled=True,
         admin_router=admin_router,
         tags=["woocommerce"],

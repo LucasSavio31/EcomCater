@@ -8,6 +8,7 @@ import { AsyncBoundary } from '@/components/async-boundary';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { configApi, type ModuleInfo } from '@/modules/config/api';
+import { MODULES_CHANGED_EVENT } from '@/components/admin-shell';
 
 export default function ModulosPage() {
   const toast = useToast();
@@ -23,6 +24,7 @@ export default function ModulosPage() {
       return;
     }
     toast.success(`Módulo ${mod.label} ${enabled ? 'ativado' : 'desativado'}.`);
+    window.dispatchEvent(new Event(MODULES_CHANGED_EVENT));
     reload();
   }
 

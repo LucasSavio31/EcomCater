@@ -6,8 +6,9 @@ spec = register(
     ModuleSpec(
         slug="size_charts",
         label="Tabelas de medidas",
-        kind="domain",
-        toggleable=False,
+        kind="feature",
+        toggleable=True,
+        default_enabled=True,
         admin_router=admin_router,
         tags=["size_charts"],
     )
