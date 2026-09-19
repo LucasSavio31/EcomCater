@@ -50,8 +50,15 @@ export default function FretePage() {
   };
 
   const providerOptions = (['melhor_envio', 'frenet'] as const)
-    .filter((p) => p === cfg?.active_provider || (p === 'melhor_envio' ? cfg?.has_token : cfg?.has_frenet_token))
+    .filter(
+      (p) =>
+        p === cfg?.active_provider ||
+        (p === 'melhor_envio' ? (cfg?.melhor_envio_enabled ?? true) : cfg?.frenet_enabled),
+    )
     .map((p) => ({ value: p, label: PROVIDER_LABEL[p] ?? p }));
+
+  const activeProviderHasQuoteToken =
+    cfg?.active_provider === 'melhor_envio' ? cfg?.has_token : cfg?.has_frenet_token;
 
   async function save(): Promise<void> {
     if (!cfg) return;
@@ -116,7 +123,15 @@ export default function FretePage() {
           <Card variant="outline" className="flex max-w-2xl flex-col gap-4">
             {providerOptions.length === 0 && (
               <p className="rounded-card bg-warning/10 p-2 text-sm text-warning">
-                Nenhum provedor conectado ainda — vá em Provedores de frete e configure pelo menos um.
+                Nenhum provedor ativo ainda — vá em Provedores de frete e ative pelo menos um.
+              </p>
+            )}
+            {providerOptions.length > 0 && !activeProviderHasQuoteToken && (
+              <p className="rounded-card bg-warning/10 p-2 text-sm text-warning">
+                O provedor ativo ({PROVIDER_LABEL[cfg.active_provider] ?? cfg.active_provider}) não
+                tem o token de cotação preenchido — o cálculo de frete no checkout vai falhar até
+                você configurar em Provedores de frete (a menos que &ldquo;Frete grátis&rdquo;
+                esteja ligado abaixo).
               </p>
             )}
             <div className="grid gap-4 sm:grid-cols-2">

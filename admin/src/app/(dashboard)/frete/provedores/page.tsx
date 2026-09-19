@@ -44,6 +44,13 @@ export default function ProvedoresFretePage() {
     setDraft((d) => ({ ...d, [k]: v }));
   };
 
+  async function toggleEnabled(key: 'melhor_envio_enabled' | 'frenet_enabled', value: boolean): Promise<void> {
+    const result = await configApi.putShipping({ [key]: value });
+    if (!result.ok) return toast.error(result.error.message);
+    toast.success(value ? 'Provedor ativado.' : 'Provedor desativado.');
+    setData(result.data);
+  }
+
   async function saveMelhorEnvio(): Promise<void> {
     if (!cfg) return;
     setSavingMe(true);
@@ -132,19 +139,26 @@ export default function ProvedoresFretePage() {
         {cfg && (
           <div className="flex max-w-2xl flex-col gap-4">
             <Card variant="outline" className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold">Melhor Envio</h3>
-                <Badge tone={cfg.has_token ? 'success' : 'neutral'}>
-                  {cfg.has_token ? 'Conectado' : 'Não conectado'}
-                </Badge>
-                {cfg.token_from_env && (
-                  <span className="text-xs text-text-muted">via .env do servidor</span>
-                )}
-                {cfg.token_expires_at && (
-                  <span className="text-xs text-text-muted">
-                    expira em {new Date(cfg.token_expires_at).toLocaleDateString('pt-BR')}
-                  </span>
-                )}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-semibold">Melhor Envio</h3>
+                  <Badge tone={cfg.has_token ? 'success' : 'neutral'}>
+                    {cfg.has_token ? 'Conectado' : 'Não conectado'}
+                  </Badge>
+                  {cfg.token_from_env && (
+                    <span className="text-xs text-text-muted">via .env do servidor</span>
+                  )}
+                  {cfg.token_expires_at && (
+                    <span className="text-xs text-text-muted">
+                      expira em {new Date(cfg.token_expires_at).toLocaleDateString('pt-BR')}
+                    </span>
+                  )}
+                </div>
+                <Checkbox
+                  label="Ativo"
+                  checked={cfg.melhor_envio_enabled ?? true}
+                  onChange={(v) => void toggleEnabled('melhor_envio_enabled', v)}
+                />
               </div>
 
               <Checkbox
@@ -217,11 +231,18 @@ export default function ProvedoresFretePage() {
             </Card>
 
             <Card variant="outline" className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold">Frenet</h3>
-                <Badge tone={cfg.has_frenet_token ? 'success' : 'neutral'}>
-                  {cfg.has_frenet_token ? 'Cotação conectada' : 'Cotação não conectada'}
-                </Badge>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-semibold">Frenet</h3>
+                  <Badge tone={cfg.has_frenet_token ? 'success' : 'neutral'}>
+                    {cfg.has_frenet_token ? 'Cotação conectada' : 'Cotação não conectada'}
+                  </Badge>
+                </div>
+                <Checkbox
+                  label="Ativo"
+                  checked={!!cfg.frenet_enabled}
+                  onChange={(v) => void toggleEnabled('frenet_enabled', v)}
+                />
               </div>
 
               <div className="flex flex-col gap-2 rounded-card bg-bg-subtle p-3 text-sm">

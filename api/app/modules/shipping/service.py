@@ -981,8 +981,20 @@ async def _render_url_to_pdf(url: str, *, postal_card: bool, want_declaration: b
             await page.goto(url, wait_until="networkidle", timeout=60_000)
             await page.wait_for_timeout(3500)
 
-            body = (await page.inner_text("body")).lower()
-            if "destinat" not in body and "recebedor" not in body and "remetente" not in body:
+            # A geração da etiqueta no ME é assíncrona -- às vezes o link de
+            # impressão já existe mas o conteúdo ainda não terminou de
+            # processar do lado deles. Em vez de desistir na primeira
+            # tentativa (3.5s), recarrega e espera mais um pouco, algumas
+            # vezes, antes de reportar "ainda não saiu".
+            body = ""
+            for attempt in range(4):
+                body = (await page.inner_text("body")).lower()
+                if "destinat" in body or "recebedor" in body or "remetente" in body:
+                    break
+                if attempt < 3:
+                    await page.reload(wait_until="networkidle", timeout=60_000)
+                    await page.wait_for_timeout(4000 + attempt * 2000)
+            else:
                 raise DomainError(
                     "O Melhor Envio não renderizou a etiqueta (a etiqueta pode ainda "
                     "estar sendo gerada — tente de novo em alguns segundos).",
@@ -1108,10 +1120,11 @@ async def generate_reverse_label(db: AsyncSession, number: str) -> dict:
     )
     if not order:
         raise DomainError("Pedido não encontrado.", code="order_not_found")
-    if order.reverse_shipping_json:
-        raise DomainError(
-            "Esse pedido já tem uma logística reversa gerada.", code="reverse_already_exists"
-        )
+    # Pode gerar de novo quantas vezes precisar (ex.: cancelou a etiqueta
+    # anterior no painel do ME e quer refazer) -- cada chamada cria um envio
+    # NOVO de verdade no Melhor Envio (cobra de novo do saldo, se comprar);
+    # o que valer pro pedido é sempre o último `reverse_shipping_json`
+    # salvo, sobrescrevendo o anterior.
 
     addr = order.shipping_address_json or {}
     _req = ("street", "number", "district", "city", "state", "zip")
@@ -1251,7 +1264,17 @@ async def generate_reverse_label(db: AsyncSession, number: str) -> dict:
             svc["protocol"] = protocol
         svc["me_status"] = "purchased"
         order.reverse_shipping_json = dict(svc)
-        await db.flush()
+        # Registra e avança o pedido pra "returning" JÁ AQUI, assim que a
+        # compra é confirmada -- não espera o PDF (que pode falhar/demorar,
+        # é assíncrono do lado do ME e não deveria travar o fato de que a
+        # devolução já foi comprada de verdade). Commit imediato: se o passo
+        # do PDF adiante falhar/estourar, essa parte já fica valendo.
+        await record_event(
+            db, order, type="reverse_label_generated", actor_type="admin",
+            message=f"Logística reversa comprada no Melhor Envio (protocolo {protocol})."
+            if protocol else "Logística reversa comprada no Melhor Envio.",
+        )
+        await transition(db, order, "returning", actor_type="system", message="Logística reversa comprada.")
 
         await c.post(f"{base}/api/v2/me/shipment/generate", json={"orders": [shipment_id]})
 
@@ -1272,27 +1295,35 @@ async def generate_reverse_label(db: AsyncSession, number: str) -> dict:
                 pass
 
     if not label_url:
-        # comprada, mas o link de impressão falhou — não trava a compra, só
-        # não tem PDF ainda. Fica visível pro admin tentar de novo depois.
+        # comprada, mas o link de impressão falhou — não trava a compra (já
+        # registrada e com status avançado acima), só não tem PDF ainda.
+        # Sem evento próprio na linha do tempo (o "comprada" acima já conta a
+        # história; isso ficaria repetitivo/alarmante) -- a rotina de
+        # sincronização (`sync_reverse_tracking`) tenta de novo sozinha até
+        # conseguir, sem precisar de ação manual.
         order.reverse_shipping_json = dict(svc)
-        await record_event(
-            db, order, type="reverse_label_generated", actor_type="admin",
-            message="Logística reversa comprada, mas o PDF ainda não pôde ser gerado.",
-        )
+        await db.commit()
         return {"ok": True, "label_pdf": False, **svc}
 
-    pdf = await _render_url_to_pdf(label_url, postal_card=True, want_declaration=False)
+    try:
+        pdf = await _render_url_to_pdf(label_url, postal_card=True, want_declaration=False)
+    except DomainError:
+        order.reverse_shipping_json = dict(svc)
+        await db.commit()
+        return {"ok": True, "label_pdf": False, **svc}
     key = f"orders/{number}/reverse-label.pdf"
     private_storage.save(key, pdf, "application/pdf")
     svc["reverse_label_key"] = key
     order.reverse_shipping_json = dict(svc)
 
     tracking_code = svc.get("tracking_code")
-    msg = "Etiqueta de logística reversa gerada — PDF enviado ao cliente por e-mail."
+    msg = "PDF da etiqueta de logística reversa pronto para download."
     if tracking_code:
         msg += f" Código de rastreio: {tracking_code}."
-    await record_event(db, order, type="reverse_label_generated", actor_type="admin", message=msg)
-    await transition(db, order, "returning", actor_type="system", message="Logística reversa gerada.")
+    await record_event(db, order, type="reverse_label_pdf_ready", actor_type="admin", message=msg)
+    # commit ANTES de emitir -- o e-mail (subscriber de `order.reverse_label_ready`)
+    # abre a própria sessão e precisa enxergar o `reverse_label_key` já gravado.
+    await db.commit()
     await emit("order.reverse_label_ready", {"order_id": str(order.id)})
 
     return {"ok": True, "label_pdf": True, **svc}
@@ -1501,7 +1532,19 @@ async def sync_reverse_tracking(db: AsyncSession) -> dict:
             )
         )
     )
-    if not rows:
+    # pedidos com etiqueta comprada mas cujo PDF não saiu na hora (geração
+    # assíncrona do ME) -- entram na fila da rotina até conseguir. Pode
+    # incluir pedidos já "returned" (a devolução chegou, mas o PDF em si
+    # ainda vale a pena tentar completar pro histórico).
+    pdf_pending_rows = list(
+        await db.scalars(
+            select(Order).where(
+                Order.reverse_shipping_json["shipment_id"].astext.isnot(None),
+                Order.reverse_shipping_json["reverse_label_key"].astext.is_(None),
+            )
+        )
+    )
+    if not rows and not pdf_pending_rows:
         return {"ran": True, "checked": 0, "updated": 0}
 
     base = _me_base(cfg)
@@ -1565,8 +1608,45 @@ async def sync_reverse_tracking(db: AsyncSession) -> dict:
                 )
                 updated += 1
 
+        # fila de PDF pendente: tenta de novo pegar o link de impressão +
+        # renderizar, sem comprar nada de novo (a compra já foi feita).
+        from app.modules.orders.service import record_event as _record_event
+        from app.shared.storage import private_storage
+
+        for order in pdf_pending_rows:
+            svc = dict(order.reverse_shipping_json or {})
+            sid = svc.get("shipment_id")
+            if not sid or svc.get("reverse_label_key"):
+                continue
+            try:
+                r = await c.post(f"{base}/api/v2/me/shipment/print", json={"mode": "public", "orders": [sid]})
+                label_url = (r.json() or {}).get("url") if r.status_code < 300 else None
+            except Exception:  # noqa: BLE001
+                logger.exception("sync reversa: falha ao pegar link de impressão do envio %s", sid)
+                continue
+            if not label_url:
+                continue
+            try:
+                pdf = await _render_url_to_pdf(label_url, postal_card=True, want_declaration=False)
+            except DomainError:
+                continue  # ainda não saiu -- tenta de novo na próxima rodada
+            except Exception:  # noqa: BLE001
+                logger.exception("sync reversa: falha ao renderizar PDF do envio %s", sid)
+                continue
+            key = f"orders/{order.number}/reverse-label.pdf"
+            private_storage.save(key, pdf, "application/pdf")
+            svc["reverse_label_key"] = key
+            order.reverse_shipping_json = svc
+            await _record_event(
+                db, order, type="reverse_label_pdf_ready", actor_type="system",
+                message="PDF da etiqueta de logística reversa pronto para download (rotina).",
+            )
+            await db.commit()
+            await emit("order.reverse_label_ready", {"order_id": str(order.id)})
+            updated += 1
+
     await db.flush()
-    return {"ran": True, "checked": len(rows), "updated": updated}
+    return {"ran": True, "checked": len(rows) + len(pdf_pending_rows), "updated": updated}
 
 
 # --------------------------------------------------------------------- Etiqueta Frenet

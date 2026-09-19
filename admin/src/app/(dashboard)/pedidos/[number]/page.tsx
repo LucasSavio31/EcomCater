@@ -149,8 +149,10 @@ const EVENT_LABEL: Record<string, string> = {
   label_printed: 'Etiqueta impressa',
   edited: 'Pedido editado',
   payment_confirmed: 'Pagamento confirmado',
-  reverse_label_generated: 'Logística reversa gerada',
+  reverse_label_generated: 'Logística reversa comprada',
   reverse_label_cart: 'Logística reversa — carrinho do Melhor Envio',
+  reverse_label_pdf_pending: 'Logística reversa — PDF ainda não saiu',
+  reverse_label_pdf_ready: 'PDF da etiqueta de devolução pronto',
   reverse_tracking_added: 'Rastreio da devolução adicionado',
   nfe_requested: 'NF-e enviada pra SEFAZ',
   nfe_authorized: 'NF-e autorizada',
@@ -737,8 +739,11 @@ export default function PedidoDetalhePage() {
                             aguardando pagamento no Melhor Envio
                           </span>
                         ) : (
-                          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
-                            comprada (gerando…)
+                          <span
+                            title="A geração da etiqueta no Melhor Envio é assíncrona — a sincronização automática tenta de novo sozinha até sair, sem precisar clicar em nada."
+                            className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning"
+                          >
+                            aguardando etiqueta…
                           </span>
                         )}
                       </div>

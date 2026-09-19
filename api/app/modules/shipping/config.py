@@ -13,6 +13,12 @@ class DefaultPackage(BaseModel):
 
 class ShippingConfig(BaseModel):
     active_provider: str = "melhor_envio"
+    # Liga/desliga cada provedor -- controla quem aparece como opção em
+    # "Provedor de frete ativo" (independe de ter token de cotação
+    # preenchido: dá pra habilitar a Frenet usando só a integração via
+    # WooCommerce, sem usar a cotação em tempo real dela).
+    melhor_envio_enabled: bool = True
+    frenet_enabled: bool = False
     origin_zip: str = "01001000"
     melhor_envio_token: str = ""          # access_token (JWT) — sobrescreve o .env
     melhor_envio_sandbox: bool = True

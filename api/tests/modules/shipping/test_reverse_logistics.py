@@ -174,6 +174,86 @@ async def test_reverse_label_no_balance_keeps_status(client, db, variant, monkey
 
 
 @pytest.mark.asyncio
+async def test_reverse_label_advances_status_even_if_pdf_render_fails(client, db, variant, monkeypatch):
+    """A compra em si (protocolo obtido) já é o fato real -- o pedido tem
+    que virar "returning" mesmo se o PDF falhar depois (renderização do ME
+    é assíncrona e às vezes atrasa). Antes disso ficava preso em "delivered"
+    até o PDF sair, mesmo com a devolução já comprada de verdade."""
+    order = await _delivered_order(client, db, variant)
+    await _setup_config(db)
+    _patch_quote(monkeypatch)
+
+    async def fake_post(self, url, json=None, **kwargs):
+        if url.endswith("/api/v2/me/cart"):
+            return httpx.Response(201, json={"id": "SHIP-REV-3"})
+        if url.endswith("/api/v2/me/shipment/checkout"):
+            return httpx.Response(200, json={"purchase": {"protocol": "PUR-TEST-3"}})
+        if url.endswith("/api/v2/me/shipment/generate"):
+            return httpx.Response(200, json={})
+        if url.endswith("/api/v2/me/shipment/print"):
+            return httpx.Response(200, json={"url": "https://sandbox.melhorenvio.com.br/imprimir/test"})
+        if url.endswith("/api/v2/me/shipment/tracking"):
+            return httpx.Response(200, json={})
+        raise AssertionError(f"POST inesperado: {url}")
+
+    async def fake_render_fails(url, *, postal_card, want_declaration):
+        raise DomainError("O Melhor Envio não renderizou a etiqueta.", code="me_pdf_empty")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    monkeypatch.setattr(shipping_service, "_render_url_to_pdf", fake_render_fails)
+
+    result = await shipping_service.generate_reverse_label(db, order.number)
+    assert result["ok"] is True
+    assert result["label_pdf"] is False
+
+    await db.refresh(order)
+    # o fato principal (compra) já vale, mesmo sem o PDF ainda
+    assert order.status == "returning"
+    assert order.reverse_shipping_json["protocol"] == "PUR-TEST-3"
+    assert "reverse_label_key" not in order.reverse_shipping_json
+
+
+@pytest.mark.asyncio
+async def test_reverse_label_can_be_regenerated(client, db, variant, monkeypatch):
+    """Pode gerar de novo quantas vezes precisar (ex.: cancelou a etiqueta
+    anterior no painel do ME) -- não trava mais em "já existe"."""
+    order = await _delivered_order(client, db, variant)
+    await _setup_config(db)
+    _patch_quote(monkeypatch)
+    _patch_render(monkeypatch)
+
+    attempt = {"n": 0}  # incrementado só no /cart -- 1 por tentativa de geração, não por POST
+
+    async def fake_post(self, url, json=None, **kwargs):
+        if url.endswith("/api/v2/me/cart"):
+            attempt["n"] += 1
+            return httpx.Response(201, json={"id": f"SHIP-REV-REGEN-{attempt['n']}"})
+        if url.endswith("/api/v2/me/shipment/checkout"):
+            return httpx.Response(200, json={"purchase": {"protocol": f"PUR-REGEN-{attempt['n']}"}})
+        if url.endswith("/api/v2/me/shipment/generate"):
+            return httpx.Response(200, json={})
+        if url.endswith("/api/v2/me/shipment/print"):
+            return httpx.Response(200, json={"url": "https://sandbox.melhorenvio.com.br/imprimir/test"})
+        if url.endswith("/api/v2/me/shipment/tracking"):
+            return httpx.Response(200, json={})
+        raise AssertionError(f"POST inesperado: {url}")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    first = await shipping_service.generate_reverse_label(db, order.number)
+    assert first["ok"] is True
+    assert first["protocol"] == "PUR-REGEN-1"
+
+    # não levanta "já existe" -- gera uma segunda, e essa é a que vale
+    second = await shipping_service.generate_reverse_label(db, order.number)
+    assert second["ok"] is True
+    assert second["protocol"] == "PUR-REGEN-2"
+
+    await db.refresh(order)
+    assert order.reverse_shipping_json["protocol"] == "PUR-REGEN-2"
+
+
+@pytest.mark.asyncio
 async def test_reverse_label_guards(client, db, variant, monkeypatch):
     order = await _delivered_order(client, db, variant)
     await _setup_config(db)
@@ -192,13 +272,6 @@ async def test_reverse_label_guards(client, db, variant, monkeypatch):
     with pytest.raises(DomainError):
         await shipping_service.generate_reverse_label(db, order.number)
 
-    # já tem logística reversa
-    order.shipping_address_json = {**ADDRESS}
-    order.reverse_shipping_json = {"shipment_id": "already-there"}
-    await db.flush()
-    with pytest.raises(DomainError):
-        await shipping_service.generate_reverse_label(db, order.number)
-
 
 @pytest.mark.asyncio
 async def test_sync_reverse_tracking_advances_status_automatically(client, db, variant, monkeypatch):
@@ -213,6 +286,10 @@ async def test_sync_reverse_tracking_advances_status_automatically(client, db, v
     async def fake_post(self, url, json=None, **kwargs):
         if url.endswith("/api/v2/me/shipment/tracking"):
             return httpx.Response(200, json={"SHIP-SYNC-1": {}})
+        if url.endswith("/api/v2/me/shipment/print"):
+            # etiqueta ainda não pronta -- a fila de PDF tenta de novo na
+            # próxima rodada (não deveria travar a checagem de status acima)
+            return httpx.Response(404, json={})
         raise AssertionError(f"POST inesperado: {url}")
 
     async def fake_get(self, url, **kwargs):
@@ -240,3 +317,36 @@ async def test_sync_reverse_tracking_advances_status_automatically(client, db, v
     assert result2["ran"] is True
     await db.refresh(order)
     assert order.status == "returned"
+
+
+@pytest.mark.asyncio
+async def test_sync_reverse_tracking_retries_pending_pdf(client, db, variant, monkeypatch):
+    """Se o PDF não saiu na hora da geração, a rotina de sincronização tenta
+    de novo (sem comprar nada de novo) até conseguir -- fica "na fila" pra
+    próxima rodada em vez de exigir clicar em gerar de novo."""
+    order = await _delivered_order(client, db, variant)
+    order.status = "returning"
+    order.reverse_shipping_json = {"shipment_id": "SHIP-SYNC-PDF", "protocol": "PUR-SYNC-PDF"}
+    await db.flush()
+    await _setup_config(db)
+    _patch_render(monkeypatch)
+
+    async def fake_post(self, url, json=None, **kwargs):
+        if url.endswith("/api/v2/me/shipment/tracking"):
+            return httpx.Response(200, json={"SHIP-SYNC-PDF": {}})
+        if url.endswith("/api/v2/me/shipment/print"):
+            return httpx.Response(200, json={"url": "https://sandbox.melhorenvio.com.br/imprimir/test"})
+        raise AssertionError(f"POST inesperado: {url}")
+
+    async def fake_get(self, url, **kwargs):
+        return httpx.Response(200, json={})
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    result = await shipping_service.sync_reverse_tracking(db)
+    assert result["ran"] is True
+    assert result["updated"] >= 1
+
+    await db.refresh(order)
+    assert order.reverse_shipping_json["reverse_label_key"] == f"orders/{order.number}/reverse-label.pdf"

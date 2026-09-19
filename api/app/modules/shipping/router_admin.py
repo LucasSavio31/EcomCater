@@ -28,6 +28,8 @@ def _config_out(cfg) -> dict:
         webhook_url += f"?token={cfg.webhook_token}"
     return {
         "active_provider": cfg.active_provider,
+        "melhor_envio_enabled": cfg.melhor_envio_enabled,
+        "frenet_enabled": cfg.frenet_enabled,
         "origin_zip": cfg.origin_zip,
         "melhor_envio_sandbox": cfg.melhor_envio_sandbox,
         "sender_cpf": cfg.sender_cpf,

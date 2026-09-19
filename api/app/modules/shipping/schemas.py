@@ -29,6 +29,8 @@ class RateOut(BaseModel):
 
 class ShippingConfigOut(BaseModel):
     active_provider: str
+    melhor_envio_enabled: bool = True
+    frenet_enabled: bool = False
     origin_zip: str
     melhor_envio_sandbox: bool
     sender_cpf: str = ""
@@ -56,6 +58,8 @@ class ShippingConfigOut(BaseModel):
 
 class ShippingConfigIn(BaseModel):
     active_provider: str | None = None
+    melhor_envio_enabled: bool | None = None
+    frenet_enabled: bool | None = None
     origin_zip: str | None = None
     melhor_envio_token: str | None = None
     melhor_envio_sandbox: bool | None = None

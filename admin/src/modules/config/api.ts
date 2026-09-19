@@ -17,6 +17,10 @@ export interface ModuleInfo {
 
 export interface ShippingConfig {
   active_provider: string;
+  /** Liga/desliga cada provedor -- controla quem aparece como opção em
+   * "Provedor de frete ativo" (independe de ter token de cotação). */
+  melhor_envio_enabled?: boolean;
+  frenet_enabled?: boolean;
   origin_zip: string;
   /** O GET não devolve o token (segurança) — use `has_token`. Enviar vazio no PUT = manter. */
   melhor_envio_token?: string;
