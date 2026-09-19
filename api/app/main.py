@@ -42,6 +42,7 @@ async def lifespan(_: FastAPI):
     if settings.run_schedulers:
         from app.modules.cart_recovery import scheduler as recovery_scheduler
         from app.modules.domains import scheduler as domains_scheduler
+        from app.modules.nfe import scheduler as nfe_scheduler
         from app.modules.shipping import scheduler as me_tracking_scheduler
         from app.modules.system import email_retry as email_retry_scheduler
         from app.modules.system import health_scheduler
@@ -56,6 +57,7 @@ async def lifespan(_: FastAPI):
             email_retry_scheduler,
             domains_scheduler,
             upseller_scheduler,
+            nfe_scheduler,
         ]
         for s in schedulers:
             s.start()

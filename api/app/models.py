@@ -50,6 +50,9 @@ from app.modules.menus.models import Menu, MenuItem  # noqa: F401
 # --- newsletter ---
 from app.modules.newsletter.models import NewsletterSubscriber  # noqa: F401
 
+# --- nfe ---
+from app.modules.nfe.models import NfeDocument  # noqa: F401
+
 # --- orders ---
 from app.modules.orders.models import Order, OrderEvent, OrderItem  # noqa: F401
 

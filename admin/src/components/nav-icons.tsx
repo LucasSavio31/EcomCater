@@ -54,6 +54,12 @@ export const IconPromotions = (p: P) => (
     <path d="M20.6 12.6 12 21l-8-8a4.5 4.5 0 0 1 0-6.4 4.5 4.5 0 0 1 6.4 0L12 8l1.6-1.6a4.5 4.5 0 0 1 6.4 6.2Z" />
   </svg>
 );
+export const IconInvoice = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M6 2h9l3 3v17H6z" />
+    <path d="M9 9h6M9 13h6M9 17h4" />
+  </svg>
+);
 export const IconPayment = (p: P) => (
   <svg {...base(p)}>
     <rect x="2" y="5" width="20" height="14" rx="2" />

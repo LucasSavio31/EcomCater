@@ -74,6 +74,14 @@ class Product(UUIDPKMixin, TimestampMixin, Base):
     width_mm: Mapped[int] = mapped_column(Integer, default=100)
     height_mm: Mapped[int] = mapped_column(Integer, default=50)
 
+    # Classificação fiscal (NF-e) -- sem preenchimento em massa, é por produto
+    ncm: Mapped[str | None] = mapped_column(String(8))
+    cfop: Mapped[str | None] = mapped_column(String(4))  # vazio = usa o padrão da config (dentro/fora UF)
+    cest: Mapped[str | None] = mapped_column(String(7))  # só produtos com Substituição Tributária
+    csosn_cst: Mapped[str | None] = mapped_column(String(3))  # CSOSN (Simples) ou CST (Normal)
+    origem: Mapped[str] = mapped_column(String(1), default="0")  # 0 = nacional
+    unidade: Mapped[str] = mapped_column(String(6), default="UN")
+
     rating_avg: Mapped[float] = mapped_column(Numeric(3, 2), default=0)
     rating_count: Mapped[int] = mapped_column(Integer, default=0)
 

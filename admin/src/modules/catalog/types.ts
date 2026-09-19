@@ -165,6 +165,12 @@ export interface ProductDetail {
   is_featured: boolean;
   seo_title: string | null;
   seo_description: string | null;
+  ncm?: string | null;
+  cfop?: string | null;
+  cest?: string | null;
+  csosn_cst?: string | null;
+  origem?: string | null;
+  unidade?: string | null;
   color_name: string | null;
   color_siblings: ColorSibling[];
   option_types: OptionType[];
@@ -207,4 +213,10 @@ export interface ProductInput {
   seo_title?: string | null;
   seo_description?: string | null;
   related_product_ids?: string[];
+  ncm?: string | null;
+  cfop?: string | null;
+  cest?: string | null;
+  csosn_cst?: string | null;
+  origem?: string | null;
+  unidade?: string | null;
 }

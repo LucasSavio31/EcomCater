@@ -40,6 +40,12 @@ interface GeneralState {
   height_mm: string;
   seo_title: string;
   seo_description: string;
+  ncm: string;
+  cfop: string;
+  cest: string;
+  csosn_cst: string;
+  origem: string;
+  unidade: string;
 }
 
 function toState(p: ProductDetail | null): GeneralState {
@@ -64,6 +70,12 @@ function toState(p: ProductDetail | null): GeneralState {
     height_mm: p?.height_mm != null ? String(p.height_mm) : '0',
     seo_title: p?.seo_title ?? '',
     seo_description: p?.seo_description ?? '',
+    ncm: p?.ncm ?? '',
+    cfop: p?.cfop ?? '',
+    cest: p?.cest ?? '',
+    csosn_cst: p?.csosn_cst ?? '',
+    origem: p?.origem ?? '0',
+    unidade: p?.unidade ?? 'UN',
   };
 }
 
@@ -90,6 +102,12 @@ function buildPayload(s: GeneralState, status: ProductStatus): ProductInput {
     height_mm: Number(s.height_mm) || 0,
     seo_title: s.seo_title.trim() || null,
     seo_description: s.seo_description.trim() || null,
+    ncm: s.ncm.trim() || null,
+    cfop: s.cfop.trim() || null,
+    cest: s.cest.trim() || null,
+    csosn_cst: s.csosn_cst.trim() || null,
+    origem: s.origem.trim() || '0',
+    unidade: s.unidade.trim() || 'UN',
   };
 }
 
@@ -187,6 +205,7 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
   const tabs: TabDef[] = [
     { id: 'geral', label: 'Geral' },
     { id: 'preco', label: 'Preço' },
+    { id: 'fiscal', label: 'Fiscal' },
     { id: 'variacoes', label: 'Variações' },
     { id: 'imagens', label: 'Imagens' },
     { id: 'specs', label: 'Especificações' },
@@ -423,6 +442,57 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
                 inputMode="numeric"
                 value={state.height_mm}
                 onChange={(e) => set('height_mm', e.target.value)}
+              />
+            </div>
+          </Card>
+        )}
+
+        {tab === 'fiscal' && (
+          <Card variant="outline" className="flex flex-col gap-4">
+            <p className="text-sm text-text-muted">
+              Usado na emissão de NF-e (Sistema → NF-e). Pode ficar em branco aqui e ser preenchido
+              na hora de emitir a nota de uma venda específica.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Input
+                label="NCM"
+                hint="Classificação fiscal (8 dígitos)"
+                value={state.ncm}
+                onChange={(e) => set('ncm', e.target.value)}
+              />
+              <Input
+                label="CFOP"
+                hint="Vazio = usa o padrão da config (dentro/fora UF)"
+                value={state.cfop}
+                onChange={(e) => set('cfop', e.target.value)}
+              />
+              <Input
+                label="CEST"
+                hint="Só produtos com Substituição Tributária"
+                value={state.cest}
+                onChange={(e) => set('cest', e.target.value)}
+              />
+              <Input
+                label="CSOSN / CST"
+                hint="Código de tributação do ICMS (Simples Nacional usa CSOSN)"
+                value={state.csosn_cst}
+                onChange={(e) => set('csosn_cst', e.target.value)}
+              />
+              <Select
+                label="Origem da mercadoria"
+                value={state.origem}
+                onChange={(e) => set('origem', e.target.value)}
+                options={[
+                  { value: '0', label: '0 — Nacional' },
+                  { value: '1', label: '1 — Estrangeira, importação direta' },
+                  { value: '2', label: '2 — Estrangeira, adquirida no mercado interno' },
+                ]}
+              />
+              <Input
+                label="Unidade"
+                hint="UN, PC, KG, etc."
+                value={state.unidade}
+                onChange={(e) => set('unidade', e.target.value.toUpperCase())}
               />
             </div>
           </Card>

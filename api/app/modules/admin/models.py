@@ -91,6 +91,11 @@ class StoreSettings(Base):
     store_name: Mapped[str] = mapped_column(String(160), default="Minha Loja")
     legal_name: Mapped[str | None] = mapped_column(String(200))
     cnpj: Mapped[str | None] = mapped_column(String(18))
+    # Dados fiscais (NF-e) -- emitente da nota
+    ie: Mapped[str | None] = mapped_column(String(20))  # Inscrição Estadual
+    regime_tributario: Mapped[str | None] = mapped_column(String(1))  # 1 Simples, 2 Simples c/ excesso, 3 Normal
+    cnae_fiscal: Mapped[str | None] = mapped_column(String(9))
+    municipio_ibge: Mapped[str | None] = mapped_column(String(7))  # código IBGE do município do emitente
     address_json: Mapped[dict] = mapped_column(JSONB, default=dict)
     social_json: Mapped[dict] = mapped_column(JSONB, default=dict)
     contact_phone: Mapped[str | None] = mapped_column(String(32))

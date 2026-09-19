@@ -152,6 +152,14 @@ class ProductBase(BaseModel):
     height_mm: int = 50
     seo_title: str | None = None
     seo_description: str | None = None
+    # Classificação fiscal (NF-e) -- opcional no cadastro, exigida só na hora
+    # de emitir (a tela de emissão permite preencher/corrigir ali também)
+    ncm: str | None = None
+    cfop: str | None = None
+    cest: str | None = None
+    csosn_cst: str | None = None
+    origem: str = "0"
+    unidade: str = "UN"
 
 
 class ProductCreateIn(ProductBase):
@@ -182,6 +190,12 @@ class ProductUpdateIn(BaseModel):
     seo_title: str | None = None
     seo_description: str | None = None
     related_product_ids: list[str] | None = None
+    ncm: str | None = None
+    cfop: str | None = None
+    cest: str | None = None
+    csosn_cst: str | None = None
+    origem: str | None = None
+    unidade: str | None = None
 
 
 class ProductListItem(BaseModel):
@@ -237,6 +251,12 @@ class ProductDetail(BaseModel):
     size_chart: dict | None = None
     size_chart_id: str | None = None
     supplier: str | None = None
+    ncm: str | None = None
+    cfop: str | None = None
+    cest: str | None = None
+    csosn_cst: str | None = None
+    origem: str | None = None
+    unidade: str | None = None
 
 
 class SearchResultItem(BaseModel):

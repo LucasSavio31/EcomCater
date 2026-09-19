@@ -206,6 +206,11 @@ export interface StoreSettings {
   store_name: string;
   legal_name: string | null;
   cnpj: string | null;
+  // Dados fiscais (NF-e) -- emitente da nota
+  ie: string | null;
+  regime_tributario: string | null;
+  cnae_fiscal: string | null;
+  municipio_ibge: string | null;
   address_json: Record<string, string> | null;
   social_json: Record<string, string> | null;
   contact_phone: string | null;

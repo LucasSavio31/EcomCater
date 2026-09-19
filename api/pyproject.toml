@@ -38,6 +38,15 @@ playwright = "^1.48"
 ppf-datamatrix = "^0.2"
 python-barcode = "^0.16"
 openpyxl = "^3.1.5"
+# --- NF-e (emissão direta SEFAZ) ---
+nfelib = "^2.5.2"
+# O wheel publicado no PyPI (3.1.1) não inclui os bindings legados vendorizados
+# em `src/erpbrasil/nfelib_legacy` (usados pelo `erpbrasil.edoc.nfe.NFe` pros
+# envelopes TEnviNFe/TConsReciNFe/eventos) -- só existem no código-fonte do
+# GitHub. Fixado no commit exato pra não quebrar se o master mudar de novo.
+"erpbrasil.edoc" = { git = "https://github.com/erpbrasil/erpbrasil.edoc.git", rev = "e90618f330b8eac37cfd7ab7e6d6a83974b4fda8" }
+six = "^1.17.0"  # dependência transitiva não declarada dos bindings legados acima
+BrazilFiscalReport = "^1.1.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"

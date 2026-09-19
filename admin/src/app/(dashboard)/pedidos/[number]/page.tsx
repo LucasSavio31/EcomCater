@@ -18,6 +18,7 @@ import { ADMIN_API_BASE_URL } from '@/lib/admin-api-client';
 import { getSession } from '@/lib/auth-storage';
 import { ordersApi, type OrderEditPayload } from '@/modules/orders/api';
 import { type OrderDetail, type OrderStatus } from '@/modules/orders/types';
+import { NfePanel } from './_components/nfe-panel';
 
 const ALL_STATUSES: OrderStatus[] = [
   'pending_payment',
@@ -151,6 +152,10 @@ const EVENT_LABEL: Record<string, string> = {
   reverse_label_generated: 'Logística reversa gerada',
   reverse_label_cart: 'Logística reversa — carrinho do Melhor Envio',
   reverse_tracking_added: 'Rastreio da devolução adicionado',
+  nfe_requested: 'NF-e enviada pra SEFAZ',
+  nfe_authorized: 'NF-e autorizada',
+  nfe_rejected: 'NF-e rejeitada',
+  nfe_canceled: 'NF-e cancelada',
 };
 
 function Timeline({ events }: { events: OrderDetail['events'] }) {
@@ -430,6 +435,7 @@ export default function PedidoDetalhePage() {
           >
             <IconPrinter width={16} height={16} /> Fatura
           </Link>
+          <NfePanel orderNumber={number} />
           <Button size="sm" variant="ghost" className="text-danger" onClick={() => setConfirmDel(true)}>
             Excluir pedido
           </Button>
