@@ -223,12 +223,14 @@ async def melhor_envio_label(
 
 
 @router.post("/{number}/reverse-logistics")
-async def generate_reverse_logistics(number: str, db: DbDep, _: AdminDep) -> dict:
+async def generate_reverse_logistics(
+    number: str, db: DbDep, _: AdminDep, background: BackgroundTasks
+) -> dict:
     """Gera a logística reversa (devolução) do pedido no Melhor Envio —
     remetente = cliente, destinatário = loja."""
     from app.modules.shipping import service as shipping
 
-    return await shipping.generate_reverse_label(db, number)
+    return await shipping.generate_reverse_label(db, number, background=background)
 
 
 @router.get("/{number}/reverse-label")

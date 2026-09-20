@@ -1,6 +1,7 @@
 """Regra de negócio do módulo `shipping` — cotação com cache Redis + rastreio."""
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import io
@@ -12,10 +13,12 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
+from fastapi import BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.database import SessionLocal
 from app.core.errors import DomainError
 from app.core.events import emit
 from app.core.redis import redis_client
@@ -1093,7 +1096,9 @@ async def melhor_envio_labels_pdf(db: AsyncSession, order_numbers: list[str]) ->
     return pdf
 
 
-async def generate_reverse_label(db: AsyncSession, number: str) -> dict:
+async def generate_reverse_label(
+    db: AsyncSession, number: str, *, background: BackgroundTasks | None = None
+) -> dict:
     """Logística reversa (devolução): gera uma etiqueta no Melhor Envio com
     remetente = CLIENTE e destinatário = LOJA — mesma sequência de chamadas
     (carrinho -> checkout -> generate -> imprimir) do envio normal, só com
@@ -1295,11 +1300,13 @@ async def generate_reverse_label(db: AsyncSession, number: str) -> dict:
         # comprada, mas o link de impressão falhou — não trava a compra (já
         # registrada e com status avançado acima), só não tem PDF ainda.
         # Sem evento próprio na linha do tempo (o "comprada" acima já conta a
-        # história; isso ficaria repetitivo/alarmante) -- a rotina de
-        # sincronização (`sync_reverse_tracking`) tenta de novo sozinha até
-        # conseguir, sem precisar de ação manual.
+        # história; isso ficaria repetitivo/alarmante). Não espera o próximo
+        # ciclo da rotina geral (5+ min): dispara um monitor de curto prazo
+        # em segundo plano (tenta de novo a cada ~20s por alguns minutos).
         order.reverse_shipping_json = dict(svc)
         await db.commit()
+        if background is not None:
+            background.add_task(_watch_reverse_label_pdf, number)
         return {"ok": True, "label_pdf": False, **svc}
 
     try:
@@ -1307,6 +1314,8 @@ async def generate_reverse_label(db: AsyncSession, number: str) -> dict:
     except DomainError:
         order.reverse_shipping_json = dict(svc)
         await db.commit()
+        if background is not None:
+            background.add_task(_watch_reverse_label_pdf, number)
         return {"ok": True, "label_pdf": False, **svc}
     key = f"orders/{number}/reverse-label.pdf"
     private_storage.save(key, pdf, "application/pdf")
@@ -1503,6 +1512,92 @@ async def poll_melhor_envio_tracking(db: AsyncSession) -> dict:
     return {"ran": True, "checked": len(ids), "updated": updated, "errors": errors}
 
 
+async def _try_complete_reverse_pdf(
+    db: AsyncSession, c: httpx.AsyncClient, base: str, order, *, source: str
+) -> bool:
+    """Tenta pegar o link de impressão + renderizar o PDF de uma logística
+    reversa já comprada, sem comprar nada de novo. Usada tanto pela rotina
+    periódica (`sync_reverse_tracking`) quanto pelo monitor de curto prazo
+    logo após a geração (`_watch_reverse_label_pdf`) -- mesma lógica, dois
+    ritmos de chamada diferentes."""
+    from app.modules.orders.service import record_event
+    from app.shared.storage import private_storage
+
+    svc = dict(order.reverse_shipping_json or {})
+    sid = svc.get("shipment_id")
+    if not sid or svc.get("reverse_label_key"):
+        return False
+    try:
+        r = await c.post(f"{base}/api/v2/me/shipment/print", json={"mode": "public", "orders": [sid]})
+        label_url = (r.json() or {}).get("url") if r.status_code < 300 else None
+    except Exception:  # noqa: BLE001
+        logger.exception("logística reversa: falha ao pegar link de impressão do envio %s", sid)
+        return False
+    if not label_url:
+        return False
+    try:
+        pdf = await _render_url_to_pdf(label_url, postal_card=True, want_declaration=False)
+    except DomainError:
+        return False  # ainda não saiu -- tenta de novo na próxima chamada
+    except Exception:  # noqa: BLE001
+        logger.exception("logística reversa: falha ao renderizar PDF do envio %s", sid)
+        return False
+    key = f"orders/{order.number}/reverse-label.pdf"
+    private_storage.save(key, pdf, "application/pdf")
+    svc["reverse_label_key"] = key
+    order.reverse_shipping_json = svc
+    await record_event(
+        db, order, type="reverse_label_pdf_ready", actor_type="system",
+        message=f"PDF da etiqueta de logística reversa pronto para download ({source}).",
+    )
+    await db.commit()
+    await emit("order.reverse_label_ready", {"order_id": str(order.id)})
+    return True
+
+
+async def _watch_reverse_label_pdf(number: str) -> None:
+    """Logo após gerar a logística reversa (compra confirmada mas PDF ainda
+    não saiu), monitora de perto por alguns minutos -- não faz sentido
+    esperar o próximo ciclo da rotina geral (5+ min) pra isso, já que a
+    etiqueta costuma ficar pronta no Melhor Envio pouco depois da compra.
+    Roda em segundo plano (`BackgroundTasks`), nunca bloqueia a resposta do
+    clique de "Gerar logística reversa"."""
+    from app.modules.orders.models import Order
+
+    # 10 tentativas, ~20s de intervalo -- cobre os primeiros ~3-4 min, que é
+    # onde a etiqueta normalmente fica pronta; depois disso a rotina geral
+    # (a cada poucos minutos) continua tentando sozinha até conseguir.
+    for _attempt in range(10):
+        await asyncio.sleep(20)
+        try:
+            async with SessionLocal() as db:
+                order = await db.scalar(select(Order).where(Order.number == number))
+                if not order:
+                    return
+                svc = order.reverse_shipping_json or {}
+                if svc.get("reverse_label_key") or not svc.get("shipment_id"):
+                    return  # já saiu (por essa via ou outra) ou não há o que buscar
+
+                cfg = await load_config(db)
+                cfg = await _maybe_refresh_me_token(db, cfg)
+                token = cfg.melhor_envio_token or settings.melhor_envio_token
+                if not token:
+                    return
+                base = _me_base(cfg)
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "User-Agent": settings.melhor_envio_user_agent,
+                }
+                async with httpx.AsyncClient(timeout=40, headers=headers) as c:
+                    done = await _try_complete_reverse_pdf(db, c, base, order, source="monitor pós-geração")
+                if done:
+                    return
+        except Exception:  # noqa: BLE001 - nunca deixa a task de fundo morrer com traceback perdido
+            logger.exception("monitor pós-geração da logística reversa falhou (pedido %s)", number)
+
+
 async def sync_reverse_tracking(db: AsyncSession) -> dict:
     """Acompanha os envios de logística reversa (devolução) em andamento:
     preenche o rastreio (a geração no ME é assíncrona, visto na prática
@@ -1607,40 +1702,9 @@ async def sync_reverse_tracking(db: AsyncSession) -> dict:
 
         # fila de PDF pendente: tenta de novo pegar o link de impressão +
         # renderizar, sem comprar nada de novo (a compra já foi feita).
-        from app.modules.orders.service import record_event as _record_event
-        from app.shared.storage import private_storage
-
         for order in pdf_pending_rows:
-            svc = dict(order.reverse_shipping_json or {})
-            sid = svc.get("shipment_id")
-            if not sid or svc.get("reverse_label_key"):
-                continue
-            try:
-                r = await c.post(f"{base}/api/v2/me/shipment/print", json={"mode": "public", "orders": [sid]})
-                label_url = (r.json() or {}).get("url") if r.status_code < 300 else None
-            except Exception:  # noqa: BLE001
-                logger.exception("sync reversa: falha ao pegar link de impressão do envio %s", sid)
-                continue
-            if not label_url:
-                continue
-            try:
-                pdf = await _render_url_to_pdf(label_url, postal_card=True, want_declaration=False)
-            except DomainError:
-                continue  # ainda não saiu -- tenta de novo na próxima rodada
-            except Exception:  # noqa: BLE001
-                logger.exception("sync reversa: falha ao renderizar PDF do envio %s", sid)
-                continue
-            key = f"orders/{order.number}/reverse-label.pdf"
-            private_storage.save(key, pdf, "application/pdf")
-            svc["reverse_label_key"] = key
-            order.reverse_shipping_json = svc
-            await _record_event(
-                db, order, type="reverse_label_pdf_ready", actor_type="system",
-                message="PDF da etiqueta de logística reversa pronto para download (rotina).",
-            )
-            await db.commit()
-            await emit("order.reverse_label_ready", {"order_id": str(order.id)})
-            updated += 1
+            if await _try_complete_reverse_pdf(db, c, base, order, source="rotina"):
+                updated += 1
 
     await db.flush()
     return {"ran": True, "checked": len(rows) + len(pdf_pending_rows), "updated": updated}

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from fastapi import BackgroundTasks
 
 from app.core.errors import DomainError
 from app.modules.shipping import service as shipping_service
@@ -251,6 +252,40 @@ async def test_reverse_label_can_be_regenerated(client, db, variant, monkeypatch
 
     await db.refresh(order)
     assert order.reverse_shipping_json["protocol"] == "PUR-REGEN-2"
+
+
+@pytest.mark.asyncio
+async def test_reverse_label_schedules_background_watch_when_pdf_not_ready(client, db, variant, monkeypatch):
+    """Quando o PDF não sai na hora, não espera o próximo ciclo da rotina
+    geral (5+ min) -- agenda um monitor de curto prazo em segundo plano
+    (tenta de novo a cada ~20s por alguns minutos), sem bloquear a
+    resposta do clique de "Gerar logística reversa"."""
+    order = await _delivered_order(client, db, variant)
+    await _setup_config(db)
+    _patch_quote(monkeypatch)
+
+    async def fake_post(self, url, json=None, **kwargs):
+        if url.endswith("/api/v2/me/cart"):
+            return httpx.Response(201, json={"id": "SHIP-BG-1"})
+        if url.endswith("/api/v2/me/shipment/checkout"):
+            return httpx.Response(200, json={"purchase": {"protocol": "PUR-BG-1"}})
+        if url.endswith("/api/v2/me/shipment/generate"):
+            return httpx.Response(200, json={})
+        if url.endswith("/api/v2/me/shipment/print"):
+            return httpx.Response(404, json={})  # etiqueta ainda não saiu
+        if url.endswith("/api/v2/me/shipment/tracking"):
+            return httpx.Response(200, json={})
+        raise AssertionError(f"POST inesperado: {url}")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    background = BackgroundTasks()
+    result = await shipping_service.generate_reverse_label(db, order.number, background=background)
+    assert result["label_pdf"] is False
+    assert len(background.tasks) == 1
+    task = background.tasks[0]
+    assert task.func is shipping_service._watch_reverse_label_pdf
+    assert task.args == (order.number,)
 
 
 @pytest.mark.asyncio
