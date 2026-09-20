@@ -282,9 +282,11 @@ _STATUS_TEMPLATE = {
     "delivered": "order_delivered",
     "canceled": "order_canceled",
     "refunded": "order_refunded",
-    # "returning" NÃO está aqui de propósito: o e-mail dela é o dedicado
-    # (com o PDF da etiqueta anexado), disparado por `order.reverse_label_ready`
-    # — não duplica com um genérico aqui.
+    # confirmação IMEDIATA da solicitação (sem esperar o PDF, que pode
+    # demorar alguns minutos no Melhor Envio) -- o e-mail com a etiqueta
+    # anexada é outro, dedicado, disparado por `order.reverse_label_ready`
+    # quando o PDF sai.
+    "returning": "order_returning",
     "return_posted": "order_return_posted",
     "returned": "order_returned",
     "return_completed": "order_return_completed",

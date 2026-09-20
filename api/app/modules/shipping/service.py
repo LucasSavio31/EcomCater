@@ -1512,9 +1512,7 @@ async def poll_melhor_envio_tracking(db: AsyncSession) -> dict:
     return {"ran": True, "checked": len(ids), "updated": updated, "errors": errors}
 
 
-async def _try_complete_reverse_pdf(
-    db: AsyncSession, c: httpx.AsyncClient, base: str, order, *, source: str
-) -> bool:
+async def _try_complete_reverse_pdf(db: AsyncSession, c: httpx.AsyncClient, base: str, order) -> bool:
     """Tenta pegar o link de impressão + renderizar o PDF de uma logística
     reversa já comprada, sem comprar nada de novo. Usada tanto pela rotina
     periódica (`sync_reverse_tracking`) quanto pelo monitor de curto prazo
@@ -1548,7 +1546,7 @@ async def _try_complete_reverse_pdf(
     order.reverse_shipping_json = svc
     await record_event(
         db, order, type="reverse_label_pdf_ready", actor_type="system",
-        message=f"PDF da etiqueta de logística reversa pronto para download ({source}).",
+        message="PDF da etiqueta de logística reversa pronto para download.",
     )
     await db.commit()
     await emit("order.reverse_label_ready", {"order_id": str(order.id)})
@@ -1591,7 +1589,7 @@ async def _watch_reverse_label_pdf(number: str) -> None:
                     "User-Agent": settings.melhor_envio_user_agent,
                 }
                 async with httpx.AsyncClient(timeout=40, headers=headers) as c:
-                    done = await _try_complete_reverse_pdf(db, c, base, order, source="monitor pós-geração")
+                    done = await _try_complete_reverse_pdf(db, c, base, order)
                 if done:
                     return
         except Exception:  # noqa: BLE001 - nunca deixa a task de fundo morrer com traceback perdido
@@ -1703,7 +1701,7 @@ async def sync_reverse_tracking(db: AsyncSession) -> dict:
         # fila de PDF pendente: tenta de novo pegar o link de impressão +
         # renderizar, sem comprar nada de novo (a compra já foi feita).
         for order in pdf_pending_rows:
-            if await _try_complete_reverse_pdf(db, c, base, order, source="rotina"):
+            if await _try_complete_reverse_pdf(db, c, base, order):
                 updated += 1
 
     await db.flush()

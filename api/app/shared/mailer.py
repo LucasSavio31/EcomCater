@@ -169,6 +169,16 @@ TEMPLATES: dict[str, tuple[str, str]] = {
             _ACCOUNT_CTA,
         ),
     ),
+    "order_returning": (
+        "Solicitação de devolução recebida — pedido {{ number }}",
+        _order_email(
+            "<h2>Recebemos sua solicitação de devolução 📦</h2>"
+            "<p>Já estamos gerando a etiqueta de devolução do pedido <b>{{ number }}</b>. "
+            "Assim que ela ficar pronta, mandamos outro e-mail com o PDF anexado "
+            "pra você imprimir e postar.</p>",
+            _ACCOUNT_CTA,
+        ),
+    ),
     "reverse_label_ready": (
         "Etiqueta de devolução — pedido {{ number }}",
         _order_email(
@@ -422,6 +432,7 @@ _CUSTOMER_ORDER_TEMPLATES = frozenset(
         "order_delivered",
         "order_canceled",
         "order_refunded",
+        "order_returning",
         "reverse_label_ready",
         "order_return_posted",
         "order_returned",

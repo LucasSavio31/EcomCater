@@ -160,7 +160,16 @@ const EVENT_LABEL: Record<string, string> = {
   nfe_canceled: 'NF-e cancelada',
 };
 
-function Timeline({ events }: { events: OrderDetail['events'] }) {
+function Timeline({
+  events,
+  onDownloadReverseLabel,
+  reverseLabelBusy,
+}: {
+  events: OrderDetail['events'];
+  /** Presente só quando a etiqueta de devolução já está pronta pra baixar. */
+  onDownloadReverseLabel?: () => void;
+  reverseLabelBusy?: boolean;
+}) {
   if (events.length === 0) return <p className="text-sm text-text-muted">Sem eventos.</p>;
   const sorted = [...events].sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
@@ -183,6 +192,17 @@ function Timeline({ events }: { events: OrderDetail['events'] }) {
             <span className="text-xs text-text-muted">
               {formatDateTime(ev.created_at)} · {ev.actor_type}
             </span>
+            {ev.type === 'reverse_label_pdf_ready' && onDownloadReverseLabel && (
+              <Button
+                size="sm"
+                variant="outline"
+                loading={reverseLabelBusy}
+                onClick={onDownloadReverseLabel}
+                className="mt-1 self-start"
+              >
+                <IconTag width={16} height={16} /> Baixar etiqueta de devolução (PDF)
+              </Button>
+            )}
           </div>
         </li>
       ))}
@@ -784,7 +804,15 @@ export default function PedidoDetalhePage() {
 
               <Card variant="outline" className="flex flex-col gap-3">
                 <h2 className="text-lg font-semibold">Linha do tempo</h2>
-                <Timeline events={data.events} />
+                <Timeline
+                  events={data.events}
+                  reverseLabelBusy={reversePrintBusy}
+                  onDownloadReverseLabel={
+                    data.reverse_shipping?.reverse_label_key
+                      ? () => void downloadReverseLabel()
+                      : undefined
+                  }
+                />
               </Card>
             </div>
 

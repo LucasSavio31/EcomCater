@@ -143,6 +143,19 @@ async def test_reverse_label_success(client, db, variant, monkeypatch):
     pdf = private_storage.read(order.reverse_shipping_json["reverse_label_key"])
     assert pdf == b"%PDF-1.4 fake reverse label"
 
+    # confirmação imediata da solicitação (não espera o PDF) + aviso com a
+    # etiqueta em anexo quando o PDF sai -- os dois têm que ter disparado.
+    from sqlalchemy import select as _select
+
+    from app.modules.admin.models import EmailLog
+
+    templates = {
+        r.template
+        for r in await db.scalars(_select(EmailLog).where(EmailLog.order_id == str(order.id)))
+    }
+    assert "order_returning" in templates
+    assert "reverse_label_ready" in templates
+
 
 @pytest.mark.asyncio
 async def test_reverse_label_no_balance_keeps_status(client, db, variant, monkeypatch):

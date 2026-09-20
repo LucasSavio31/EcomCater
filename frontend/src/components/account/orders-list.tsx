@@ -160,6 +160,15 @@ function Timeline({ events, number }: { events: OrderEvent[]; number: string }) 
                 Baixar fatura (PDF)
               </button>
             )}
+            {ev.type === 'reverse_label_pdf_ready' && (
+              <button
+                type="button"
+                onClick={() => void downloadReverseLabel(number)}
+                className="mt-1 self-start text-xs text-primary underline"
+              >
+                Baixar etiqueta de devolução (PDF)
+              </button>
+            )}
           </div>
         </li>
       ))}
