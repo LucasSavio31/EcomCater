@@ -2,7 +2,7 @@
 
 import { adminFetch } from '@/lib/admin-api-client';
 
-export type NotificationType = 'order_created' | 'order_shipped';
+export type NotificationType = 'order_created' | 'order_shipped' | 'order_paid' | 'order_returned';
 
 export interface NotificationItem {
   id: string;
@@ -17,6 +17,9 @@ export interface NotificationItem {
 export interface NotificationsList {
   items: NotificationItem[];
   unread_count: number;
+  /** Sons do painel (menu Aparência → Sons) -- vêm junto pra não exigir outra chamada. */
+  sound_sale_enabled: boolean;
+  sound_return_enabled: boolean;
 }
 
 export const notificationsApi = {

@@ -82,6 +82,7 @@ _THEME_FIELDS = {
     "lead_popup_bg_color", "lead_popup_text_color",
     "lead_popup_button_color", "lead_popup_button_text_color",
     "lead_popup_show_logo",
+    "sound_sale_enabled", "sound_return_enabled",
 }
 
 _BOOL_FIELDS = {
@@ -104,6 +105,7 @@ _BOOL_FIELDS = {
     "pdp_reassurance_enabled",
     "pdp_qty_selector_enabled", "wishlist_enabled",
     "card_hover_zoom_enabled", "card_buy_button_enabled",
+    "sound_sale_enabled", "sound_return_enabled",
 }
 
 

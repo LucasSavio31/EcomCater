@@ -12,6 +12,7 @@ import { EmailsTab } from './_components/emails-tab';
 import { BannersTab } from './_components/banners-tab';
 import { PagesTab } from './_components/pages-tab';
 import { StoreTab } from './_components/store-tab';
+import { SoundsTab } from './_components/sounds-tab';
 
 const TABS = [
   { id: 'cores', label: 'Cores gerais' },
@@ -23,6 +24,7 @@ const TABS = [
   { id: 'banners', label: 'Banners' },
   { id: 'paginas', label: 'Páginas' },
   { id: 'loja', label: 'Dados da loja' },
+  { id: 'sons', label: 'Sons' },
 ];
 
 export default function AparenciaPage() {
@@ -43,6 +45,7 @@ export default function AparenciaPage() {
         {tab === 'banners' && <BannersTab />}
         {tab === 'paginas' && <PagesTab />}
         {tab === 'loja' && <StoreTab />}
+        {tab === 'sons' && <SoundsTab />}
       </Tabs>
     </div>
   );

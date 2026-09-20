@@ -84,8 +84,53 @@ async def test_order_shipped_generates_notification(client, admin_token, auth_he
     data = (await client.get("/api/admin/notifications", headers=h)).json()
     types = [i["type"] for i in data["items"]]
     assert "order_created" in types
+    assert "order_paid" in types
     assert "order_shipped" in types
-    assert data["unread_count"] == 2
+    assert data["unread_count"] == 3
+
+
+@pytest.mark.asyncio
+async def test_order_paid_generates_notification_with_sound_flags(client, admin_token, auth_headers, variant):
+    h = auth_headers(admin_token)
+    order = await _order(client, variant)
+    await client.post(f"/api/admin/orders/{order['number']}/status", json={"status": "paid"}, headers=h)
+
+    data = (await client.get("/api/admin/notifications", headers=h)).json()
+    types = [i["type"] for i in data["items"]]
+    assert "order_paid" in types
+    item = next(i for i in data["items"] if i["type"] == "order_paid")
+    assert order["number"] in item["title"]
+    assert data["sound_sale_enabled"] is True
+    assert data["sound_return_enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_order_returned_generates_notification(client, admin_token, auth_headers, variant):
+    h = auth_headers(admin_token)
+    order = await _order(client, variant)
+    await client.post(f"/api/admin/orders/{order['number']}/status", json={"status": "paid"}, headers=h)
+    await client.post(f"/api/admin/orders/{order['number']}/status", json={"status": "returned"}, headers=h)
+
+    data = (await client.get("/api/admin/notifications", headers=h)).json()
+    types = [i["type"] for i in data["items"]]
+    assert "order_returned" in types
+    item = next(i for i in data["items"] if i["type"] == "order_returned")
+    assert order["number"] in item["title"]
+
+
+@pytest.mark.asyncio
+async def test_sound_flags_reflect_theme_settings(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    r = await client.put(
+        "/api/admin/theme",
+        json={"sound_sale_enabled": False, "sound_return_enabled": False},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+
+    data = (await client.get("/api/admin/notifications", headers=h)).json()
+    assert data["sound_sale_enabled"] is False
+    assert data["sound_return_enabled"] is False
 
 
 @pytest.mark.asyncio

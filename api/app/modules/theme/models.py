@@ -350,6 +350,14 @@ class ThemeSettings(Base):
         String(300), default="", server_default="", nullable=False
     )
 
+    # Sons do painel admin (menu "Sons" na Aparência)
+    sound_sale_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    sound_return_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

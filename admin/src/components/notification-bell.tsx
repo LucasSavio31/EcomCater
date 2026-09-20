@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { IconBell, IconTrash } from './nav-icons';
 import { notificationsApi, type NotificationItem, type NotificationsList } from '@/modules/notifications/api';
+import { playReturnSound, playSaleSound } from '@/lib/sounds';
 
 const POLL_MS = 30_000;
 
@@ -19,18 +20,34 @@ function formatWhen(iso: string): string {
   });
 }
 
-/** Sininho de notificações do header: novas vendas e novos envios.
- * Atualiza sozinho a cada 30s; clicar num item abre o pedido e marca como
- * lida; dá pra apagar 1 a 1 ou tudo de uma vez. */
+/** Sininho de notificações do header: novas vendas, pagamentos, envios e
+ * devoluções entregues. Atualiza sozinho a cada 30s; clicar num item abre o
+ * pedido e marca como lida; dá pra apagar 1 a 1 ou tudo de uma vez. Também
+ * toca o som de venda/devolução (configurável em Aparência → Sons) quando
+ * uma notificação nova desses tipos chega -- funciona em qualquer tela do
+ * admin porque este componente vive no layout, não numa página específica. */
 export function NotificationBell() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<NotificationsList | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Ids já vistos, pra tocar som só nas notificações que chegaram DEPOIS do
+  // primeiro carregamento (nunca ao abrir o painel com itens antigos na fila).
+  const seenIdsRef = useRef<Set<string> | null>(null);
 
   const refresh = useCallback(async () => {
     const res = await notificationsApi.list();
-    if (res.ok) setData(res.data);
+    if (!res.ok) return;
+    setData(res.data);
+    const seen = seenIdsRef.current;
+    if (seen) {
+      for (const item of res.data.items) {
+        if (seen.has(item.id)) continue;
+        if (item.type === 'order_paid' && res.data.sound_sale_enabled) playSaleSound();
+        if (item.type === 'order_returned' && res.data.sound_return_enabled) playReturnSound();
+      }
+    }
+    seenIdsRef.current = new Set(res.data.items.map((i) => i.id));
   }, []);
 
   useEffect(() => {

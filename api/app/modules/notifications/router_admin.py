@@ -11,6 +11,7 @@ from app.core.deps import get_current_admin
 from app.modules.admin.models import AdminUser
 from app.modules.notifications import service
 from app.modules.notifications.models import Notification
+from app.modules.theme.service import get_theme
 
 admin_router = APIRouter()
 
@@ -33,7 +34,13 @@ def _out(row: Notification) -> dict:
 @admin_router.get("")
 async def list_notifications(db: DbDep, _: AdminDep, limit: int = Query(default=50, le=200)) -> dict:
     rows = await service.list_recent(db, limit=limit)
-    return {"items": [_out(r) for r in rows], "unread_count": await service.unread_count(db)}
+    theme = await get_theme(db)
+    return {
+        "items": [_out(r) for r in rows],
+        "unread_count": await service.unread_count(db),
+        "sound_sale_enabled": theme.sound_sale_enabled,
+        "sound_return_enabled": theme.sound_return_enabled,
+    }
 
 
 @admin_router.post("/{notification_id}/read")

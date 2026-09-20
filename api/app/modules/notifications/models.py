@@ -10,7 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.models_base import Base, TimestampMixin, UUIDPKMixin
 
-NOTIFICATION_TYPES = ("order_created", "order_shipped")
+NOTIFICATION_TYPES = ("order_created", "order_shipped", "order_paid", "order_returned")
 
 
 class Notification(UUIDPKMixin, TimestampMixin, Base):

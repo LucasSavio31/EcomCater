@@ -178,6 +178,9 @@ export interface Theme {
   email_button_color: string;
   email_button_text_color: string;
   email_footer_text: string;
+  /** Sons do painel admin (menu "Sons") */
+  sound_sale_enabled: boolean;
+  sound_return_enabled: boolean;
   logo_url?: string | null;
   logo_mobile_url?: string | null;
   favicon_url?: string | null;
