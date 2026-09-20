@@ -61,6 +61,13 @@ async def upload_certificate(
     return _config_out(cfg)
 
 
+@admin_router.get("/test-connection")
+async def test_connection(db: DbDep, _: SuperDep) -> dict:
+    """Consulta status do serviço na SEFAZ -- não emite nada, só confirma
+    certificado + conectividade antes de emitir a primeira nota de verdade."""
+    return await service.test_connection(db)
+
+
 def _doc_out(doc) -> dict:
     return {
         "id": str(doc.id),
@@ -77,6 +84,21 @@ def _doc_out(doc) -> dict:
         "requested_at": doc.requested_at.isoformat() if doc.requested_at else None,
         "authorized_at": doc.authorized_at.isoformat() if doc.authorized_at else None,
         "canceled_at": doc.canceled_at.isoformat() if doc.canceled_at else None,
+    }
+
+
+def _doc_out_full(doc) -> dict:
+    """Versão maior de `_doc_out`, pra listagem/detalhe: valor, natureza da
+    operação, destinatário e a justificativa do cancelamento (quando houver)."""
+    payload = doc.payload_json or {}
+    dest = payload.get("destinatario") or {}
+    return {
+        **_doc_out(doc),
+        "total_cents": doc.total_cents,
+        "natureza_operacao": payload.get("natureza_operacao"),
+        "destinatario_nome": dest.get("nome"),
+        "cancel_justificativa": doc.cancel_justificativa,
+        "created_at": doc.created_at.isoformat(),
     }
 
 
@@ -209,3 +231,80 @@ async def bulk_danfe(
         # nomes de pedido não contêm vírgula -- seguro juntar assim
         headers["X-Nfe-Skipped"] = ",".join(skipped)
     return Response(content=pdf, media_type="application/pdf", headers=headers)
+
+
+# --------------------------------------------------------------- listagem (todas as NF-e)
+
+
+@admin_router.get("/documents")
+async def list_documents(
+    db: DbDep,
+    _: EditorDep,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10),
+    status: str | None = Query(default=None),
+) -> dict:
+    if page_size not in (10, 20, 50, 100):
+        page_size = 10
+    rows, total = await service.list_documents(db, page=page, page_size=page_size, status=status)
+    return {"items": [_doc_out_full(r) for r in rows], "total": total, "page": page, "page_size": page_size}
+
+
+@admin_router.get("/documents/{doc_id}")
+async def get_document(doc_id: str, db: DbDep, _: EditorDep) -> dict:
+    doc = await service.get_document(db, doc_id)
+    return _doc_out_full(doc)
+
+
+@admin_router.get("/documents/{doc_id}/xml")
+async def download_document_xml(doc_id: str, db: DbDep, _: EditorDep) -> Response:
+    content, filename = await service.get_document_xml(db, doc_id)
+    return Response(
+        content=content,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@admin_router.get("/documents/{doc_id}/danfe")
+async def download_document_danfe(doc_id: str, db: DbDep, _: EditorDep) -> Response:
+    content, filename = await service.get_document_danfe(db, doc_id)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+@admin_router.get("/documents/{doc_id}/mini-danfe")
+async def download_document_mini_danfe(doc_id: str, db: DbDep, _: EditorDep) -> Response:
+    content, filename = await service.get_document_mini_danfe(db, doc_id)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+@admin_router.post("/documents/{doc_id}/email")
+async def email_document(doc_id: str, body: dict, db: DbDep, _: EditorDep) -> dict:
+    doc = await service.get_document(db, doc_id)
+    to = str(body.get("to") or "").strip()
+    if not to:
+        raise ValidationError("Informe o e-mail de destino.")
+    await service.send_document_email(db, doc, to, mini=bool(body.get("mini")))
+    return {"ok": True}
+
+
+@admin_router.post("/documents/{doc_id}/cancel")
+async def cancel_document(doc_id: str, body: dict, db: DbDep, admin: EditorDep) -> dict:
+    doc = await service.get_document(db, doc_id)
+    doc = await service.cancel(db, doc, body.get("justificativa", ""), admin.id)
+    return _doc_out_full(doc)
+
+
+@admin_router.delete("/documents/{doc_id}")
+async def delete_document(doc_id: str, db: DbDep, _: EditorDep) -> dict:
+    doc = await service.get_document(db, doc_id)
+    await service.delete_document(db, doc)
+    return {"ok": True}

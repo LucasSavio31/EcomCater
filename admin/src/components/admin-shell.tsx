@@ -84,7 +84,16 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Vendas',
     items: [
       { href: '/pedidos', label: 'Pedidos', icon: IconOrders },
-      { href: '/nfe', label: 'NF-e', icon: IconInvoice, moduleSlugs: ['nfe'] },
+      {
+        href: '/nfe',
+        label: 'NF-e',
+        icon: IconInvoice,
+        moduleSlugs: ['nfe'],
+        children: [
+          { href: '/nfe/xml', label: 'XML para o contador', icon: IconModules },
+          { href: '/nfe/notas', label: 'Notas emitidas', icon: IconModules },
+        ],
+      },
     ],
   },
   {

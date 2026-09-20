@@ -344,6 +344,13 @@ TEMPLATES: dict[str, tuple[str, str]] = {
         "</ul>"
         "<p style='margin-top:10px'>Último backup: {{ last_backup or 'nenhum registrado' }}</p>",
     ),
+    "nfe_document": (
+        "Nota Fiscal Eletrônica{% if numero %} nº {{ numero }}{% endif %} — pedido {{ order_number }}",
+        "<h2>Nota Fiscal Eletrônica 📄</h2>"
+        "<p>Segue em anexo a NF-e do pedido <b>{{ order_number }}</b>"
+        "{% if numero %} (nº {{ numero }}){% endif %}.</p>"
+        "{% if chave %}<p style='font-size:12px;color:#888'>Chave de acesso: {{ chave }}</p>{% endif %}",
+    ),
 }
 
 # rótulos pt-BR para status de saúde

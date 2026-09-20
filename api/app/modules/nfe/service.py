@@ -314,52 +314,176 @@ async def _gerar_danfe(db: AsyncSession, doc: NfeDocument) -> None:
         logger.exception("Falha ao gerar DANFE da NF-e %s", doc.order_number)
 
 
-async def get_xml(db: AsyncSession, order_number: str) -> tuple[bytes, str]:
+async def _doc_xml_bytes(doc: NfeDocument) -> tuple[bytes, str]:
     from app.shared.storage import private_storage
 
-    doc = await db.scalar(
-        select(NfeDocument)
-        .where(NfeDocument.order_number == order_number, NfeDocument.status.in_(("authorized", "processing")))
-        .order_by(NfeDocument.created_at.desc())
-        .limit(1)
-    )
-    if not doc or not doc.xml_key:
+    if not doc.xml_key:
         raise NotFoundError("XML da NF-e ainda não disponível.")
-    return private_storage.read(doc.xml_key), f"nfe-{order_number}.xml"
+    return private_storage.read(doc.xml_key), f"nfe-{doc.order_number}.xml"
 
 
-async def get_danfe(db: AsyncSession, order_number: str) -> tuple[bytes, str]:
+async def _doc_danfe_bytes(doc: NfeDocument) -> tuple[bytes, str]:
     from app.shared.storage import private_storage
 
-    doc = await db.scalar(
-        select(NfeDocument)
-        .where(NfeDocument.order_number == order_number, NfeDocument.status == "authorized")
-        .order_by(NfeDocument.created_at.desc())
-        .limit(1)
-    )
-    if not doc or not doc.danfe_key:
+    if not doc.danfe_key:
         raise NotFoundError("DANFE ainda não disponível.")
-    return private_storage.read(doc.danfe_key), f"danfe-{order_number}.pdf"
+    return private_storage.read(doc.danfe_key), f"danfe-{doc.order_number}.pdf"
 
 
-async def get_mini_danfe(db: AsyncSession, order_number: str) -> tuple[bytes, str]:
+async def _doc_mini_danfe_bytes(doc: NfeDocument) -> tuple[bytes, str]:
     """DANFE Simplificado – Etiqueta (NT 2020.004), formato 10x15 pra
     impressora térmica -- gerado na hora a partir do XML já assinado (não
     precisa de um `_key` próprio guardado, é leve montar de novo)."""
     from app.modules.nfe.mini_danfe import build_mini_danfe
     from app.shared.storage import private_storage
 
+    if not doc.xml_key:
+        raise NotFoundError("NF-e ainda não autorizada.")
+    xml_bytes = private_storage.read(doc.xml_key)
+    pdf = build_mini_danfe(xml_bytes, doc.protocolo_autorizacao)
+    return pdf, f"etiqueta-nfe-{doc.order_number}.pdf"
+
+
+async def get_xml(db: AsyncSession, order_number: str) -> tuple[bytes, str]:
+    doc = await db.scalar(
+        select(NfeDocument)
+        .where(NfeDocument.order_number == order_number, NfeDocument.status.in_(("authorized", "processing")))
+        .order_by(NfeDocument.created_at.desc())
+        .limit(1)
+    )
+    if not doc:
+        raise NotFoundError("XML da NF-e ainda não disponível.")
+    return await _doc_xml_bytes(doc)
+
+
+async def get_danfe(db: AsyncSession, order_number: str) -> tuple[bytes, str]:
     doc = await db.scalar(
         select(NfeDocument)
         .where(NfeDocument.order_number == order_number, NfeDocument.status == "authorized")
         .order_by(NfeDocument.created_at.desc())
         .limit(1)
     )
-    if not doc or not doc.xml_key:
+    if not doc:
+        raise NotFoundError("DANFE ainda não disponível.")
+    return await _doc_danfe_bytes(doc)
+
+
+async def get_mini_danfe(db: AsyncSession, order_number: str) -> tuple[bytes, str]:
+    doc = await db.scalar(
+        select(NfeDocument)
+        .where(NfeDocument.order_number == order_number, NfeDocument.status == "authorized")
+        .order_by(NfeDocument.created_at.desc())
+        .limit(1)
+    )
+    if not doc:
         raise NotFoundError("NF-e ainda não autorizada.")
-    xml_bytes = private_storage.read(doc.xml_key)
-    pdf = build_mini_danfe(xml_bytes, doc.protocolo_autorizacao)
-    return pdf, f"etiqueta-nfe-{order_number}.pdf"
+    return await _doc_mini_danfe_bytes(doc)
+
+
+# --------------------------------------------------------------- documentos (listagem)
+async def get_document(db: AsyncSession, doc_id: str) -> NfeDocument:
+    try:
+        doc_uuid = uuid.UUID(doc_id)
+    except ValueError as exc:
+        raise NotFoundError("NF-e não encontrada.") from exc
+    doc = await db.get(NfeDocument, doc_uuid)
+    if not doc:
+        raise NotFoundError("NF-e não encontrada.")
+    return doc
+
+
+async def list_documents(
+    db: AsyncSession, *, page: int = 1, page_size: int = 10, status: str | None = None
+) -> tuple[list[NfeDocument], int]:
+    from sqlalchemy import func
+
+    page = max(1, page)
+    if page_size not in (10, 20, 50, 100):
+        page_size = 10
+
+    q = select(NfeDocument)
+    if status:
+        q = q.where(NfeDocument.status == status)
+
+    total = await db.scalar(select(func.count()).select_from(q.subquery())) or 0
+    rows = list(
+        await db.scalars(
+            q.order_by(NfeDocument.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        )
+    )
+    return rows, total
+
+
+async def get_document_xml(db: AsyncSession, doc_id: str) -> tuple[bytes, str]:
+    return await _doc_xml_bytes(await get_document(db, doc_id))
+
+
+async def get_document_danfe(db: AsyncSession, doc_id: str) -> tuple[bytes, str]:
+    return await _doc_danfe_bytes(await get_document(db, doc_id))
+
+
+async def get_document_mini_danfe(db: AsyncSession, doc_id: str) -> tuple[bytes, str]:
+    return await _doc_mini_danfe_bytes(await get_document(db, doc_id))
+
+
+async def delete_document(db: AsyncSession, doc: NfeDocument) -> None:
+    """Só é permitido excluir tentativas que nunca chegaram a ser autorizadas
+    pela SEFAZ (pendente/processando/rejeitada/erro) -- uma NF-e autorizada é
+    documento fiscal de verdade e só pode ser cancelada (dentro do prazo
+    legal), nunca apagada; uma cancelada fica como histórico do cancelamento."""
+    if doc.status in ("authorized", "canceled"):
+        raise ValidationError(
+            "Não é possível excluir uma NF-e autorizada ou cancelada — é documento fiscal. "
+            "Use \"Cancelar\" se ainda estiver dentro do prazo legal."
+        )
+    await db.delete(doc)
+    await db.flush()
+
+
+async def send_document_email(
+    db: AsyncSession, doc: NfeDocument, to_email: str, *, mini: bool = False
+) -> None:
+    from app.shared import mailer
+
+    if doc.status != "authorized":
+        raise ValidationError("Só é possível enviar por e-mail uma NF-e autorizada.")
+    pdf_bytes, filename = await (_doc_mini_danfe_bytes(doc) if mini else _doc_danfe_bytes(doc))
+    ok = await mailer.send(
+        db,
+        to=to_email,
+        template="nfe_document",
+        context={"order_number": doc.order_number, "numero": doc.numero, "chave": doc.chave_acesso},
+        attachments=[(filename, pdf_bytes, "application", "pdf")],
+    )
+    if not ok:
+        raise ValidationError("Falha ao enviar o e-mail — confira as configurações de SMTP.")
+
+
+# --------------------------------------------------------------- teste de conexão
+async def test_connection(db: AsyncSession) -> dict:
+    """Consulta status do serviço na SEFAZ (sem emitir nada) -- confirma que o
+    certificado é válido e o webservice da UF está no ar."""
+    from app.modules.admin.models import StoreSettings
+    from app.modules.nfe.sefaz_client import SefazClient
+
+    cfg = await load_config(db)
+    pfx_bytes = await _get_certificate(cfg)
+    store = await db.get(StoreSettings, 1)
+    uf = ((store.address_json or {}).get("state") if store and store.address_json else None) or "SP"
+    client = SefazClient(
+        pfx_bytes=pfx_bytes, senha=cfg.certificado_senha, uf=uf, cuf=_uf_cuf(uf), ambiente=cfg.ambiente
+    )
+    try:
+        resultado = await asyncio.to_thread(client.status)
+    except Exception as exc:  # noqa: BLE001 -- é um teste, o erro real é o resultado útil
+        return {"ok": False, "codigo_status": None, "motivo": f"Falha de comunicação com a SEFAZ: {exc}"}
+    return {
+        "ok": resultado.ok,
+        "codigo_status": resultado.codigo_status,
+        "motivo": resultado.motivo,
+        "ambiente": cfg.ambiente,
+        "uf": uf,
+    }
 
 
 async def export_month_zip(db: AsyncSession, year: int, month: int) -> tuple[bytes, str]:

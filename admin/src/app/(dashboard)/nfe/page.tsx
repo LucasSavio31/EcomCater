@@ -1,14 +1,22 @@
 'use client';
 
+import Link from 'next/link';
 import { useRef, useState } from 'react';
-import { Button, Card, Input } from '@ecom/ui';
+import { Badge, Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { AsyncBoundary } from '@/components/async-boundary';
 import { Select } from '@/components/form-controls';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { appearanceApi, type StoreSettings } from '@/modules/appearance/api';
-import { nfeApi, type NfeConfig } from '@/modules/nfe/api';
+import {
+  nfeApi,
+  nfeStatusLabel,
+  nfeStatusTone,
+  type NfeConfig,
+  type NfeConnectionTest,
+  type NfeDocumentOut,
+} from '@/modules/nfe/api';
 import { maskCep, maskCnpj, maskDigits } from '@/lib/br-masks';
 
 const ADDR_FIELDS: Array<[keyof NonNullable<StoreSettings['address_json']>, string]> = [
@@ -35,11 +43,12 @@ export default function NfePage() {
   const [certBusy, setCertBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const now = new Date();
-  const [exportMonth, setExportMonth] = useState(
-    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
-  );
-  const [exportBusy, setExportBusy] = useState(false);
+  const [testingConn, setTestingConn] = useState(false);
+  const [connResult, setConnResult] = useState<NfeConnectionTest | null>(null);
+
+  const [testOrderNumber, setTestOrderNumber] = useState('');
+  const [testEmitBusy, setTestEmitBusy] = useState(false);
+  const [testEmitResult, setTestEmitResult] = useState<NfeDocumentOut | null>(null);
 
   const store = storeDraft ?? storeRes.data;
   const cfg = cfgDraft ?? cfgRes.data;
@@ -96,23 +105,63 @@ export default function NfePage() {
     if (fileRef.current) fileRef.current.value = '';
   }
 
-  async function doExportMonth(): Promise<void> {
-    const [y, m] = exportMonth.split('-').map(Number);
-    if (!y || !m) {
-      toast.error('Selecione um mês.');
+  async function doTestConnection(): Promise<void> {
+    setTestingConn(true);
+    setConnResult(null);
+    const res = await nfeApi.testConnection();
+    setTestingConn(false);
+    if (!res.ok) {
+      toast.error(res.error.message);
       return;
     }
-    setExportBusy(true);
-    const res = await nfeApi.downloadExportMonth(y, m);
-    setExportBusy(false);
-    if (!res.ok) toast.error(res.message);
+    setConnResult(res.data);
+    if (res.data.ok) toast.success('Conexão com a SEFAZ OK.');
+    else toast.error(res.data.motivo || 'A SEFAZ recusou a consulta.');
+  }
+
+  async function doTestEmit(): Promise<void> {
+    const number = testOrderNumber.trim();
+    if (!number) {
+      toast.error('Informe o número de um pedido existente.');
+      return;
+    }
+    setTestEmitBusy(true);
+    setTestEmitResult(null);
+    const draftRes = await nfeApi.getDraft(number);
+    if (!draftRes.ok) {
+      setTestEmitBusy(false);
+      toast.error(draftRes.error.message);
+      return;
+    }
+    const res = await nfeApi.emit(number, draftRes.data);
+    setTestEmitBusy(false);
+    if (!res.ok) {
+      toast.error(res.error.message);
+      return;
+    }
+    setTestEmitResult(res.data);
+    if (res.data.status === 'authorized' || res.data.status === 'processing') {
+      toast.success('NF-e de teste enviada com sucesso.');
+    } else {
+      toast.error(res.data.status_message || 'A SEFAZ recusou a NF-e de teste.');
+    }
   }
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="NF-e"
-        description="Emissão de Nota Fiscal Eletrônica direto na SEFAZ. Configure os dados fiscais e o certificado digital antes de emitir a primeira nota — sempre teste em homologação primeiro."
+        description="Configuração de emissão — dados fiscais, certificado digital e ambiente. Configure tudo aqui antes de emitir a primeira nota, sempre testando em homologação primeiro."
+        actions={
+          <div className="flex gap-4 text-sm">
+            <Link href="/nfe/xml" className="text-accent hover:underline">
+              → XML para o contador
+            </Link>
+            <Link href="/nfe/notas" className="text-accent hover:underline">
+              → Notas emitidas
+            </Link>
+          </div>
+        }
       />
 
       <AsyncBoundary loading={storeRes.loading} error={storeRes.error} onRetry={storeRes.reload}>
@@ -261,30 +310,53 @@ export default function NfePage() {
             </Card>
 
             <Card variant="outline" className="flex max-w-3xl flex-col gap-4">
-              <h3 className="text-sm font-semibold">XML para o contador</h3>
+              <h3 className="text-sm font-semibold">Teste de conexão</h3>
               <p className="text-sm text-text-muted">
-                Baixa um .zip com o XML de todas as NF-e autorizadas do mês escolhido (um arquivo por
-                nota, nome = chave de acesso). O XML já fica guardado no sistema desde a emissão — isso
-                só agrupa por mês pra facilitar o envio.
+                Consulta o status do serviço na SEFAZ (sem emitir nada) — confirma que o certificado é
+                válido e o webservice da UF está no ar antes de emitir a primeira nota de verdade.
               </p>
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium" htmlFor="nfe-export-month">
-                    Mês
-                  </label>
-                  <input
-                    id="nfe-export-month"
-                    type="month"
-                    value={exportMonth}
-                    onChange={(e) => setExportMonth(e.target.value)}
-                    className="min-h-touch rounded-card border border-surface-border bg-surface px-3 text-sm"
-                  />
-                </div>
-                <Button size="sm" loading={exportBusy} onClick={() => void doExportMonth()}>
-                  Baixar XML do mês (.zip)
-                </Button>
-              </div>
+              <Button size="sm" variant="outline" loading={testingConn} onClick={() => void doTestConnection()} className="self-start">
+                Testar conexão
+              </Button>
+              {connResult && (
+                <p className={`text-sm ${connResult.ok ? 'text-success' : 'text-danger'}`}>
+                  {connResult.ok ? '✅' : '⚠️'} [{connResult.codigo_status ?? '—'}] {connResult.motivo}
+                </p>
+              )}
             </Card>
+
+            {cfg.ambiente === 'homologacao' && (
+              <Card variant="outline" className="flex max-w-3xl flex-col gap-4">
+                <h3 className="text-sm font-semibold">Emitir NF de teste (sandbox)</h3>
+                <p className="text-sm text-text-muted">
+                  Emite a NF-e de um pedido real contra o ambiente de homologação da SEFAZ (marcada
+                  &quot;SEM VALOR FISCAL&quot;) — pra validar o fluxo completo (certificado, dados
+                  fiscais, itens) sem sair do ambiente de testes.
+                </p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <Input
+                    label="Número do pedido"
+                    placeholder="Ex.: 2026-000123"
+                    value={testOrderNumber}
+                    onChange={(e) => setTestOrderNumber(e.target.value)}
+                  />
+                  <Button size="sm" loading={testEmitBusy} onClick={() => void doTestEmit()}>
+                    Emitir NF de teste
+                  </Button>
+                </div>
+                {testEmitResult && (
+                  <div className="flex flex-col gap-1">
+                    <Badge tone={nfeStatusTone(testEmitResult.status)} className="self-start">
+                      {nfeStatusLabel(testEmitResult.status)}
+                    </Badge>
+                    {(testEmitResult.status === 'rejected' || testEmitResult.status === 'error') &&
+                      testEmitResult.status_message && (
+                        <p className="text-sm text-danger">{testEmitResult.status_message}</p>
+                      )}
+                  </div>
+                )}
+              </Card>
+            )}
           </>
         )}
       </AsyncBoundary>

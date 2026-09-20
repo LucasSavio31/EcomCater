@@ -94,6 +94,32 @@ export interface NfeDocumentOut {
   canceled_at?: string | null;
 }
 
+/** Versão maior de `NfeDocumentOut`, usada na listagem/detalhe de "Notas emitidas". */
+export interface NfeDocumentFull extends NfeDocumentOut {
+  id: string;
+  order_number: string;
+  total_cents: number;
+  natureza_operacao: string | null;
+  destinatario_nome: string | null;
+  cancel_justificativa: string | null;
+  created_at: string;
+}
+
+export interface NfeDocumentsList {
+  items: NfeDocumentFull[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface NfeConnectionTest {
+  ok: boolean;
+  codigo_status: string | null;
+  motivo: string | null;
+  ambiente?: string;
+  uf?: string;
+}
+
 export function nfeStatusTone(status: NfeDocumentOut['status']): 'neutral' | 'warning' | 'success' | 'danger' {
   if (status === 'authorized') return 'success';
   if (status === 'processing' || status === 'pending') return 'warning';
@@ -264,5 +290,68 @@ export const nfeApi = {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
     const skippedHeader = res.headers.get('X-Nfe-Skipped');
     return { ok: true, skipped: skippedHeader ? skippedHeader.split(',') : [] };
+  },
+
+  // --------------------------------------------------------- teste de conexão
+
+  testConnection: (): Promise<ApiResult<NfeConnectionTest>> =>
+    adminFetch<NfeConnectionTest>('/api/admin/nfe/test-connection'),
+
+  // --------------------------------------------------------- notas emitidas (listagem)
+
+  listDocuments: (params: {
+    page: number;
+    pageSize: number;
+    status?: string;
+  }): Promise<ApiResult<NfeDocumentsList>> =>
+    adminFetch<NfeDocumentsList>('/api/admin/nfe/documents', {
+      query: { page: params.page, page_size: params.pageSize, status: params.status || undefined },
+    }),
+
+  getDocument: (id: string): Promise<ApiResult<NfeDocumentFull>> =>
+    adminFetch<NfeDocumentFull>(`/api/admin/nfe/documents/${id}`),
+
+  cancelDocument: (id: string, justificativa: string): Promise<ApiResult<NfeDocumentFull>> =>
+    adminFetch<NfeDocumentFull>(`/api/admin/nfe/documents/${id}/cancel`, {
+      method: 'POST',
+      body: { justificativa },
+    }),
+
+  deleteDocument: (id: string): Promise<ApiResult<{ ok: boolean }>> =>
+    adminFetch<{ ok: boolean }>(`/api/admin/nfe/documents/${id}`, { method: 'DELETE' }),
+
+  emailDocument: (id: string, to: string, mini = false): Promise<ApiResult<{ ok: boolean }>> =>
+    adminFetch<{ ok: boolean }>(`/api/admin/nfe/documents/${id}/email`, {
+      method: 'POST',
+      body: { to, mini },
+    }),
+
+  downloadDocumentXml: async (id: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const res = await downloadFile(`/api/admin/nfe/documents/${id}/xml`);
+    if (!res.ok) return res;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(res.blob);
+    a.download = `nfe-${id}.xml`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    return { ok: true };
+  },
+
+  openDocumentDanfe: async (id: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const res = await downloadFile(`/api/admin/nfe/documents/${id}/danfe`);
+    if (!res.ok) return res;
+    const url = URL.createObjectURL(res.blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return { ok: true };
+  },
+
+  openDocumentMiniDanfe: async (id: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const res = await downloadFile(`/api/admin/nfe/documents/${id}/mini-danfe`);
+    if (!res.ok) return res;
+    const url = URL.createObjectURL(res.blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return { ok: true };
   },
 };

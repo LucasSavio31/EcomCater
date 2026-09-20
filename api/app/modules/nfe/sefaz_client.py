@@ -109,6 +109,15 @@ class SefazClient:
         )
         return resultado, xml_assinado
 
+    def status(self) -> SefazResultado:
+        """Consulta status do serviço (`nfeStatusServicoNF`) -- não emite nada,
+        só confirma que o certificado é válido e a SEFAZ da UF está no ar.
+        cStat "107" = "Serviço em Operação"."""
+        resposta = self._nfe.status_servico()
+        r = resposta.resposta
+        cstat = str(getattr(r, "cStat", "") or "")
+        return SefazResultado(ok=cstat == "107", codigo_status=cstat, motivo=str(getattr(r, "xMotivo", "") or ""))
+
     def consultar_recibo(self, numero_recibo: str) -> SefazResultado:
         resposta = self._nfe.consulta_recibo(numero=numero_recibo)
         r = resposta.resposta

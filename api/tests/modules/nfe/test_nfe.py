@@ -540,3 +540,236 @@ async def test_bulk_danfe_all_skipped_returns_error(client, admin_token, auth_he
 
     r = await client.get(f"/api/admin/nfe/bulk-danfe?numbers={number}", headers=auth_headers(admin_token))
     assert r.status_code == 422, r.text
+
+
+# ------------------------------------------------ listagem (todas as NF-e)
+
+
+async def _emit_rejected(client, h, number: str, monkeypatch) -> None:
+    """Emite uma NF-e que a SEFAZ recusa de cara (sem precisar de poll)."""
+    from app.modules.nfe.sefaz_client import SefazClient, SefazResultado
+
+    def fake_enviar(self, edoc_dataclass, doc_id):
+        from xsdata.formats.dataclass.serializers import XmlSerializer
+        from xsdata.formats.dataclass.serializers.config import SerializerConfig
+
+        serializer = XmlSerializer(config=SerializerConfig(xml_declaration=False))
+        xml_bytes = serializer.render(edoc_dataclass).encode("utf-8")
+        return (
+            SefazResultado(ok=False, codigo_status="225", motivo="Rejeição: CNPJ do emitente inválido"),
+            xml_bytes,
+        )
+
+    monkeypatch.setattr(SefazClient, "enviar", fake_enviar)
+    await client.patch("/api/admin/orders/" + number, json={"cpf": VALID_CPF}, headers=h)
+    draft = (await client.get(f"/api/admin/nfe/orders/{number}/draft", headers=h)).json()
+    r = await client.post(f"/api/admin/nfe/orders/{number}", json=draft, headers=h)
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.asyncio
+async def test_documents_list_and_detail(client, admin_token, auth_headers, db, monkeypatch):
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    _pid, vid = await _make_product_with_fiscal(client, h)
+    number = await _make_order(client, vid)
+    await client.patch("/api/admin/orders/" + number, json={"cpf": VALID_CPF}, headers=h)
+    await _emit_authorized(client, h, db, monkeypatch, number)
+
+    r = await client.get("/api/admin/nfe/documents", headers=h)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total"] == 1
+    assert body["page"] == 1
+    assert body["page_size"] == 10
+    item = body["items"][0]
+    assert item["order_number"] == number
+    assert item["status"] == "authorized"
+    assert item["total_cents"] > 0
+    assert item["natureza_operacao"]
+    assert item["destinatario_nome"]
+
+    r2 = await client.get(f"/api/admin/nfe/documents/{item['id']}", headers=h)
+    assert r2.status_code == 200, r2.text
+    assert r2.json()["chave_acesso"] == item["chave_acesso"]
+
+
+@pytest.mark.asyncio
+async def test_documents_list_invalid_page_size_falls_back_to_10(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    r = await client.get("/api/admin/nfe/documents?page_size=999", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["page_size"] == 10
+
+
+@pytest.mark.asyncio
+async def test_document_detail_not_found(client, admin_token, auth_headers):
+    import uuid
+
+    h = auth_headers(admin_token)
+    r = await client.get(f"/api/admin/nfe/documents/{uuid.uuid4()}", headers=h)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_document_delete_blocked_when_authorized(client, admin_token, auth_headers, db, monkeypatch):
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    _pid, vid = await _make_product_with_fiscal(client, h)
+    number = await _make_order(client, vid)
+    await client.patch("/api/admin/orders/" + number, json={"cpf": VALID_CPF}, headers=h)
+    await _emit_authorized(client, h, db, monkeypatch, number)
+
+    doc_id = (await client.get("/api/admin/nfe/documents", headers=h)).json()["items"][0]["id"]
+    r = await client.delete(f"/api/admin/nfe/documents/{doc_id}", headers=h)
+    assert r.status_code in (400, 422), r.text
+
+    still_there = await client.get(f"/api/admin/nfe/documents/{doc_id}", headers=h)
+    assert still_there.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_document_delete_allowed_when_rejected(client, admin_token, auth_headers, monkeypatch):
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    _pid, vid = await _make_product_with_fiscal(client, h)
+    number = await _make_order(client, vid)
+    await _emit_rejected(client, h, number, monkeypatch)
+
+    doc_id = (await client.get("/api/admin/nfe/documents", headers=h)).json()["items"][0]["id"]
+    assert (await client.get(f"/api/admin/nfe/documents/{doc_id}", headers=h)).json()["status"] == "rejected"
+
+    r = await client.delete(f"/api/admin/nfe/documents/{doc_id}", headers=h)
+    assert r.status_code == 200, r.text
+    assert (await client.get(f"/api/admin/nfe/documents/{doc_id}", headers=h)).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_document_cancel_via_id_shows_reason_and_justificativa(
+    client, admin_token, auth_headers, db, monkeypatch
+):
+    from app.modules.nfe.sefaz_client import SefazClient, SefazResultado
+
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    _pid, vid = await _make_product_with_fiscal(client, h)
+    number = await _make_order(client, vid)
+    await client.patch("/api/admin/orders/" + number, json={"cpf": VALID_CPF}, headers=h)
+    await _emit_authorized(client, h, db, monkeypatch, number)
+    doc_id = (await client.get("/api/admin/nfe/documents", headers=h)).json()["items"][0]["id"]
+
+    def fake_cancelar(self, *, chave, protocolo, justificativa):
+        return SefazResultado(ok=True, codigo_status="135", motivo="Evento registrado e vinculado a NF-e")
+
+    monkeypatch.setattr(SefazClient, "cancelar", fake_cancelar)
+    r = await client.post(
+        f"/api/admin/nfe/documents/{doc_id}/cancel",
+        json={"justificativa": "Cancelamento solicitado pelo cliente via suporte"},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "canceled"
+    assert body["cancel_justificativa"] == "Cancelamento solicitado pelo cliente via suporte"
+
+
+@pytest.mark.asyncio
+async def test_document_email_requires_authorized(client, admin_token, auth_headers, monkeypatch):
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    _pid, vid = await _make_product_with_fiscal(client, h)
+    number = await _make_order(client, vid)
+    await _emit_rejected(client, h, number, monkeypatch)
+    doc_id = (await client.get("/api/admin/nfe/documents", headers=h)).json()["items"][0]["id"]
+
+    r = await client.post(
+        f"/api/admin/nfe/documents/{doc_id}/email", json={"to": "contador@test.example"}, headers=h
+    )
+    assert r.status_code in (400, 422), r.text
+
+
+@pytest.mark.asyncio
+async def test_document_email_sends_with_attachment(client, admin_token, auth_headers, db, monkeypatch):
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    _pid, vid = await _make_product_with_fiscal(client, h)
+    number = await _make_order(client, vid)
+    await client.patch("/api/admin/orders/" + number, json={"cpf": VALID_CPF}, headers=h)
+    await _emit_authorized(client, h, db, monkeypatch, number)
+    doc_id = (await client.get("/api/admin/nfe/documents", headers=h)).json()["items"][0]["id"]
+
+    r = await client.post(
+        f"/api/admin/nfe/documents/{doc_id}/email",
+        json={"to": "contador@test.example", "mini": False},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+
+    from sqlalchemy import select as _select
+
+    from app.modules.admin.models import EmailLog
+
+    rows = list(await db.scalars(_select(EmailLog).where(EmailLog.template == "nfe_document")))
+    assert len(rows) == 1
+    assert rows[0].to_email == "contador@test.example"
+
+
+# ------------------------------------------------ teste de conexão
+
+
+@pytest.mark.asyncio
+async def test_test_connection_requires_super_admin(client, staff_token, auth_headers):
+    h = auth_headers(staff_token)
+    r = await client.get("/api/admin/nfe/test-connection", headers=h)
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_test_connection_without_certificate_fails_clearly(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    r = await client.get("/api/admin/nfe/test-connection", headers=h)
+    assert r.status_code in (400, 422)
+
+
+@pytest.mark.asyncio
+async def test_test_connection_reports_ok_and_reports_failure_reason(client, admin_token, auth_headers, monkeypatch):
+    from app.modules.nfe.sefaz_client import SefazClient, SefazResultado
+
+    h = auth_headers(admin_token)
+    await _setup_store_settings(client, h)
+    files = {"file": ("cert.pfx", _make_test_pfx(), "application/x-pkcs12")}
+    await client.post("/api/admin/nfe/config/certificate", files=files, data={"senha": "senha123"}, headers=h)
+
+    monkeypatch.setattr(
+        SefazClient, "status", lambda self: SefazResultado(ok=True, codigo_status="107", motivo="Serviço em Operação")
+    )
+    r = await client.get("/api/admin/nfe/test-connection", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["ok"] is True
+    assert r.json()["codigo_status"] == "107"
+
+    monkeypatch.setattr(
+        SefazClient, "status", lambda self: SefazResultado(ok=False, codigo_status="108", motivo="Serviço Paralisado")
+    )
+    r2 = await client.get("/api/admin/nfe/test-connection", headers=h)
+    assert r2.status_code == 200, r2.text
+    assert r2.json()["ok"] is False
+    assert "Paralisado" in r2.json()["motivo"]
