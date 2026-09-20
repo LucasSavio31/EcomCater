@@ -19,6 +19,18 @@ async def create(
     return row
 
 
+def notification_out(row: Notification) -> dict:
+    return {
+        "id": str(row.id),
+        "type": row.type,
+        "title": row.title,
+        "message": row.message,
+        "link_path": row.link_path,
+        "read_at": row.read_at.isoformat() if row.read_at else None,
+        "created_at": row.created_at.isoformat(),
+    }
+
+
 async def list_recent(db: AsyncSession, *, limit: int = 50) -> list[Notification]:
     return list(
         await db.scalars(

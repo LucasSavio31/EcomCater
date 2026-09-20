@@ -3,7 +3,11 @@
 apagar tudo)."""
 from __future__ import annotations
 
+import asyncio
+
 import pytest
+
+from app.modules.notifications import stream
 
 ADDRESS = {
     "recipient_name": "Cliente Teste",
@@ -131,6 +135,28 @@ async def test_sound_flags_reflect_theme_settings(client, admin_token, auth_head
     data = (await client.get("/api/admin/notifications", headers=h)).json()
     assert data["sound_sale_enabled"] is False
     assert data["sound_return_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_realtime_stream_publishes_on_order_paid_and_returned(client, admin_token, auth_headers, variant):
+    """O sininho não pode depender só do polling de 30s -- confirma que o
+    evento chega no `stream` (WebSocket) assim que o pedido é pago/devolvido."""
+    h = auth_headers(admin_token)
+    order = await _order(client, variant)
+
+    q = stream.subscribe()
+    try:
+        await client.post(f"/api/admin/orders/{order['number']}/status", json={"status": "paid"}, headers=h)
+        paid_event = await asyncio.wait_for(q.get(), timeout=5)
+        assert paid_event["type"] == "order_paid"
+        assert order["number"] in paid_event["title"]
+
+        await client.post(f"/api/admin/orders/{order['number']}/status", json={"status": "returned"}, headers=h)
+        returned_event = await asyncio.wait_for(q.get(), timeout=5)
+        assert returned_event["type"] == "order_returned"
+        assert order["number"] in returned_event["title"]
+    finally:
+        stream.unsubscribe(q)
 
 
 @pytest.mark.asyncio

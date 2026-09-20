@@ -5,8 +5,20 @@ import { useRouter } from 'next/navigation';
 import { IconBell, IconTrash } from './nav-icons';
 import { notificationsApi, type NotificationItem, type NotificationsList } from '@/modules/notifications/api';
 import { playReturnSound, playSaleSound } from '@/lib/sounds';
+import { ADMIN_API_BASE_URL } from '@/lib/admin-api-client';
+import { getSession } from '@/lib/auth-storage';
 
+// Rede de segurança: o WebSocket cobre o tempo real; o poll continua existindo
+// pra sincronizar caso a conexão caia (fila, reconexão de wifi, etc).
 const POLL_MS = 30_000;
+const WS_RETRY_MS = 5_000;
+
+function wsUrl(): string | null {
+  const session = getSession();
+  if (!session) return null;
+  const base = ADMIN_API_BASE_URL.replace(/^http/, 'ws');
+  return `${base}/api/admin/notifications/stream?token=${encodeURIComponent(session.accessToken)}`;
+}
 
 function formatWhen(iso: string): string {
   const date = new Date(iso);
@@ -32,29 +44,91 @@ export function NotificationBell() {
   const [data, setData] = useState<NotificationsList | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   // Ids já vistos, pra tocar som só nas notificações que chegaram DEPOIS do
-  // primeiro carregamento (nunca ao abrir o painel com itens antigos na fila).
+  // primeiro carregamento (nunca ao abrir o painel com itens antigos na fila) --
+  // compartilhado entre o poll e o WebSocket pra nunca tocar 2x a mesma.
   const seenIdsRef = useRef<Set<string> | null>(null);
+  const soundFlagsRef = useRef({ sale: true, return: true });
+
+  const playIfNew = useCallback((item: NotificationItem) => {
+    const seen = seenIdsRef.current;
+    if (!seen || seen.has(item.id)) return;
+    seen.add(item.id);
+    if (item.type === 'order_paid' && soundFlagsRef.current.sale) playSaleSound();
+    if (item.type === 'order_returned' && soundFlagsRef.current.return) playReturnSound();
+  }, []);
 
   const refresh = useCallback(async () => {
     const res = await notificationsApi.list();
     if (!res.ok) return;
     setData(res.data);
-    const seen = seenIdsRef.current;
-    if (seen) {
-      for (const item of res.data.items) {
-        if (seen.has(item.id)) continue;
-        if (item.type === 'order_paid' && res.data.sound_sale_enabled) playSaleSound();
-        if (item.type === 'order_returned' && res.data.sound_return_enabled) playReturnSound();
-      }
+    soundFlagsRef.current = {
+      sale: res.data.sound_sale_enabled,
+      return: res.data.sound_return_enabled,
+    };
+    if (seenIdsRef.current === null) {
+      // Primeiro carregamento: só registra os ids existentes -- nunca toca
+      // som pra notificação que já estava na fila antes de abrir o painel.
+      seenIdsRef.current = new Set(res.data.items.map((i) => i.id));
+      return;
     }
-    seenIdsRef.current = new Set(res.data.items.map((i) => i.id));
-  }, []);
+    for (const item of res.data.items) playIfNew(item);
+  }, [playIfNew]);
 
   useEffect(() => {
     void refresh();
     const id = window.setInterval(() => void refresh(), POLL_MS);
     return () => window.clearInterval(id);
   }, [refresh]);
+
+  // Push em tempo real: assim que uma venda é paga ou uma devolução é
+  // entregue, o backend manda na hora -- não importa a página do admin em
+  // que o usuário está, porque este componente vive no layout. Reconecta
+  // sozinho se a conexão cair (wifi, servidor reiniciando, etc).
+  useEffect(() => {
+    let socket: WebSocket | null = null;
+    let retryTimer: ReturnType<typeof window.setTimeout> | null = null;
+    let stopped = false;
+
+    function connect(): void {
+      if (stopped) return;
+      const url = wsUrl();
+      if (!url) {
+        retryTimer = setTimeout(connect, WS_RETRY_MS);
+        return;
+      }
+      socket = new WebSocket(url);
+      socket.onmessage = (ev: MessageEvent<string>) => {
+        let item: NotificationItem;
+        try {
+          item = JSON.parse(ev.data) as NotificationItem;
+        } catch {
+          return;
+        }
+        setData((prev) =>
+          prev
+            ? {
+                ...prev,
+                items: [item, ...prev.items.filter((i) => i.id !== item.id)],
+                unread_count: prev.unread_count + (item.read_at ? 0 : 1),
+              }
+            : prev,
+        );
+        playIfNew(item);
+      };
+      socket.onclose = () => {
+        if (stopped) return;
+        retryTimer = setTimeout(connect, WS_RETRY_MS);
+      };
+      socket.onerror = () => socket?.close();
+    }
+
+    connect();
+    return () => {
+      stopped = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      socket?.close();
+    };
+  }, [playIfNew]);
 
   useEffect(() => {
     if (!open) return;
