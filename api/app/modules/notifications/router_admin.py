@@ -1,7 +1,6 @@
 """Rotas administrativas do módulo `notifications`."""
 from __future__ import annotations
 
-import logging
 import uuid
 from typing import Annotated
 
@@ -14,8 +13,6 @@ from app.core.security import decode_token
 from app.modules.admin.models import AdminUser
 from app.modules.notifications import service, stream
 from app.modules.theme.service import get_theme
-
-logger = logging.getLogger("notifications.ws")
 
 admin_router = APIRouter()
 
@@ -85,27 +82,17 @@ async def notifications_stream(websocket: WebSocket) -> None:
     """Push em tempo real pro sininho -- o browser não manda header em
     WebSocket, então o access token vem por `?token=` (mesmo padrão de
     `get_current_admin_downloadable`)."""
-    try:
-        raw_token = websocket.query_params.get("token")
-        logger.info("ws stream: token presente=%s", bool(raw_token))
-        admin_id = await _admin_id_from_ws_token(raw_token)
-        logger.info("ws stream: admin_id=%s", admin_id)
-        if admin_id is None:
-            await websocket.close(code=4401)
-            return
-        async with SessionLocal() as db:
-            admin = await db.get(AdminUser, admin_id)
-        logger.info("ws stream: admin=%s is_active=%s", admin, getattr(admin, "is_active", None))
-        if not admin or not admin.is_active:
-            await websocket.close(code=4401)
-            return
+    admin_id = await _admin_id_from_ws_token(websocket.query_params.get("token"))
+    if admin_id is None:
+        await websocket.close(code=4401)
+        return
+    async with SessionLocal() as db:
+        admin = await db.get(AdminUser, admin_id)
+    if not admin or not admin.is_active:
+        await websocket.close(code=4401)
+        return
 
-        await websocket.accept()
-        logger.info("ws stream: accepted")
-    except Exception:  # noqa: BLE001
-        logger.exception("ws stream: falha inesperada antes/durante accept")
-        raise
-
+    await websocket.accept()
     queue = stream.subscribe()
     try:
         while True:
