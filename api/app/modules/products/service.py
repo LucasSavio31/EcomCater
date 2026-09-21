@@ -306,7 +306,6 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
             for v in sorted(product.variants, key=lambda x: x.position)
         ],
         "images": [_img_out(i) for i in sorted(product.images, key=lambda i: (not i.is_primary, i.position))],
-        "spin_frames": list(product.spin_frames_json or []),
         "specs": [
             {"id": str(s.id), "group": s.group, "label": s.label, "value": s.value, "position": s.position}
             for s in sorted(product.specs, key=lambda s: s.position)

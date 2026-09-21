@@ -178,10 +178,6 @@ export interface ProductDetail {
   option_types: OptionType[];
   variants: ProductVariant[];
   images: ProductImage[];
-  /** Sequência de URLs pro giro 360° (fotos + quadros gerados por IA entre
-   * pares de ângulo parecido) -- vazio até a 1ª geração ou quando o recurso
-   * não se aplica. Ver `Product360Viewer`. */
-  spin_frames: string[];
   specs: ProductSpec[];
   related: ProductListItem[];
   reviews: ProductReview[];

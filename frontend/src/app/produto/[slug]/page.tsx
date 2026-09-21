@@ -192,7 +192,7 @@ export default async function ProdutoPage({ params }: PageProps) {
 
       {theme.product_360_enabled && product.images.length >= PRODUCT_360_MIN_IMAGES && (
         <section aria-label="Visualização 360°">
-          <Product360Viewer images={product.images} spinFrames={product.spin_frames} productName={product.name} />
+          <Product360Viewer images={product.images} productName={product.name} />
         </section>
       )}
 

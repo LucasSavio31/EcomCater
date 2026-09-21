@@ -18,7 +18,6 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -89,12 +88,6 @@ class Product(UUIDPKMixin, TimestampMixin, Base):
     seo_title: Mapped[str | None] = mapped_column(String(200))
     seo_description: Mapped[str | None] = mapped_column(String(320))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-    # Sequência de URLs pro giro 360° (fotos originais + quadros gerados por
-    # IA entre pares de ângulo parecido) -- gerado em lote por
-    # `spin_ai.service`, vazio até a 1ª geração ou quando o recurso não se
-    # aplica (menos de 4 fotos, ou "Visualização 360°" desligada).
-    spin_frames_json: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]", nullable=False)
 
     variants: Mapped[list[ProductVariant]] = relationship(
         back_populates="product", cascade="all, delete-orphan"
