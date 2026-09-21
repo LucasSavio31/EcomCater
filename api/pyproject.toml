@@ -47,6 +47,15 @@ nfelib = "^2.5.2"
 "erpbrasil.edoc" = { git = "https://github.com/erpbrasil/erpbrasil.edoc.git", rev = "e90618f330b8eac37cfd7ab7e6d6a83974b4fda8" }
 six = "^1.17.0"  # dependência transitiva não declarada dos bindings legados acima
 BrazilFiscalReport = "^1.1.0"
+# --- Giro 360° com IA (RIFE, offline/CPU) -- api/app/modules/products/spin_ai ---
+# CPU-only (a VPS não tem GPU): o wheel do PyPI é o build CUDA, bem maior.
+numpy = "^2.0.0"
+torch = { version = "^2.4.0", source = "pytorch-cpu" }
+
+[[tool.poetry.source]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"

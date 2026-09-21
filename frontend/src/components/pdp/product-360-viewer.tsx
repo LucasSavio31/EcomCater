@@ -7,27 +7,28 @@ import { PRODUCT_360_MIN_IMAGES } from '@/components/pdp/product-360-config';
 
 interface Props {
   images: ProductImage[];
+  /** Sequência pronta (fotos + quadros gerados por IA) -- quando presente,
+   * usada no lugar de `images`. Ver `product_360_enabled` em Aparência. */
+  spinFrames?: string[];
   productName: string;
 }
 
 const DRAG_PX_PER_FRAME = 18;
 
 /**
- * Giro 360° "pobre" a partir das fotos já cadastradas do produto (sem
- * reconstrução 3D real/IA — fotos comuns de e-commerce não têm cobertura de
- * ângulo suficiente pra isso). Arrastar troca de foto conforme a distância
- * percorrida, dando a sensação de girar o produto; duplo clique/toque
- * aplica um zoom simples na foto atual.
+ * Giro 360° a partir das fotos já cadastradas do produto, enriquecido com
+ * quadros intermediários gerados por IA (RIFE) entre pares de ângulo
+ * parecido quando disponíveis (`spinFrames`) -- sem isso, cai pra troca
+ * direta entre as fotos originais. Arrastar troca de quadro conforme a
+ * distância percorrida, dando a sensação de girar o produto; duplo
+ * clique/toque aplica um zoom simples no quadro atual.
  */
-export function Product360Viewer({ images, productName }: Props) {
-  const frames = useMemo(
-    () =>
-      [...images]
-        .sort((a, b) => a.position - b.position)
-        .map((img) => resolveMediaUrl(img.zoom_url))
-        .filter((url): url is string => Boolean(url)),
-    [images],
-  );
+export function Product360Viewer({ images, spinFrames, productName }: Props) {
+  const frames = useMemo(() => {
+    if (spinFrames && spinFrames.length > 0) return spinFrames;
+    // mesma ordem que a galeria mostra (a API já traz a primária primeiro)
+    return images.map((img) => resolveMediaUrl(img.zoom_url)).filter((url): url is string => Boolean(url));
+  }, [images, spinFrames]);
 
   const [index, setIndex] = useState(0);
   const [zoomed, setZoomed] = useState(false);

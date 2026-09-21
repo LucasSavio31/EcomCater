@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -231,6 +231,7 @@ async def add_image(
     product_id: str,
     db: DbDep,
     _: EditorDep,
+    background: BackgroundTasks,
     file: Annotated[UploadFile, File()],
     variant_id: Annotated[str | None, Form()] = None,
     alt: Annotated[str | None, Form()] = None,
@@ -239,12 +240,14 @@ async def add_image(
     img = await service.add_image(
         db, product_id, raw, file.filename or "produto.png", variant_id=variant_id, alt=alt
     )
+    await _trigger_spin_ai(db, product_id, background)
     return {"id": str(img.id)}
 
 
 @router.delete("/{product_id}/images/{image_id}", status_code=204)
-async def delete_image(product_id: str, image_id: str, db: DbDep, _: EditorDep) -> None:
+async def delete_image(product_id: str, image_id: str, db: DbDep, _: EditorDep, background: BackgroundTasks) -> None:
     await service.delete_image(db, product_id, image_id)
+    await _trigger_spin_ai(db, product_id, background)
 
 
 class _ReorderImagesIn(BaseModel):
@@ -257,9 +260,21 @@ async def reorder_images(
     product_id: str,
     db: DbDep,
     _: EditorDep,
+    background: BackgroundTasks,
     body: _ReorderImagesIn = Body(...),
 ) -> None:
     await service.reorder_images(db, product_id, body.ordered_ids, body.primary_id)
+    await _trigger_spin_ai(db, product_id, background)
+
+
+async def _trigger_spin_ai(db: DbDep, product_id: str, background: BackgroundTasks) -> None:
+    """Reavalia o giro 360° (IA) depois de qualquer mudança nas fotos --
+    silencioso se o recurso estiver desligado ou o produto não se qualificar
+    (ver `spin_ai.service.maybe_trigger`)."""
+    from app.modules.products.spin_ai.service import maybe_trigger
+
+    product = await service.get_admin(db, product_id)
+    await maybe_trigger(db, product, background)
 
 
 # ------------------------------------------------------------------ specs
