@@ -17,6 +17,7 @@ from app.shared.storage import storage
 _THEME_FIELDS = {
     "primary_color", "secondary_color", "accent_color", "text_color", "bg_color",
     "button_bg_color", "button_text_color", "button_hover_color", "button_border_color",
+    "button_border_width_px",
     "variation_bg_color", "variation_text_color", "variation_border_color",
     "header_bg_color", "header_text_color", "header_max_width_px",
     "footer_bg_color", "footer_text_color",
@@ -57,6 +58,9 @@ _THEME_FIELDS = {
     "pdp_reassurance_enabled", "pdp_reassurance_items",
     "freight_button_bg_color", "freight_button_text_color",
     "freight_button_hover_color", "freight_button_border_color", "freight_button_radius_px",
+    "pdp_buy_button_bg_color", "pdp_buy_button_text_color",
+    "pdp_buy_button_hover_color", "pdp_buy_button_border_color", "pdp_buy_button_radius_px",
+    "pdp_buy_button_border_width_px",
     "promo_badge_bg_color", "promo_badge_text_color", "promo_badge_border_color",
     "promo_badge_radius_px",
     "promo_badge_card_enabled", "promo_badge_pdp_enabled",
@@ -202,6 +206,8 @@ async def update_theme(db: AsyncSession, data: dict) -> ThemeSettings:
             v = max(0, min(30, int(v)))
         if k.endswith("_radius_px"):
             v = max(0, min(40, int(v or 0)))
+        if k.endswith("_border_width_px"):
+            v = max(0, min(20, int(v or 0)))
         if k == "pdp_reassurance_items":
             v = [str(x).strip()[:120] for x in v if str(x).strip()][:6] if isinstance(v, list) else []
         if k in _BOOL_FIELDS:

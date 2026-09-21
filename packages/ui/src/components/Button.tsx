@@ -17,7 +17,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const VARIANTS: Record<ButtonVariant, string> = {
   // `border-btn-border` some sozinha quando a cor da borda é igual ao fundo
   // (padrão) — só aparece quando o tema define uma cor de borda diferente.
-  primary: 'border-2 border-btn-border bg-btn text-btn-fg hover:bg-btn-hover hover:opacity-90',
+  // Espessura vem de --btn-border-width (0 = sem borda), configurável em
+  // Aparência → Cores gerais; 2px é o valor histórico (antes fixo).
+  primary:
+    'border-[length:var(--btn-border-width,2px)] border-btn-border bg-btn text-btn-fg hover:bg-btn-hover hover:opacity-90',
   secondary: 'bg-secondary text-secondary-fg hover:opacity-90',
   outline: 'border border-surface-border bg-transparent text-text hover:bg-bg-subtle',
   ghost: 'bg-transparent text-text hover:bg-bg-subtle',

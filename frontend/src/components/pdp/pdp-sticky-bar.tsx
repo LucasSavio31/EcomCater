@@ -47,7 +47,14 @@ export function PdpStickyBar({
           onClick={() =>
             document.getElementById(buyBoxId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
           }
-          className="rounded-btn bg-btn px-6 py-3 text-base font-extrabold uppercase tracking-wide text-btn-fg"
+          className="px-6 py-3 text-base font-extrabold uppercase tracking-wide"
+          style={{
+            background: 'var(--color-pdp-buy-bg)',
+            color: 'var(--color-pdp-buy-fg)',
+            borderRadius: 'var(--radius-pdp-buy, 0.75rem)',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-pdp-buy-hover)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-pdp-buy-bg)')}
         >
           Comprar
         </button>

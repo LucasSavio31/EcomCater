@@ -2,6 +2,7 @@
 
 import { Input } from '@ecom/ui';
 import { AsyncBoundary } from '@/components/async-boundary';
+import { Checkbox } from '@/components/form-controls';
 import { useThemeEditor } from './use-theme-editor';
 import { ColorGrid, SaveBar, SectionCard, type ColorFieldDef } from './_shared';
 
@@ -54,6 +55,21 @@ export function CartTab() {
     <AsyncBoundary loading={loading} error={error} onRetry={reload}>
       {theme && (
         <div className="flex max-w-3xl flex-col gap-6">
+          <SectionCard title="Ao adicionar ao carrinho">
+            <Checkbox
+              label="Abrir mini-carrinho lateral"
+              hint="Tem precedência sobre a opção abaixo."
+              checked={theme.mini_cart_enabled}
+              onChange={(v) => set('mini_cart_enabled', v)}
+            />
+            <Checkbox
+              label="Ir direto para o carrinho"
+              hint="Só quando o mini-carrinho está desligado."
+              checked={theme.cart_redirect_after_add}
+              onChange={(v) => set('cart_redirect_after_add', v)}
+            />
+          </SectionCard>
+
           <SectionCard title="Botão “Finalizar compra”">
             <ColorGrid fields={CHECKOUT_BTN} theme={theme} set={set} />
             <RadiusInput

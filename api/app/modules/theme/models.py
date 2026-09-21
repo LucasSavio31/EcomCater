@@ -42,6 +42,10 @@ class ThemeSettings(Base):
     button_border_color: Mapped[str] = mapped_column(
         String(9), default="#111111", server_default="#111111", nullable=False
     )
+    # espessura da borda (px) -- 0 = sem borda. Antes era sempre 2px fixo.
+    button_border_width_px: Mapped[int] = mapped_column(
+        Integer, default=2, server_default="2", nullable=False
+    )
 
     # caixas de variação (numeração/cor na PDP) + botão "calcular frete"
     variation_bg_color: Mapped[str] = mapped_column(String(9), default="#FDE047", server_default="#FDE047", nullable=False)
@@ -274,6 +278,19 @@ class ThemeSettings(Base):
     freight_button_hover_color: Mapped[str] = mapped_column(String(9), default="#333333", server_default="#333333", nullable=False)
     freight_button_border_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
     freight_button_radius_px: Mapped[int] = mapped_column(Integer, default=12, server_default="12", nullable=False)
+
+    # Botão "Comprar" da página do produto (buy-box + barra fixa mobile) —
+    # cores próprias, independentes do botão geral (Cores gerais, usado por
+    # outros botões diversos do site).
+    pdp_buy_button_bg_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    pdp_buy_button_text_color: Mapped[str] = mapped_column(String(9), default="#FFFFFF", server_default="#FFFFFF", nullable=False)
+    pdp_buy_button_hover_color: Mapped[str] = mapped_column(String(9), default="#333333", server_default="#333333", nullable=False)
+    pdp_buy_button_border_color: Mapped[str] = mapped_column(String(9), default="#111111", server_default="#111111", nullable=False)
+    pdp_buy_button_radius_px: Mapped[int] = mapped_column(Integer, default=12, server_default="12", nullable=False)
+    # espessura da borda (px) -- 0 = sem borda.
+    pdp_buy_button_border_width_px: Mapped[int] = mapped_column(
+        Integer, default=2, server_default="2", nullable=False
+    )
 
     # Selo de promoção (-XX%) — cor de fundo e texto
     promo_badge_bg_color: Mapped[str] = mapped_column(String(9), default="#DC2626", server_default="#DC2626", nullable=False)

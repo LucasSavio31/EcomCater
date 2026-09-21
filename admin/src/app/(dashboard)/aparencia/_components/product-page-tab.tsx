@@ -23,6 +23,12 @@ const FREIGHT_BTN: ColorFieldDef[] = [
   { key: 'freight_button_hover_color', label: 'Hover' },
   { key: 'freight_button_border_color', label: 'Borda' },
 ];
+const BUY_BTN: ColorFieldDef[] = [
+  { key: 'pdp_buy_button_bg_color', label: 'Fundo' },
+  { key: 'pdp_buy_button_text_color', label: 'Texto' },
+  { key: 'pdp_buy_button_hover_color', label: 'Hover' },
+  { key: 'pdp_buy_button_border_color', label: 'Borda' },
+];
 const PROMO_BADGE: ColorFieldDef[] = [
   { key: 'promo_badge_bg_color', label: 'Fundo do selo' },
   { key: 'promo_badge_text_color', label: 'Texto do selo' },
@@ -65,6 +71,35 @@ export function ProductPageTab() {
               checked={theme.discount_badge_enabled}
               onChange={(v) => set('discount_badge_enabled', v)}
             />
+          </SectionCard>
+
+          <SectionCard
+            title="Botão “Comprar”"
+            hint="Botão principal da página do produto (buy-box + barra fixa no mobile) — independente do botão geral, usado por outros botões diversos do site (Aparência → Cores gerais)."
+          >
+            <ColorGrid fields={BUY_BTN} theme={theme} set={set} />
+            <div className="flex flex-wrap gap-4">
+              <Input
+                label="Raio da borda (px)"
+                inputMode="numeric"
+                hint="0 = quadrado · máx. 40"
+                className="w-40"
+                value={String(theme.pdp_buy_button_radius_px ?? 12)}
+                onChange={(e) =>
+                  set('pdp_buy_button_radius_px', Math.max(0, Math.min(40, Number(e.target.value) || 0)))
+                }
+              />
+              <Input
+                label="Espessura da borda (px)"
+                inputMode="numeric"
+                hint="0 = sem borda."
+                className="w-40"
+                value={String(theme.pdp_buy_button_border_width_px ?? 2)}
+                onChange={(e) =>
+                  set('pdp_buy_button_border_width_px', Math.max(0, Math.min(20, Number(e.target.value) || 0)))
+                }
+              />
+            </div>
           </SectionCard>
 
           <SectionCard
@@ -186,43 +221,6 @@ export function ProductPageTab() {
                 )}
               </div>
             )}
-          </SectionCard>
-
-          <SectionCard title="Cards da vitrine">
-            <Checkbox
-              label="Zoom suave na imagem ao passar o mouse"
-              checked={theme.card_hover_zoom_enabled}
-              onChange={(v) => set('card_hover_zoom_enabled', v)}
-            />
-            <Checkbox
-              label="Botão de compra abaixo do card"
-              hint="Segue a cor do botão de comprar, sem o ícone do carrinho."
-              checked={theme.card_buy_button_enabled}
-              onChange={(v) => set('card_buy_button_enabled', v)}
-            />
-            {theme.card_buy_button_enabled && (
-              <Input
-                label="Texto do botão do card"
-                value={theme.card_buy_button_label}
-                onChange={(e) => set('card_buy_button_label', e.target.value)}
-                className="w-48"
-              />
-            )}
-          </SectionCard>
-
-          <SectionCard title="Ao adicionar ao carrinho">
-            <Checkbox
-              label="Abrir mini-carrinho lateral"
-              hint="Tem precedência sobre a opção abaixo."
-              checked={theme.mini_cart_enabled}
-              onChange={(v) => set('mini_cart_enabled', v)}
-            />
-            <Checkbox
-              label="Ir direto para o carrinho"
-              hint="Só quando o mini-carrinho está desligado."
-              checked={theme.cart_redirect_after_add}
-              onChange={(v) => set('cart_redirect_after_add', v)}
-            />
           </SectionCard>
 
           <SaveBar dirty={dirty} saving={saving} onSave={() => void save()} onDiscard={discard} />

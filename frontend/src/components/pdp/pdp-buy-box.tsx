@@ -248,6 +248,15 @@ export function PdpBuyBox({
             loading={busy}
             disabled={busy || outOfStock}
             className="flex-1 gap-2 text-lg font-extrabold uppercase tracking-wide"
+            style={{
+              background: 'var(--color-pdp-buy-bg)',
+              color: 'var(--color-pdp-buy-fg)',
+              borderColor: 'var(--color-pdp-buy-border)',
+              borderRadius: 'var(--radius-pdp-buy, 0.75rem)',
+              borderWidth: 'var(--pdp-buy-border-width, 2px)',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-pdp-buy-hover)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-pdp-buy-bg)')}
           >
             {!busy && (
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

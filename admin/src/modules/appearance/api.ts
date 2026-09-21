@@ -16,6 +16,8 @@ export interface Theme {
   button_text_color: string;
   button_hover_color: string;
   button_border_color: string;
+  /** Espessura da borda (px) — 0 = sem borda. */
+  button_border_width_px: number;
   /** Caixas de variação (PDP) + botão "calcular frete" */
   variation_bg_color: string;
   variation_text_color: string;
@@ -181,6 +183,13 @@ export interface Theme {
   /** Sons do painel admin (menu "Sons") */
   sound_sale_enabled: boolean;
   sound_return_enabled: boolean;
+  /** Botão "Comprar" da página do produto — independente do botão geral acima. */
+  pdp_buy_button_bg_color: string;
+  pdp_buy_button_text_color: string;
+  pdp_buy_button_hover_color: string;
+  pdp_buy_button_border_color: string;
+  pdp_buy_button_radius_px: number;
+  pdp_buy_button_border_width_px: number;
   logo_url?: string | null;
   logo_mobile_url?: string | null;
   favicon_url?: string | null;

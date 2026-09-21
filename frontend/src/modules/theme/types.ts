@@ -11,6 +11,8 @@ export interface ThemeSettings {
   button_hover_color: string;
   /** Borda do botão "Comprar" — igual ao fundo por padrão (some visualmente). */
   button_border_color: string;
+  /** Espessura da borda (px) — 0 = sem borda. */
+  button_border_width_px: number;
   /** Caixas de variação (PDP) + botão "calcular frete". */
   variation_bg_color: string;
   variation_text_color: string;
@@ -139,6 +141,12 @@ export interface ThemeSettings {
   freight_button_hover_color: string;
   freight_button_border_color: string;
   freight_button_radius_px: number;
+  pdp_buy_button_bg_color: string;
+  pdp_buy_button_text_color: string;
+  pdp_buy_button_hover_color: string;
+  pdp_buy_button_border_color: string;
+  pdp_buy_button_radius_px: number;
+  pdp_buy_button_border_width_px: number;
   promo_badge_bg_color: string;
   promo_badge_text_color: string;
   promo_badge_border_color: string;
@@ -230,6 +238,7 @@ export const NEUTRAL_THEME: ThemeSettings = {
   button_text_color: '#FFFFFF',
   button_hover_color: '#DC2626',
   button_border_color: '#111111',
+  button_border_width_px: 2,
   variation_bg_color: '#FDE047',
   variation_text_color: '#111111',
   variation_border_color: '#111111',
@@ -340,6 +349,12 @@ export const NEUTRAL_THEME: ThemeSettings = {
   freight_button_hover_color: '#333333',
   freight_button_border_color: '#111111',
   freight_button_radius_px: 12,
+  pdp_buy_button_bg_color: '#111111',
+  pdp_buy_button_text_color: '#FFFFFF',
+  pdp_buy_button_hover_color: '#333333',
+  pdp_buy_button_border_color: '#111111',
+  pdp_buy_button_radius_px: 12,
+  pdp_buy_button_border_width_px: 2,
   promo_badge_bg_color: '#DC2626',
   promo_badge_text_color: '#FFFFFF',
   promo_badge_border_color: '#DC2626',

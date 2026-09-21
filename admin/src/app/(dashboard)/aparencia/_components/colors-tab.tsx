@@ -2,6 +2,7 @@
 
 import { Input } from '@ecom/ui';
 import { AsyncBoundary } from '@/components/async-boundary';
+import { Checkbox } from '@/components/form-controls';
 import { ImageUploader } from '@/components/image-uploader';
 import { useThemeEditor } from './use-theme-editor';
 import { ColorGrid, SaveBar, SectionCard, type ColorFieldDef } from './_shared';
@@ -46,19 +47,53 @@ export function ColorsTab() {
 
           <SectionCard
             title="Botões (geral)"
-            hint="Vale para os botões da loja inteira, incluindo o Comprar da página do produto. A borda fica igual ao fundo (invisível) até você escolher uma cor diferente."
+            hint="Vale para os outros botões diversos da loja — não inclui o Comprar da página do produto, que tem cor própria em Página de produto."
           >
-            <Input
-              label="Raio das bordas (px)"
-              inputMode="numeric"
-              hint="0 = quadrado."
-              value={String(theme.button_radius_px ?? 12)}
-              onChange={(e) =>
-                set('button_radius_px', Math.max(0, Math.min(40, Number(e.target.value) || 0)))
-              }
-              className="w-40"
-            />
+            <div className="flex flex-wrap gap-4">
+              <Input
+                label="Raio das bordas (px)"
+                inputMode="numeric"
+                hint="0 = quadrado."
+                value={String(theme.button_radius_px ?? 12)}
+                onChange={(e) =>
+                  set('button_radius_px', Math.max(0, Math.min(40, Number(e.target.value) || 0)))
+                }
+                className="w-40"
+              />
+              <Input
+                label="Espessura da borda (px)"
+                inputMode="numeric"
+                hint="0 = sem borda."
+                value={String(theme.button_border_width_px ?? 2)}
+                onChange={(e) =>
+                  set('button_border_width_px', Math.max(0, Math.min(20, Number(e.target.value) || 0)))
+                }
+                className="w-40"
+              />
+            </div>
             <ColorGrid fields={BUTTONS} theme={theme} set={set} />
+          </SectionCard>
+
+          <SectionCard title="Cards da vitrine">
+            <Checkbox
+              label="Zoom suave na imagem ao passar o mouse"
+              checked={theme.card_hover_zoom_enabled}
+              onChange={(v) => set('card_hover_zoom_enabled', v)}
+            />
+            <Checkbox
+              label="Botão de compra abaixo do card"
+              hint="Segue a cor do botão geral acima, não a do Comprar da página do produto — sem o ícone do carrinho."
+              checked={theme.card_buy_button_enabled}
+              onChange={(v) => set('card_buy_button_enabled', v)}
+            />
+            {theme.card_buy_button_enabled && (
+              <Input
+                label="Texto do botão do card"
+                value={theme.card_buy_button_label}
+                onChange={(e) => set('card_buy_button_label', e.target.value)}
+                className="w-48"
+              />
+            )}
           </SectionCard>
 
           <SectionCard title="Menu superior">
