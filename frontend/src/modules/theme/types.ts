@@ -174,6 +174,7 @@ export interface ThemeSettings {
   cart_badge_bg_color: string;
   cart_badge_text_color: string;
   pdp_qty_selector_enabled: boolean;
+  size_chart_enabled: boolean;
   size_chart_bg_color: string;
   size_chart_header_bg_color: string;
   size_chart_header_text_color: string;
@@ -382,6 +383,7 @@ export const NEUTRAL_THEME: ThemeSettings = {
   cart_badge_bg_color: '#111111',
   cart_badge_text_color: '#FFFFFF',
   pdp_qty_selector_enabled: true,
+  size_chart_enabled: true,
   size_chart_bg_color: '#FFFFFF',
   size_chart_header_bg_color: '#FFC400',
   size_chart_header_text_color: '#111111',

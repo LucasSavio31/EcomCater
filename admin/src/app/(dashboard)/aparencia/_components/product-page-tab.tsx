@@ -71,6 +71,18 @@ export function ProductPageTab() {
               checked={theme.discount_badge_enabled}
               onChange={(v) => set('discount_badge_enabled', v)}
             />
+            <Checkbox
+              label="Mostrar “Tabela de medidas”"
+              hint="Link ao lado da numeração, abre o popup com a tabela. As cores ficam em “Popup Tabela de medidas” abaixo."
+              checked={theme.size_chart_enabled}
+              onChange={(v) => set('size_chart_enabled', v)}
+            />
+            <Checkbox
+              label="Mostrar “Cadastre-se e ganhe…”"
+              hint="Link abaixo do botão Comprar, abre o popup de captura de leads. Título, cupom e cores ficam em Aparência → Popups."
+              checked={theme.lead_popup_pdp_enabled}
+              onChange={(v) => set('lead_popup_pdp_enabled', v)}
+            />
           </SectionCard>
 
           <SectionCard

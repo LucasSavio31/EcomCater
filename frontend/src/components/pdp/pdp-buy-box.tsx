@@ -21,6 +21,7 @@ interface PdpBuyBoxProps {
   leadPopup?: LeadPopupConfig | null;
   showQty?: boolean;
   showWishlist?: boolean;
+  showSizeChart?: boolean;
   sizeChartColors?: SizeChartColors;
   /** Seletor de COR (produtos irmãos) — renderizado logo abaixo da numeração. */
   colorSlot?: React.ReactNode;
@@ -33,6 +34,7 @@ export function PdpBuyBox({
   leadPopup = null,
   showQty = true,
   showWishlist = true,
+  showSizeChart = true,
   sizeChartColors,
   colorSlot = null,
 }: PdpBuyBoxProps) {
@@ -170,7 +172,7 @@ export function PdpBuyBox({
                   </span>
                 )}
               </span>
-              {type.is_size && product.size_chart && (
+              {showSizeChart && type.is_size && product.size_chart && (
                 <SizeChartButton chart={product.size_chart} colors={sizeChartColors} />
               )}
             </legend>

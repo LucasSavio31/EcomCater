@@ -161,6 +161,7 @@ export interface Theme {
   pdp_wishlist_border_color: string;
   pdp_wishlist_icon_color: string;
   pdp_qty_selector_enabled: boolean;
+  size_chart_enabled: boolean;
   size_chart_bg_color: string;
   size_chart_header_bg_color: string;
   size_chart_header_text_color: string;

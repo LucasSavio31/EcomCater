@@ -56,6 +56,7 @@ export function PdpMain({ product, redirectAfterAdd, miniCart, theme }: PdpMainP
             leadPopup={leadPopup}
             showQty={theme.pdp_qty_selector_enabled}
             showWishlist={theme.wishlist_enabled}
+            showSizeChart={theme.size_chart_enabled}
             colorSlot={
               <ColorSiblings
                 currentColorName={product.color_name}
