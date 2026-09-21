@@ -8,8 +8,6 @@ import { Breadcrumbs, type Crumb } from '@/components/catalog/breadcrumbs';
 import { Stars } from '@/components/catalog/stars';
 import { ProductCarousel } from '@/components/catalog/product-carousel';
 import { PdpMain } from '@/components/pdp/pdp-main';
-import { Product360Viewer } from '@/components/pdp/product-360-viewer';
-import { PRODUCT_360_MIN_IMAGES } from '@/components/pdp/product-360-config';
 import { ReviewForm } from '@/components/pdp/review-form';
 import { FreeShippingProgress } from '@/components/layout/free-shipping-progress';
 import { TrackOnMount } from '@/components/analytics/track-on-mount';
@@ -187,12 +185,6 @@ export default async function ProdutoPage({ params }: PageProps) {
       {accordionItems.length > 0 && (
         <section aria-label="Detalhes do produto">
           <Accordion items={accordionItems} multiple defaultOpen={['descricao']} />
-        </section>
-      )}
-
-      {theme.product_360_enabled && product.images.length >= PRODUCT_360_MIN_IMAGES && (
-        <section aria-label="Visualização 360°">
-          <Product360Viewer images={product.images} productName={product.name} />
         </section>
       )}
 

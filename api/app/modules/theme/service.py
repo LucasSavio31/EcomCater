@@ -74,7 +74,6 @@ _THEME_FIELDS = {
     "cart_badge_bg_color", "cart_badge_text_color",
     "pdp_qty_selector_enabled", "wishlist_enabled",
     "pdp_wishlist_bg_color", "pdp_wishlist_border_color", "pdp_wishlist_icon_color",
-    "product_360_enabled",
     "size_chart_enabled",
     "size_chart_bg_color", "size_chart_header_bg_color",
     "size_chart_header_text_color", "size_chart_text_color",
@@ -109,7 +108,7 @@ _BOOL_FIELDS = {
     "cookie_consent_enabled",
     "lead_popup_enabled", "lead_popup_pdp_enabled", "lead_capture_enabled", "lead_popup_show_logo",
     "pdp_reassurance_enabled",
-    "pdp_qty_selector_enabled", "wishlist_enabled", "size_chart_enabled", "product_360_enabled",
+    "pdp_qty_selector_enabled", "wishlist_enabled", "size_chart_enabled",
     "card_hover_zoom_enabled", "card_buy_button_enabled",
     "sound_sale_enabled", "sound_return_enabled",
 }

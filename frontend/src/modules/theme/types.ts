@@ -175,8 +175,6 @@ export interface ThemeSettings {
   cart_badge_text_color: string;
   pdp_qty_selector_enabled: boolean;
   size_chart_enabled: boolean;
-  /** Giro 360° com as fotos do produto (mín. 4) — antes de "Avaliações". */
-  product_360_enabled: boolean;
   size_chart_bg_color: string;
   size_chart_header_bg_color: string;
   size_chart_header_text_color: string;
@@ -386,7 +384,6 @@ export const NEUTRAL_THEME: ThemeSettings = {
   cart_badge_text_color: '#FFFFFF',
   pdp_qty_selector_enabled: true,
   size_chart_enabled: true,
-  product_360_enabled: true,
   size_chart_bg_color: '#FFFFFF',
   size_chart_header_bg_color: '#FFC400',
   size_chart_header_text_color: '#111111',

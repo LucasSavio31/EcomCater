@@ -339,8 +339,6 @@ class ThemeSettings(Base):
     card_hover_zoom_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
     card_buy_button_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     card_buy_button_label: Mapped[str] = mapped_column(String(40), default="COMPRAR", server_default="COMPRAR", nullable=False)
-    # Giro 360° com as fotos do produto (mín. 4 fotos) -- antes de "Avaliações"
-    product_360_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
 
     # Popup "Tabela de medidas" na PDP
     size_chart_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
