@@ -83,6 +83,12 @@ export function ProductPageTab() {
               checked={theme.lead_popup_pdp_enabled}
               onChange={(v) => set('lead_popup_pdp_enabled', v)}
             />
+            <Checkbox
+              label="Visualização 360°"
+              hint={`Gira o produto arrastando as fotos já cadastradas (não é modelo 3D real) — aparece antes de "Avaliações", só quando o produto tem 4 fotos ou mais.`}
+              checked={theme.product_360_enabled}
+              onChange={(v) => set('product_360_enabled', v)}
+            />
           </SectionCard>
 
           <SectionCard

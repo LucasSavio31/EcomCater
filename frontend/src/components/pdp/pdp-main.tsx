@@ -50,6 +50,7 @@ export function PdpMain({ product, redirectAfterAdd, miniCart, theme }: PdpMainP
 
         <div id="pdp-buybox">
           <PdpBuyBox
+            key={product.id}
             product={product}
             redirectAfterAdd={redirectAfterAdd}
             miniCart={miniCart}
@@ -59,6 +60,7 @@ export function PdpMain({ product, redirectAfterAdd, miniCart, theme }: PdpMainP
             showSizeChart={theme.size_chart_enabled}
             colorSlot={
               <ColorSiblings
+                key={product.id}
                 currentColorName={product.color_name}
                 siblings={product.color_siblings}
               />
