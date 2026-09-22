@@ -87,6 +87,12 @@ class TopProduct(BaseModel):
     revenue_cents: int
 
 
+class TopState(BaseModel):
+    state: str
+    orders: int
+    revenue_cents: int
+
+
 class DashboardOut(BaseModel):
     window_days: int              # tamanho do período considerado (padrão 30)
     orders_period: int            # pedidos criados no período
@@ -102,3 +108,4 @@ class DashboardOut(BaseModel):
     series_previous: list[RevenuePoint]
     abc_curve: list[AbcPoint]
     top_products: list[TopProduct]
+    top_states: list[TopState]

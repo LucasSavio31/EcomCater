@@ -245,6 +245,168 @@ async def test_series_buckets_group_events_by_window(db):
 
 
 @pytest.mark.asyncio
+async def test_payment_method_breakdown_conversion_and_share(client, admin_token, auth_headers):
+    """Unidade: agregação vem do livro-caixa (`FinancialEvent.payment_method`),
+    não de um join em `payments` -- conversão = pago / gerado (placed) por
+    forma de pagamento."""
+    from datetime import UTC, datetime
+
+    from app.modules.financial import service
+    from app.modules.financial.models import FinancialEvent
+
+    h = auth_headers(admin_token)
+    now = datetime.now(UTC)
+
+    from app.core.database import SessionLocal
+
+    async with SessionLocal() as db:
+        db.add_all(
+            [
+                # pix: 1 gerado, 1 pago -> conversão 100%
+                FinancialEvent(occurred_at=now, kind="placed", order_number="PM1", payment_method="pix", items_count=1),
+                FinancialEvent(occurred_at=now, kind="paid", order_number="PM1", payment_method="pix", gross_cents=7000, items_count=1),
+                # boleto: 2 gerados, 1 pago -> conversão 50%
+                FinancialEvent(occurred_at=now, kind="placed", order_number="PM2", payment_method="boleto", items_count=1),
+                FinancialEvent(occurred_at=now, kind="placed", order_number="PM3", payment_method="boleto", items_count=1),
+                FinancialEvent(occurred_at=now, kind="paid", order_number="PM3", payment_method="boleto", gross_cents=7000, items_count=1),
+            ]
+        )
+        await db.commit()
+
+        win_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        win_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        breakdown = await service.payment_method_breakdown(db, win_start, win_end)
+
+    by_method = {b["method"]: b for b in breakdown}
+    assert by_method["pix"]["placed_count"] == 1
+    assert by_method["pix"]["paid_count"] == 1
+    assert by_method["pix"]["conversion_pct"] == 100.0
+    assert by_method["pix"]["gross_cents"] == 7000
+    assert by_method["pix"]["share_pct"] == 50.0
+
+    assert by_method["boleto"]["placed_count"] == 2
+    assert by_method["boleto"]["paid_count"] == 1
+    assert by_method["boleto"]["conversion_pct"] == 50.0
+    assert by_method["boleto"]["gross_cents"] == 7000
+    assert by_method["boleto"]["share_pct"] == 50.0
+
+    assert by_method["credit_card"]["placed_count"] == 0
+    assert by_method["credit_card"]["conversion_pct"] == 0.0
+    assert by_method["credit_card"]["gross_cents"] == 0
+
+    s = await _summary(client, h)
+    assert {pm["method"] for pm in s["payment_methods"]} == {"pix", "boleto", "credit_card"}
+
+
+@pytest.fixture
+async def fake_gateway(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    r = await client.put("/api/admin/payment/config/providers/fake", json={"enabled": True}, headers=h)
+    assert r.status_code == 200, r.text
+    r = await client.put(
+        "/api/admin/payment/config/method-providers",
+        json={"credit_card": "fake", "pix": "fake", "boleto": "fake"},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    return h
+
+
+@pytest.fixture
+async def variant_pay(client, admin_token, auth_headers, fake_gateway):
+    h = auth_headers(admin_token)
+    cat = (await client.post("/api/admin/categories", json={"name": "PayFin"}, headers=h)).json()
+    p = (
+        await client.post(
+            "/api/admin/products",
+            json={"name": "Item PayFin", "category_id": cat["id"], "price_cents": 7000, "status": "active"},
+            headers=h,
+        )
+    ).json()
+    await client.put(
+        f"/api/admin/products/{p['id']}/option-types",
+        json=[{"name": "T", "values": [{"value": "U"}]}],
+        headers=h,
+    )
+    vid = (await client.get(f"/api/products/{p['slug']}")).json()["option_types"][0]["values"][0]["id"]
+    v = (
+        await client.post(
+            f"/api/admin/products/{p['id']}/variants",
+            json={"sku": "PAYFIN-U", "option_value_ids": [vid], "stock_qty": 5},
+            headers=h,
+        )
+    ).json()
+    return v["id"]
+
+
+@pytest.mark.asyncio
+async def test_payment_method_breakdown_survives_order_deletion(client, variant_pay, admin_token, auth_headers):
+    """O pedido central desta feature: o gráfico de pizza/caixinha de
+    conversão por forma de pagamento NUNCA pode zerar -- é livro-caixa
+    (snapshot), não join em `payments`, então excluir o pedido não apaga o
+    fato já registrado."""
+    h = auth_headers(admin_token)
+    await client.post("/api/cart/items", json={"variant_id": variant_pay, "quantity": 1})
+    order = (
+        await client.post(
+            "/api/orders/checkout",
+            json={"email": "pmdel@test.example", "shipping_address": ADDRESS},
+        )
+    ).json()
+    r = await client.post(
+        "/api/payment/charge",
+        json={"order_number": order["number"], "method": "pix", "card": None},
+    )
+    assert r.status_code == 200, r.text
+
+    before = await _summary(client, h)
+    pix_before = next(pm for pm in before["payment_methods"] if pm["method"] == "pix")
+    assert pix_before["placed_count"] == 1
+    assert pix_before["gross_cents"] == 0  # pix fica "pending" até o webhook confirmar
+
+    # confirma o pix (webhook) -> ledger ganha o fato "paid" com payment_method já resolvido
+    wh = await client.post(
+        "/api/webhooks/payment/fake",
+        json={"event_id": "evt-pmdel-1", "order_number": order["number"], "status": "paid"},
+    )
+    assert wh.status_code == 200, wh.text
+    paid = await _summary(client, h)
+    pix_paid = next(pm for pm in paid["payment_methods"] if pm["method"] == "pix")
+    assert pix_paid["paid_count"] == 1
+    assert pix_paid["gross_cents"] == 7000
+
+    # cancela + exclui o pedido -- o Payment (FK CASCADE) some junto
+    await client.post(
+        f"/api/admin/orders/{order['number']}/status", json={"status": "canceled"}, headers=h
+    )
+    d = await client.delete(
+        f"/api/admin/orders/{order['number']}", params={"confirm": "true"}, headers=h
+    )
+    assert d.status_code == 204, d.text
+
+    after = await _summary(client, h)
+    pix_after = next(pm for pm in after["payment_methods"] if pm["method"] == "pix")
+    assert pix_after["placed_count"] == pix_paid["placed_count"]
+    assert pix_after["paid_count"] == pix_paid["paid_count"]
+    assert pix_after["gross_cents"] == pix_paid["gross_cents"]
+
+
+@pytest.mark.asyncio
+async def test_report_pdf_downloads(client, variant_with_cost, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    order = await _order(client, variant_with_cost, "pdfrel@test.example")
+    await client.post(
+        f"/api/admin/orders/{order['number']}/status", json={"status": "paid"}, headers=h
+    )
+
+    r = await client.get("/api/admin/financial/report.pdf", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/pdf"
+    assert "attachment" in r.headers["content-disposition"]
+    assert r.content[:4] == b"%PDF"
+
+
+@pytest.mark.asyncio
 async def test_dashboard_uses_ledger_numbers(client, variant_with_cost, admin_token, auth_headers):
     """A dash tem que refletir o mesmo faturamento do menu Faturamento."""
     h = auth_headers(admin_token)

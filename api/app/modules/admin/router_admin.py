@@ -228,14 +228,14 @@ async def update_module(
 
 
 # ---------------------------------------------------------------- dashboard / settings
-@router.get("/dashboard", response_model=DashboardOut)
-async def dashboard(
+async def _build_dashboard(
     db: DbDep,
-    _: CurrentAdmin,
     date_from: str | None = None,
     date_to: str | None = None,
     metric: str = "revenue",
-):
+) -> DashboardOut:
+    """Monta os dados do Dashboard -- usado pela rota JSON e pelo PDF, pra
+    garantir que os dois sempre mostrem exatamente os mesmos números."""
     from datetime import UTC, datetime, timedelta
 
     from app.modules.financial import service as financial_service
@@ -381,6 +381,30 @@ async def dashboard(
         for r in agg_rows[:10]
     ]
 
+    # --- top 10 estados (por faturamento dos pedidos pagos no período) -----
+    state_col = func.coalesce(Order.shipping_address_json["state"].astext, "—")
+    state_rows = (
+        await db.execute(
+            select(
+                state_col.label("state"),
+                func.count().label("orders"),
+                func.sum(Order.grand_total_cents).label("revenue"),
+            )
+            .where(*item_conds)
+            .group_by(state_col)
+            .order_by(func.sum(Order.grand_total_cents).desc())
+            .limit(10)
+        )
+    ).all()
+    top_states = [
+        {
+            "state": (r.state or "—").upper(),
+            "orders": int(r.orders or 0),
+            "revenue_cents": int(r.revenue or 0),
+        }
+        for r in state_rows
+    ]
+
     return DashboardOut(
         window_days=window_days,
         orders_period=int(orders_period or 0),
@@ -396,6 +420,41 @@ async def dashboard(
         series_previous=series_previous,
         abc_curve=abc_curve,
         top_products=top_products,
+        top_states=top_states,
+    )
+
+
+@router.get("/dashboard", response_model=DashboardOut)
+async def dashboard(
+    db: DbDep,
+    _: CurrentAdmin,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    metric: str = "revenue",
+):
+    return await _build_dashboard(db, date_from, date_to, metric)
+
+
+@router.get("/dashboard/report.pdf")
+async def dashboard_report_pdf(
+    db: DbDep,
+    _: CurrentAdmin,
+    date_from: str | None = None,
+    date_to: str | None = None,
+):
+    """Relatório do painel em PDF, mesmo layout do relatório de Faturamento --
+    resumo de pedidos, faturamento, curva ABC, top 10 produtos e top 10
+    estados do mesmo período filtrado na tela."""
+    from fastapi.responses import Response
+
+    from app.modules.admin.dashboard_report import build_dashboard_report_pdf
+
+    data = await _build_dashboard(db, date_from, date_to, "revenue")
+    pdf = await build_dashboard_report_pdf(db, data, date_from, date_to)
+    fname = f"painel-{(date_from or 'periodo')}-a-{(date_to or 'atual')}.pdf"
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
 
 

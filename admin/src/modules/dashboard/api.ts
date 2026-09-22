@@ -18,6 +18,11 @@ export interface TopProduct {
   units: number;
   revenue_cents: number;
 }
+export interface TopState {
+  state: string;
+  orders: number;
+  revenue_cents: number;
+}
 
 export type DashboardMetric = 'revenue' | 'canceled' | 'refunded';
 
@@ -36,6 +41,7 @@ export interface DashboardData {
   series_previous: SeriesPoint[];
   abc_curve: AbcPoint[];
   top_products: TopProduct[];
+  top_states: TopState[];
 }
 
 export const dashboardApi = {
@@ -47,4 +53,11 @@ export const dashboardApi = {
         metric: opts?.metric || undefined,
       },
     }),
+  reportPdfPath: (opts?: { from?: string; to?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.from) params.set('date_from', opts.from);
+    if (opts?.to) params.set('date_to', opts.to);
+    const qs = params.toString();
+    return `/api/admin/dashboard/report.pdf${qs ? `?${qs}` : ''}`;
+  },
 };

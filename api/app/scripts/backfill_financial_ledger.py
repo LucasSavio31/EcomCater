@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import SessionLocal
 from app.modules.financial import service as financial
 from app.modules.orders.models import Order
+from app.modules.payment.models import Payment
 
 DEFAULT_COST_CENTS = 13000
 
@@ -56,6 +57,7 @@ async def run() -> dict:
         ).all()
 
         counts = {"placed": 0, "paid": 0, "refunded": 0, "canceled": 0}
+        payment_methods_set = 0
         for o in orders:
             when = o.placed_at or o.created_at
             await financial.record(db, kind="placed", order=o, when=when)
@@ -78,6 +80,20 @@ async def run() -> dict:
                     db, kind="canceled", order=o, when=o.updated_at or when
                 )
                 counts["canceled"] += 1
+
+            # `record()` é idempotente e pula fatos já gravados -- por isso o
+            # método de pagamento (coluna nova) precisa ser retroativado à
+            # parte, senão pedidos de antes da feature ficam de fora do
+            # gráfico "Faturamento por forma de pagamento" pra sempre.
+            method = await db.scalar(
+                select(Payment.method)
+                .where(Payment.order_id == o.id)
+                .order_by(Payment.created_at.desc())
+                .limit(1)
+            )
+            if method:
+                await financial.set_payment_method(db, o.number, method)
+                payment_methods_set += 1
         await db.commit()
 
         summary = {
@@ -85,6 +101,7 @@ async def run() -> dict:
             "order_items_cost_filled": r2.rowcount,
             "orders_scanned": len(orders),
             "events_ensured": counts,
+            "payment_methods_backfilled": payment_methods_set,
         }
         return summary
 

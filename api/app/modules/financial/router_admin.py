@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -46,3 +47,24 @@ async def summary(
     data = await service.summary(db, ws, we)
     data["window"] = {"from": ws.isoformat(), "to": we.isoformat()}
     return data
+
+
+@router.get("/report.pdf")
+async def report_pdf(
+    db: DbDep,
+    _: AdminDep,
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+) -> Response:
+    """Relatório de faturamento em PDF do mesmo período do menu -- cabeçalho
+    com os dados da loja, resumo, faturamento por forma de pagamento e a
+    evolução no período. Gerado na hora (WeasyPrint, sem navegador)."""
+    from app.modules.financial.report import build_financial_report_pdf
+
+    ws, we = _window(date_from, date_to)
+    pdf = await build_financial_report_pdf(db, ws, we)
+    fname = f"faturamento-{ws.date().isoformat()}-a-{we.date().isoformat()}.pdf"
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )

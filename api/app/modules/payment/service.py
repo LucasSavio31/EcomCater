@@ -197,6 +197,13 @@ async def create_charge(
         db.add(payment)
     await db.flush()
 
+    # snapshotta o método no livro-caixa (o "placed" já foi gravado antes de o
+    # cliente chegar aqui -- é assim que ele aprende a forma de pagamento
+    # depois, sem reabrir o pedido; sobrevive à exclusão do pedido/pagamento).
+    from app.modules.financial import service as financial_service
+
+    await financial_service.set_payment_method(db, order.number, payment.method)
+
     await _apply_status(db, order, payment, charge.status, source="charge", background=background)
     if payment.status == "failed":
         # o cartão foi recusado NA HORA (resposta síncrona do gateway) — devolve
@@ -375,6 +382,10 @@ async def handle_webhook(
         )
         db.add(payment)
         await db.flush()
+
+        from app.modules.financial import service as financial_service
+
+        await financial_service.set_payment_method(db, order.number, payment.method)
 
     if effective_status:
         payment.provider_payload_json = {**(payment.provider_payload_json or {}), "webhook": body}

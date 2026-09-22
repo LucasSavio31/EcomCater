@@ -11,6 +11,15 @@ export interface RevenueSeriesPoint {
   orders: number;
 }
 
+export interface PaymentMethodBreakdown {
+  method: 'credit_card' | 'pix' | 'boleto';
+  placed_count: number;
+  paid_count: number;
+  conversion_pct: number;
+  gross_cents: number;
+  share_pct: number;
+}
+
 export interface RevenueSummary {
   orders_total: number;
   gross_cents: number;
@@ -23,6 +32,7 @@ export interface RevenueSummary {
   canceled_cents: number;
   canceled_count: number;
   series: RevenueSeriesPoint[];
+  payment_methods: PaymentMethodBreakdown[];
   window: { from: string; to: string };
 }
 
@@ -34,4 +44,11 @@ export const financialApi = {
         date_to: opts?.to || undefined,
       },
     }),
+  reportPdfPath: (opts?: { from?: string; to?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.from) params.set('date_from', opts.from);
+    if (opts?.to) params.set('date_to', opts.to);
+    const qs = params.toString();
+    return `/api/admin/financial/report.pdf${qs ? `?${qs}` : ''}`;
+  },
 };

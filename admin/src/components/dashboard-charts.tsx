@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { cn } from '@ecom/ui';
 import type { AbcPoint, SeriesPoint } from '@/modules/dashboard/api';
 
@@ -180,6 +180,97 @@ export function SeriesChart({
         </span>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ pizza (donut) */
+export function PieChart({
+  slices,
+  centerLabel,
+  centerValue,
+}: {
+  slices: { label: string; value: number; color: string }[];
+  centerLabel?: string;
+  centerValue?: string;
+}) {
+  const total = slices.reduce((s, x) => s + x.value, 0);
+  const size = 200;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 73; // raio médio do anel (entre 56 e 90 do desenho anterior)
+  const strokeWidth = 34;
+  const circumference = 2 * Math.PI * r;
+
+  // Recomeça a animação de preenchimento sempre que os valores mudarem (ex.:
+  // troca do filtro de período) — não só na primeira montagem.
+  const dataKey = slices.map((s) => `${s.label}:${s.value}`).join('|');
+  const [filled, setFilled] = useState(false);
+  useEffect(() => {
+    setFilled(false);
+    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setFilled(true)));
+    return () => cancelAnimationFrame(raf);
+  }, [dataKey]);
+
+  const nonZero = slices.filter((s) => s.value > 0);
+
+  if (total <= 0 || nonZero.length === 0) {
+    return (
+      <div className="flex h-[200px] w-[200px] items-center justify-center rounded-full border-8 border-bg-subtle">
+        <span className="text-center text-xs text-text-muted">Sem dados
+          <br />
+          no período
+        </span>
+      </div>
+    );
+  }
+
+  let acc = 0;
+  const segments = slices.map((s) => {
+    const frac = s.value / total;
+    const len = frac * circumference;
+    const before = acc;
+    acc += len;
+    return { ...s, frac, len, before };
+  });
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} className="h-[200px] w-[200px]" role="img" aria-label="Faturamento por forma de pagamento">
+      <g transform={`rotate(-90 ${cx} ${cy})`}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={strokeWidth} />
+        {segments.map((s) =>
+          s.value > 0 ? (
+            <circle
+              key={s.label}
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke={s.color}
+              strokeWidth={strokeWidth}
+              strokeDasharray={filled ? `${s.len} ${circumference - s.len}` : `0 ${circumference}`}
+              strokeDashoffset={filled ? -s.before : 0}
+              style={{ transition: 'stroke-dasharray 900ms ease, stroke-dashoffset 900ms ease' }}
+            >
+              <title>{`${s.label}: ${(s.frac * 100).toFixed(1)}%`}</title>
+            </circle>
+          ) : null,
+        )}
+      </g>
+      {(centerLabel || centerValue) && (
+        <g textAnchor="middle" style={{ opacity: filled ? 1 : 0, transition: 'opacity 500ms ease 300ms' }}>
+          {centerValue && (
+            <text x={cx} y={cy - 2} fontSize={15} fontWeight={700} fill="#111827">
+              {centerValue}
+            </text>
+          )}
+          {centerLabel && (
+            <text x={cx} y={cy + 16} fontSize={9} fill="#6b7280">
+              {centerLabel}
+            </text>
+          )}
+        </g>
+      )}
+    </svg>
   );
 }
 

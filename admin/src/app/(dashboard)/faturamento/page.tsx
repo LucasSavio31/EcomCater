@@ -5,9 +5,23 @@ import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { Select } from '@/components/form-controls';
 import { useResource } from '@/lib/use-resource';
+import { useToast } from '@/components/toast';
 import { formatBRL, formatNumber } from '@/lib/format';
-import { SeriesChart } from '@/components/dashboard-charts';
+import { SeriesChart, PieChart } from '@/components/dashboard-charts';
 import { financialApi, type RevenueSeriesPoint } from '@/modules/financial/api';
+import { getSession } from '@/lib/auth-storage';
+import { ADMIN_API_BASE_URL } from '@/lib/admin-api-client';
+
+const METHOD_LABEL: Record<string, string> = {
+  credit_card: 'Cartão de crédito',
+  pix: 'Pix',
+  boleto: 'Boleto',
+};
+const METHOD_COLOR: Record<string, string> = {
+  credit_card: '#2563eb',
+  pix: '#16a34a',
+  boleto: '#d97706',
+};
 
 function todayISO(): string {
   const d = new Date();
@@ -60,6 +74,39 @@ export default function FaturamentoPage() {
     [applied.from, applied.to],
   );
   const { data, loading, error, reload } = useResource(fetcher, [applied.from, applied.to]);
+
+  const toast = useToast();
+  const [pdfBusy, setPdfBusy] = useState(false);
+  async function downloadReport() {
+    setPdfBusy(true);
+    const t = getSession()?.accessToken ?? '';
+    try {
+      const path = financialApi.reportPdfPath({
+        from: applied.from ? dayBoundISO(applied.from, false) : undefined,
+        to: applied.to ? dayBoundISO(applied.to, true) : undefined,
+      });
+      const r = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+        headers: { Authorization: `Bearer ${t}` },
+      });
+      if (!r.ok) {
+        toast.error('Não foi possível gerar o PDF do relatório.');
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `faturamento-${applied.from || 'periodo'}-a-${applied.to || 'atual'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      toast.error('Falha de rede ao baixar o relatório.');
+    } finally {
+      setPdfBusy(false);
+    }
+  }
 
   const isMoney = metric !== 'orders';
   const fmtMetric = (v: number) => (isMoney ? formatBRL(v) : formatNumber(v));
@@ -128,6 +175,9 @@ export default function FaturamentoPage() {
               Limpar
             </Button>
           )}
+          <Button variant="outline" loading={pdfBusy} onClick={() => void downloadReport()} className="ml-auto">
+            Baixar PDF
+          </Button>
         </div>
         <p className="text-xs text-text-muted">
           <b>Bruto</b> = soma dos pedidos pagos no período. <b>Líquido</b> = bruto − custo dos itens
@@ -177,6 +227,52 @@ export default function FaturamentoPage() {
               />
             </div>
             <SeriesChart current={seriesCurrent} previous={[]} fmt={fmtMetric} />
+          </Card>
+
+          <Card variant="outline" className="flex flex-col gap-4">
+            <h2 className="text-lg font-semibold">Faturamento por forma de pagamento</h2>
+            {data.payment_methods.every((pm) => pm.gross_cents === 0 && pm.placed_count === 0) ? (
+              <p className="text-sm text-text-muted">Sem pagamentos no período.</p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-6">
+                <PieChart
+                  slices={data.payment_methods.map((pm) => ({
+                    label: METHOD_LABEL[pm.method] ?? pm.method,
+                    value: pm.gross_cents,
+                    color: METHOD_COLOR[pm.method] ?? '#6b7280',
+                  }))}
+                  centerValue={formatBRL(data.gross_cents)}
+                  centerLabel="faturado"
+                />
+                <div className="flex min-w-[240px] flex-1 flex-col gap-3">
+                  {data.payment_methods.map((pm) => (
+                    <div
+                      key={pm.method}
+                      className="flex items-center justify-between gap-3 rounded-card border border-surface-border p-2.5"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                          style={{ background: METHOD_COLOR[pm.method] ?? '#6b7280' }}
+                        />
+                        <span className="text-sm font-medium">{METHOD_LABEL[pm.method] ?? pm.method}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold">{formatBRL(pm.gross_cents)}</div>
+                        <div className="text-xs text-text-muted">
+                          {pm.share_pct}% do total · conversão {pm.conversion_pct}%
+                          {pm.placed_count > 0 && ` (${pm.paid_count}/${pm.placed_count})`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-text-muted">
+              <b>Conversão</b> = dos pedidos gerados no período com essa forma de pagamento,
+              quantos terminaram pagos.
+            </p>
           </Card>
         </>
       )}

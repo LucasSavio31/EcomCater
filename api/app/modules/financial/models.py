@@ -31,6 +31,12 @@ class FinancialEvent(UUIDPKMixin, Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     kind: Mapped[str] = mapped_column(String(16))
     order_number: Mapped[str] = mapped_column(String(20))
+    # Snapshot do método de pagamento (credit_card/pix/boleto) -- gravado aqui
+    # (não lido via join em `payments`) pra sobreviver à exclusão do pedido/
+    # pagamento, igual todo o resto do livro-caixa. Pode ficar nulo por um
+    # tempo no evento "placed" (o método só é escolhido num passo seguinte do
+    # checkout) até `financial.service.set_payment_method` atualizar.
+    payment_method: Mapped[str | None] = mapped_column(String(16))
     order_id: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL")
     )

@@ -13,6 +13,8 @@ import { LiveVisitorsMap } from '@/components/live-visitors-map';
 import { dashboardApi, type DashboardMetric } from '@/modules/dashboard/api';
 import { productsApi } from '@/modules/catalog/api';
 import type { ProductListItem } from '@/modules/catalog/types';
+import { getSession } from '@/lib/auth-storage';
+import { ADMIN_API_BASE_URL } from '@/lib/admin-api-client';
 
 function todayISO(): string {
   const d = new Date();
@@ -55,6 +57,38 @@ export default function DashboardPage() {
     [applied.from, applied.to, metric],
   );
   const { data, loading, error, reload } = useResource(fetcher, [applied.from, applied.to, metric]);
+
+  const [pdfBusy, setPdfBusy] = useState(false);
+  async function downloadReport() {
+    setPdfBusy(true);
+    const t = getSession()?.accessToken ?? '';
+    try {
+      const path = dashboardApi.reportPdfPath({
+        from: applied.from ? dayBoundISO(applied.from, false) : undefined,
+        to: applied.to ? dayBoundISO(applied.to, true) : undefined,
+      });
+      const r = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+        headers: { Authorization: `Bearer ${t}` },
+      });
+      if (!r.ok) {
+        toast.error('Não foi possível gerar o PDF do painel.');
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `painel-${applied.from || 'periodo'}-a-${applied.to || 'atual'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      toast.error('Falha de rede ao baixar o relatório.');
+    } finally {
+      setPdfBusy(false);
+    }
+  }
 
   // link para /pedidos respeitando o período aplicado (ou 30 dias)
   const rangeQS = ranged
@@ -142,6 +176,9 @@ export default function DashboardPage() {
               Limpar
             </Button>
           )}
+          <Button variant="outline" loading={pdfBusy} onClick={() => void downloadReport()} className="ml-auto">
+            Baixar PDF
+          </Button>
         </div>
         <p className="text-xs text-text-muted">
           Sem filtro, tudo considera os <b>últimos 30 dias</b>. “Aguardando pagamento”, “Pendentes de
@@ -222,7 +259,7 @@ export default function DashboardPage() {
             <AbcCurve points={data.abc_curve} fmt={formatBRL} />
           </Card>
 
-          {/* Top 10 + promoção rápida lado a lado */}
+          {/* Top 10 produtos + Top 10 estados lado a lado */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Card variant="outline" className="flex flex-col gap-3">
               <h2 className="text-lg font-semibold">10 modelos mais vendidos</h2>
@@ -249,8 +286,32 @@ export default function DashboardPage() {
               )}
             </Card>
 
-            <QuickPromo onDone={() => toast.success('Preços atualizados.')} />
+            <Card variant="outline" className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold">10 estados que mais vendem</h2>
+              {data.top_states.length === 0 ? (
+                <p className="text-sm text-text-muted">Sem vendas no período.</p>
+              ) : (
+                <ol className="flex flex-col divide-y divide-surface-border">
+                  {data.top_states.map((s, i) => (
+                    <li key={s.state} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
+                      <span className="w-5 shrink-0 text-right text-sm font-semibold text-text-muted">
+                        {i + 1}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{s.state}</span>
+                        <span className="text-xs text-text-muted">{s.orders} pedido{s.orders === 1 ? '' : 's'}</span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block text-sm font-semibold">{formatBRL(s.revenue_cents)}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </Card>
           </div>
+
+          <QuickPromo onDone={() => toast.success('Preços atualizados.')} />
 
           <LiveVisitorsMap />
         </>
