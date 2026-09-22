@@ -23,6 +23,7 @@ _STR_FIELDS = {
     "google_ads_purchase_label",
     "meta_pixel_id",
     "meta_test_event_code",
+    "merchant_center_verification_code",
 }
 _BOOL_FIELDS = {
     "gtm_enabled",
@@ -30,6 +31,7 @@ _BOOL_FIELDS = {
     "google_ads_enabled",
     "meta_pixel_enabled",
     "meta_capi_enabled",
+    "merchant_center_enabled",
 }
 
 
@@ -84,6 +86,7 @@ async def update_settings(db: AsyncSession, data: dict) -> AnalyticsSettings:
         ("ga4_enabled", "ga4_measurement_id"),
         ("google_ads_enabled", "google_ads_conversion_id"),
         ("meta_pixel_enabled", "meta_pixel_id"),
+        ("merchant_center_enabled", "merchant_center_verification_code"),
     ):
         if getattr(row, flag) and not getattr(row, ident):
             raise ValidationError(f"Preencha '{ident}' para ativar essa integração.")
@@ -104,6 +107,8 @@ def to_public(row: AnalyticsSettings) -> dict:
         "google_ads_purchase_label": row.google_ads_purchase_label,
         "meta_pixel_enabled": row.meta_pixel_enabled,
         "meta_pixel_id": row.meta_pixel_id,
+        "merchant_center_enabled": row.merchant_center_enabled,
+        "merchant_center_verification_code": row.merchant_center_verification_code,
     }
 
 

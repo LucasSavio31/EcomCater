@@ -3,15 +3,21 @@
 import { useState } from 'react';
 import { Button } from '@ecom/ui';
 
-/** Caixa read-only com a URL de webhook + botão copiar. */
-export function WebhookUrlBox({ url, note }: { url?: string; note?: string }) {
+/** Caixa read-only com uma URL (webhook, feed…) + botão copiar. */
+export function WebhookUrlBox({
+  url,
+  note,
+  label = 'URL de webhook — cadastre no painel do provedor',
+}: {
+  url?: string;
+  note?: string;
+  label?: string;
+}) {
   const [copied, setCopied] = useState(false);
   if (!url) return null;
   return (
     <div className="flex flex-col gap-1 rounded-card bg-bg-subtle p-3">
-      <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-        URL de webhook — cadastre no painel do provedor
-      </span>
+      <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">{label}</span>
       <div className="flex flex-wrap items-center gap-2">
         <code className="min-w-0 flex-1 break-all rounded border border-surface-border bg-surface px-2 py-1 text-xs">
           {url}

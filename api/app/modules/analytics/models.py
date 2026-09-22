@@ -56,6 +56,11 @@ class AnalyticsSettings(Base):
     meta_capi_access_token: Mapped[str | None] = mapped_column(Text)
     meta_test_event_code: Mapped[str | None] = mapped_column(String(40))
 
+    # Google Merchant Center — verificação de propriedade do site (meta tag
+    # no <head>, não é segredo). https://merchants.google.com/
+    merchant_center_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
+    merchant_center_verification_code: Mapped[str | None] = mapped_column(String(100))
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

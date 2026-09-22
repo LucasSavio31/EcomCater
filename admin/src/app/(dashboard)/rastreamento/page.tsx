@@ -5,10 +5,14 @@ import { Button, Card, Input } from '@ecom/ui';
 import { PageHeader } from '@/components/page-header';
 import { AsyncBoundary } from '@/components/async-boundary';
 import { Checkbox } from '@/components/form-controls';
+import { WebhookUrlBox } from '@/components/webhook-url';
 import { useToast } from '@/components/toast';
 import { useResource } from '@/lib/use-resource';
 import { analyticsApi, type AnalyticsConfig, type AnalyticsUpdate } from '@/modules/analytics/api';
 import { revalidateStore } from '@/lib/revalidate-store';
+import { ADMIN_API_BASE_URL } from '@/lib/admin-api-client';
+
+const FEED_URL = `${ADMIN_API_BASE_URL.replace(/\/$/, '')}/api/products/feed/google-merchant.xml`;
 
 type Draft = AnalyticsConfig & { meta_capi_access_token?: string; ga4_api_secret?: string };
 
@@ -40,6 +44,8 @@ export default function RastreamentoPage() {
       meta_pixel_id: cfg.meta_pixel_id,
       meta_capi_enabled: cfg.meta_capi_enabled,
       meta_test_event_code: cfg.meta_test_event_code,
+      merchant_center_enabled: cfg.merchant_center_enabled,
+      merchant_center_verification_code: cfg.merchant_center_verification_code,
     };
     if (typeof cfg.meta_capi_access_token === 'string') {
       body.meta_capi_access_token = cfg.meta_capi_access_token;
@@ -148,6 +154,32 @@ export default function RastreamentoPage() {
                 onChange={(e) => set('google_ads_purchase_label', e.target.value.trim() || null)}
                 disabled={!cfg.google_ads_enabled}
                 hint="Usado no evento 'conversion' disparado na página de obrigado."
+              />
+            </Card>
+
+            {/* Google Merchant Center */}
+            <Card variant="outline" className="flex flex-col gap-3">
+              <Checkbox
+                label="Google Merchant Center"
+                checked={cfg.merchant_center_enabled}
+                onChange={(v) => set('merchant_center_enabled', v)}
+              />
+              <Input
+                label="Código de verificação"
+                placeholder="uu3TmG9kfL5y4JIc2ixj7PE4VDl87lvTtjaHX4a8Qn8"
+                value={cfg.merchant_center_verification_code ?? ''}
+                onChange={(e) => set('merchant_center_verification_code', e.target.value.trim() || null)}
+                disabled={!cfg.merchant_center_enabled}
+                hint={'Cole só o valor do content="..." da tag <meta name="google-site-verification"> que o Merchant Center gerou.'}
+              />
+              <p className="text-xs text-text-muted">
+                Entra como meta tag no {'<head>'} de todas as páginas pra comprovar ao Google que
+                você é dono da loja — necessário pra verificar a loja no Merchant Center.
+              </p>
+              <WebhookUrlBox
+                url={FEED_URL}
+                label="Link do arquivo de produtos — cole em Fontes de dados → Inserir um link para o arquivo"
+                note="Gerado ao vivo a partir do catálogo, sempre atualizado — não precisa fazer upload nem manter nada."
               />
             </Card>
 

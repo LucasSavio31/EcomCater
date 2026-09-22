@@ -16,6 +16,9 @@ export interface AnalyticsConfig {
   meta_pixel_enabled: boolean;
   meta_pixel_id: string | null;
 
+  merchant_center_enabled: boolean;
+  merchant_center_verification_code: string | null;
+
   meta_capi_enabled: boolean;
   meta_test_event_code: string | null;
   /** só indica se há token salvo — o token nunca volta do servidor */

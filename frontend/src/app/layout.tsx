@@ -86,6 +86,16 @@ export default async function RootLayout({
             <link rel="dns-prefetch" href={API_ORIGIN} />
           </>
         )}
+        {/* Google Merchant Center — comprova a propriedade do site. Renderizada
+            direto (não via generateMetadata) porque o Next hoisteia pro <head>
+            de qualquer jeito, e assim fica no mesmo lugar/padrão do resto das
+            tags de marketing abaixo. */}
+        {analytics.merchant_center_enabled && analytics.merchant_center_verification_code && (
+          <meta
+            name="google-site-verification"
+            content={analytics.merchant_center_verification_code}
+          />
+        )}
         {/* CSS vars do tema — precisa vir antes de qualquer <script src> bloqueante
             (GTM/gtag/Pixel abaixo), senão o parser trava nesses scripts e pinta
             o body com as cores padrão do navegador antes de chegar aqui (FOUC). */}

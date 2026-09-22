@@ -12,6 +12,9 @@ export interface AnalyticsConfig {
 
   meta_pixel_enabled: boolean;
   meta_pixel_id: string | null;
+
+  merchant_center_enabled: boolean;
+  merchant_center_verification_code: string | null;
 }
 
 export const DISABLED_ANALYTICS: AnalyticsConfig = {
@@ -24,6 +27,8 @@ export const DISABLED_ANALYTICS: AnalyticsConfig = {
   google_ads_purchase_label: null,
   meta_pixel_enabled: false,
   meta_pixel_id: null,
+  merchant_center_enabled: false,
+  merchant_center_verification_code: null,
 };
 
 /**
