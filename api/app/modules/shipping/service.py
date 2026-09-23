@@ -964,7 +964,9 @@ async def _me_set_checkbox(page, selector: str, value: bool) -> None:
         logger.debug("checkbox %s não encontrado na página de impressão do ME", selector)
 
 
-async def _render_url_to_pdf(url: str, *, postal_card: bool, want_declaration: bool) -> bytes:
+async def _render_url_to_pdf(
+    url: str, *, postal_card: bool, want_declaration: bool, want_romaneio: bool = False
+) -> bytes:
     """Abre a página pública de impressão do Melhor Envio num navegador headless,
     ajusta as opções (tamanho 10x15, DACE simples) e devolve o PDF renderizado
     (a etiqueta é desenhada em <canvas> no cliente)."""
@@ -1006,7 +1008,7 @@ async def _render_url_to_pdf(url: str, *, postal_card: bool, want_declaration: b
             await _me_set_checkbox(page, "#print_tags", True)               # etiqueta
             await _me_set_checkbox(page, "#print_daces", want_declaration)  # DACE simples
             await _me_set_checkbox(page, "#print_complete_daces", False)    # nunca a completa
-            await _me_set_checkbox(page, "#print_packing_lists", False)     # sem romaneio
+            await _me_set_checkbox(page, "#print_packing_lists", want_romaneio)  # romaneio (itens do pedido)
             for name in ("IMPRIMIR", "Visualizar Etiquetas", "Visualizar"):
                 btn = page.get_by_role("button", name=name)
                 if await btn.count():
@@ -1092,6 +1094,22 @@ async def melhor_envio_labels_pdf(db: AsyncSession, order_numbers: list[str]) ->
     )
     if fmt == "a4_4up":
         pdf = _labels_a4_4up(pdf)
+    await _mark_labels_printed(db, order_numbers)
+    return pdf
+
+
+async def melhor_envio_label_pages_for_nfe_merge(db: AsyncSession, order_numbers: list[str]) -> bytes:
+    """Etiquetas SEMPRE 10x15 (compactas, sem o romaneio do Melhor Envio --
+    ligar o romaneio deles faz a própria página crescer bem além de 10x15,
+    pra caber a tabela e a DACE), uma página por pedido, na MESMA ordem de
+    `order_numbers` -- usado pelo "Gerar Etq/NFe" (`orders.etiqueta_nfe`)
+    pra empilhar a tarja da NF-e embaixo de cada etiqueta (etiqueta
+    intocada, a página cresce pra caber as duas). Não mexe no fluxo de
+    etiqueta comum (`melhor_envio_labels_pdf`)."""
+    url = await melhor_envio_print_url(db, order_numbers)
+    pdf = await _render_url_to_pdf(
+        url, postal_card=True, want_declaration=False, want_romaneio=False
+    )
     await _mark_labels_printed(db, order_numbers)
     return pdf
 

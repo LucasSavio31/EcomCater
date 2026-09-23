@@ -116,6 +116,28 @@ async def romaneio_pdf(
     )
 
 
+@router.get("/etiqueta-nfe")
+async def etiqueta_nfe_bulk(
+    db: DbDep,
+    _: Annotated[AdminUser, Depends(get_current_admin_downloadable)],
+    numbers: str = Query(..., description="números de pedido separados por vírgula"),
+) -> Response:
+    """Etiqueta do Melhor Envio (com romaneio) + tarja da NF-e do pedido,
+    numa página só por pedido. Pedidos sem NF-e autorizada saem só com a
+    etiqueta -- não é bloqueado por isso."""
+    from app.modules.orders.etiqueta_nfe import build_etiqueta_nfe_pdf
+
+    nums = [n.strip() for n in numbers.split(",") if n.strip()]
+    pdf = await build_etiqueta_nfe_pdf(db, nums)
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'attachment; filename="etiqueta-nfe.pdf"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 async def _payment_out(db: AsyncSession, order: Order) -> dict | None:
     p = await db.scalar(
         select(Payment).where(Payment.order_id == order.id).order_by(Payment.created_at.desc())
@@ -248,6 +270,19 @@ async def melhor_envio_label(
 
     pdf = await shipping.melhor_envio_labels_pdf(db, [number])
     return _pdf_response(pdf, f"etiqueta-{number}.pdf")
+
+
+@router.get("/{number}/etiqueta-nfe")
+async def etiqueta_nfe_single(
+    number: str,
+    db: DbDep,
+    _: Annotated[AdminUser, Depends(get_current_admin_downloadable)],
+) -> Response:
+    """Etiqueta + NF-e de um único pedido, numa página só."""
+    from app.modules.orders.etiqueta_nfe import build_etiqueta_nfe_pdf
+
+    pdf = await build_etiqueta_nfe_pdf(db, [number])
+    return _pdf_response(pdf, f"etiqueta-nfe-{number}.pdf")
 
 
 @router.post("/{number}/reverse-logistics")

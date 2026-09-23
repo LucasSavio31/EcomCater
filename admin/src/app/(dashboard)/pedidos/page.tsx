@@ -493,6 +493,42 @@ function PedidosPageInner() {
     }
   }
 
+  const [etqNfeBusy, setEtqNfeBusy] = useState(false);
+  async function downloadEtiquetaNfe(numbers: string[]) {
+    if (!numbers.length) return;
+    setEtqNfeBusy(true);
+    const t = getSession()?.accessToken ?? '';
+    try {
+      const r = await fetch(
+        `${ADMIN_API_BASE_URL}/api/admin/orders/etiqueta-nfe?numbers=${encodeURIComponent(
+          numbers.join(','),
+        )}`,
+        { headers: { Authorization: `Bearer ${t}` } },
+      );
+      if (!r.ok) {
+        let msg = 'Não foi possível gerar a etiqueta com NF-e.';
+        try {
+          const j = await r.json();
+          msg = j?.error?.message ?? j?.detail ?? msg;
+        } catch {
+          /* corpo não-JSON */
+        }
+        toast.error(typeof msg === 'string' ? msg : 'Falha ao gerar a etiqueta com NF-e.');
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setSelected(new Set());
+      reload();
+    } catch {
+      toast.error('Falha de rede ao baixar a etiqueta com NF-e.');
+    } finally {
+      setEtqNfeBusy(false);
+    }
+  }
+
   const [nfeEmitBusy, setNfeEmitBusy] = useState(false);
   async function bulkEmitNfe(numbers: string[]) {
     if (!numbers.length) return;
@@ -715,6 +751,15 @@ function PedidosPageInner() {
             onClick={() => void downloadLabels(selectedList)}
           >
             <IconTag width={14} height={14} /> Baixar Etiquetas
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="!gap-1.5 !px-2.5 !text-xs"
+            loading={etqNfeBusy}
+            onClick={() => void downloadEtiquetaNfe(selectedList)}
+          >
+            <IconTag width={14} height={14} /> Gerar Etq/NFe
           </Button>
           <Button
             size="sm"
