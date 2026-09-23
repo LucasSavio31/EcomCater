@@ -87,7 +87,7 @@ export function ReviewsTab({ productId }: { productId: string }) {
                 {r.status !== 'pending' && (
                   <Button
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                     disabled={busyId === r.id}
                     onClick={() => void moderate(r.id, 'pending')}
                   >

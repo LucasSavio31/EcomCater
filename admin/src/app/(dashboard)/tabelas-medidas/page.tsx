@@ -128,7 +128,7 @@ export default function TabelasMedidasPage() {
           </Button>
           <Button
             size="sm"
-            variant="ghost"
+            variant="outline"
             disabled={form.columns.length <= 1}
             onClick={() => set('columns', form.columns.slice(0, -1))}
           >
@@ -211,7 +211,7 @@ export default function TabelasMedidasPage() {
                 <Button size="sm" variant="outline" onClick={() => edit(c)}>
                   Editar
                 </Button>
-                <Button size="sm" variant="ghost" className="text-danger" onClick={() => setDel(c.id)}>
+                <Button size="sm" variant="outline" className="text-danger" onClick={() => setDel(c.id)}>
                   Excluir
                 </Button>
               </div>

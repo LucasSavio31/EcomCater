@@ -488,7 +488,7 @@ export function DomainTab() {
                       )}
                       <Button
                         size="sm"
-                        variant="ghost"
+                        variant="outline"
                         className="text-danger"
                         loading={busyId === d.id}
                         onClick={() => void remove(d)}

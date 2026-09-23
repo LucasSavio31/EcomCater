@@ -165,7 +165,7 @@ export default function FaturamentoPage() {
           </Button>
           {ranged && (
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={() => {
                 setFrom('');
                 setTo('');

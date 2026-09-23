@@ -202,7 +202,7 @@ export default function PromocoesPage() {
               <Button size="sm" variant="outline" onClick={() => openEdit(p)}>
                 Editar
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(p)}>
+              <Button size="sm" variant="outline" onClick={() => setDeleteTarget(p)}>
                 Excluir
               </Button>
             </>

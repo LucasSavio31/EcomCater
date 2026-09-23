@@ -128,12 +128,12 @@ export function ImagesTab({ product, onChanged }: Props) {
                 )}
               </div>
               <div className="flex flex-wrap gap-1">
-                <Button size="sm" variant="ghost" disabled={busy || index === 0} onClick={() => void move(index, -1)}>
+                <Button size="sm" variant="outline" disabled={busy || index === 0} onClick={() => void move(index, -1)}>
                   ↑
                 </Button>
                 <Button
                   size="sm"
-                  variant="ghost"
+                  variant="outline"
                   disabled={busy || index === images.length - 1}
                   onClick={() => void move(index, 1)}
                 >
@@ -149,7 +149,7 @@ export function ImagesTab({ product, onChanged }: Props) {
                     Tornar principal
                   </Button>
                 )}
-                <Button size="sm" variant="ghost" disabled={busy} onClick={() => void remove(img.id)}>
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => void remove(img.id)}>
                   Excluir
                 </Button>
               </div>

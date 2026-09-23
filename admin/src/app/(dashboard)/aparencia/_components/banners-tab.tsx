@@ -173,7 +173,7 @@ export function BannersTab() {
                     <Button size="sm" variant="outline" onClick={() => openEdit(b)}>
                       Editar
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(b)}>
+                    <Button size="sm" variant="outline" onClick={() => setDeleteTarget(b)}>
                       Excluir
                     </Button>
                   </div>

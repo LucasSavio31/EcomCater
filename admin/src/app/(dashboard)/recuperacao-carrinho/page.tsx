@@ -267,7 +267,7 @@ export default function CartRecoveryPage() {
         </Button>
         {editing && (
           <Button
-            variant="ghost"
+            variant="outline"
             className="ml-auto text-danger"
             onClick={() => setDel(editing)}
           >
@@ -434,7 +434,7 @@ export default function CartRecoveryPage() {
             </Button>
             <Button
               size="sm"
-              variant="ghost"
+              variant="outline"
               className="text-danger"
               onClick={() => setConfirmCarts(true)}
             >

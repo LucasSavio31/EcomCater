@@ -646,10 +646,22 @@ function PedidosPageInner() {
         actions={
           <div className="flex flex-col items-end gap-1">
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" loading={syncBusy} onClick={() => void syncTracking()}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="!px-2.5 !text-xs"
+                loading={syncBusy}
+                onClick={() => void syncTracking()}
+              >
                 Sincronizar rastreio (ME)
               </Button>
-              <Button size="sm" variant="ghost" loading={bufferBusy} onClick={() => void clearLabelsBuffer()}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="!px-2.5 !text-xs"
+                loading={bufferBusy}
+                onClick={() => void clearLabelsBuffer()}
+              >
                 Limpar buffer de etiquetas
               </Button>
             </div>

@@ -242,20 +242,20 @@ export default function ProdutosPage() {
             </Button>
             <Button
               size="sm"
-              variant="ghost"
+              variant="outline"
               loading={dupId === p.id}
               onClick={() => void duplicate(p.id)}
             >
               Duplicar
             </Button>
             {p.status === 'archived' ? (
-              <Button size="sm" variant="ghost" onClick={() => void changeStatus(p.id, 'active')}>
+              <Button size="sm" variant="outline" onClick={() => void changeStatus(p.id, 'active')}>
                 Reativar
               </Button>
             ) : (
               <Button
                 size="sm"
-                variant="ghost"
+                variant="outline"
                 className="text-danger"
                 onClick={() => void changeStatus(p.id, 'archived')}
               >

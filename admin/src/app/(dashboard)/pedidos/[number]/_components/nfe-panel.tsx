@@ -192,7 +192,7 @@ export function NfePanel({ orderNumber }: { orderNumber: string }) {
             <Button size="sm" variant="outline" loading={miniDanfeBusy} onClick={() => void doOpenMiniDanfe()}>
               Etiqueta NF (10x15)
             </Button>
-            <Button size="sm" variant="ghost" className="text-danger" onClick={() => setCancelOpen(true)}>
+            <Button size="sm" variant="outline" className="text-danger" onClick={() => setCancelOpen(true)}>
               Cancelar NF-e
             </Button>
           </>

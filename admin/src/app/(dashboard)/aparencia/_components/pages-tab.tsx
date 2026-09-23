@@ -169,7 +169,7 @@ export function PagesTab() {
             {selectedId ? 'Salvar' : 'Criar'}
           </Button>
           {selectedId && (
-            <Button variant="ghost" onClick={() => setDeleteTarget((data ?? []).find((p) => p.id === selectedId) ?? null)}>
+            <Button variant="outline" onClick={() => setDeleteTarget((data ?? []).find((p) => p.id === selectedId) ?? null)}>
               Excluir
             </Button>
           )}

@@ -126,7 +126,7 @@ export default function AvaliacoesPage() {
                 {r.status !== 'pending' && (
                   <Button
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                     loading={busyId === r.id}
                     onClick={() => void moderate(r, 'pending')}
                   >

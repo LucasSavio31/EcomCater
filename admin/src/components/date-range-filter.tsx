@@ -66,7 +66,7 @@ export function DateRangeFilter({
       {(from || to || f || t) && (
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           onClick={() => {
             setF('');
             setT('');

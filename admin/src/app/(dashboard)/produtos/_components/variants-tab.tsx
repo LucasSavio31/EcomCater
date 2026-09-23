@@ -490,7 +490,7 @@ function VariantRow({ productId, combo, variant, position, onSaved, onError, onO
           {variant ? 'Salvar' : 'Criar variação'}
         </Button>
         {variant && (
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => void remove()}>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void remove()}>
             Excluir
           </Button>
         )}

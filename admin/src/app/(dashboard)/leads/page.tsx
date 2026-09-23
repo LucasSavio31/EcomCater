@@ -223,7 +223,7 @@ export default function LeadsPage() {
           <Button size="sm" onClick={() => openCampaign(false)}>
             Enviar campanha
           </Button>
-          <Button size="sm" variant="ghost" className="text-danger" onClick={() => setConfirmDel(true)}>
+          <Button size="sm" variant="outline" className="text-danger" onClick={() => setConfirmDel(true)}>
             Excluir selecionados
           </Button>
           <button

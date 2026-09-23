@@ -304,7 +304,7 @@ export default function ClienteDetalhePage() {
                 <Button size="sm" variant="outline" onClick={() => edit(a)}>
                   Editar
                 </Button>
-                <Button size="sm" variant="ghost" className="text-danger" onClick={() => setDel(a.id)}>
+                <Button size="sm" variant="outline" className="text-danger" onClick={() => setDel(a.id)}>
                   Excluir
                 </Button>
               </div>

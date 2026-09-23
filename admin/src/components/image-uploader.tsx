@@ -92,7 +92,7 @@ export function ImageUploader({
         </Button>
         {shown && onRemove && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             disabled={disabled || busy}
             onClick={async () => {

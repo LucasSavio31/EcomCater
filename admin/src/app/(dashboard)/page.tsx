@@ -166,7 +166,7 @@ export default function DashboardPage() {
           </Button>
           {ranged && (
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={() => {
                 setFrom('');
                 setTo('');
@@ -428,7 +428,7 @@ function QuickPromo({ onDone }: { onDone: () => void }) {
           Aplicar em {pickedList.length}
         </Button>
         <Button
-          variant="ghost"
+          variant="outline"
           disabled={pickedList.length === 0}
           loading={busy}
           onClick={() => void apply(0)}
