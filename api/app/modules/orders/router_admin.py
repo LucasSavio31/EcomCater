@@ -88,6 +88,34 @@ async def export_suppliers_xlsx(
     )
 
 
+@router.get("/romaneio.pdf")
+async def romaneio_pdf(
+    db: DbDep,
+    _: Annotated[AdminUser, Depends(get_current_admin_downloadable)],
+    numbers: str = Query(..., description="números de pedido separados por vírgula"),
+) -> Response:
+    """Romaneio de separação em PDF dos pedidos selecionados -- Nº pedido,
+    data, cliente, modelo, cor e número (variação), um item por linha."""
+    from app.core.errors import ValidationError
+    from app.modules.admin.models import StoreSettings
+    from app.modules.orders.romaneio import build_romaneio_pdf
+
+    nums = [n.strip() for n in numbers.split(",") if n.strip()]
+    if not nums:
+        raise ValidationError("Selecione ao menos um pedido.")
+    orders = await service.romaneio_rows(db, nums)
+    store = await db.get(StoreSettings, 1)
+    data = build_romaneio_pdf(orders, store=store)
+    stamp = __import__("datetime").datetime.now().strftime("%Y%m%d-%H%M")
+    return Response(
+        content=data, media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="romaneio-separacao-{stamp}.pdf"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 async def _payment_out(db: AsyncSession, order: Order) -> dict | None:
     p = await db.scalar(
         select(Payment).where(Payment.order_id == order.id).order_by(Payment.created_at.desc())

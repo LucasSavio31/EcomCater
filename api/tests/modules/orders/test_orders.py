@@ -244,3 +244,33 @@ async def test_supplier_xlsx_export(client, variant, admin_token, auth_headers):
     assert len(item_rows) == 2
     for row in item_rows:
         assert row[2]  # nome do item preenchido na mesma linha do número
+
+
+@pytest.mark.asyncio
+async def test_romaneio_pdf_export(client, variant, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    o1 = await _order(client, variant, email="rom1@test.example")
+    o2 = await _order(client, variant, email="rom2@test.example")
+
+    r = await client.get(
+        "/api/admin/orders/romaneio.pdf",
+        params={"numbers": f"{o1['number']},{o2['number']}"},
+        headers=h,
+    )
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/pdf"
+    assert "attachment" in r.headers["content-disposition"]
+    assert r.content[:4] == b"%PDF"
+
+
+@pytest.mark.asyncio
+async def test_romaneio_pdf_requires_selection(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    r = await client.get("/api/admin/orders/romaneio.pdf", params={"numbers": ""}, headers=h)
+    assert r.status_code in (400, 422)
+
+
+@pytest.mark.asyncio
+async def test_romaneio_pdf_requires_auth(client):
+    r = await client.get("/api/admin/orders/romaneio.pdf", params={"numbers": "2026-000001"})
+    assert r.status_code == 401

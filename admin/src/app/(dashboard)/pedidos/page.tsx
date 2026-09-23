@@ -418,6 +418,45 @@ function PedidosPageInner() {
     }
   }
 
+  const [romaneioBusy, setRomaneioBusy] = useState(false);
+  async function downloadRomaneio(numbers: string[]) {
+    if (!numbers.length) return;
+    setRomaneioBusy(true);
+    const t = getSession()?.accessToken ?? '';
+    try {
+      const qs = new URLSearchParams({ numbers: numbers.join(',') });
+      const r = await fetch(
+        `${ADMIN_API_BASE_URL}/api/admin/orders/romaneio.pdf?${qs.toString()}`,
+        { headers: { Authorization: `Bearer ${t}` } },
+      );
+      if (!r.ok) {
+        let msg = 'Não foi possível gerar o romaneio.';
+        try {
+          const j = await r.json();
+          msg = j?.error?.message ?? j?.detail ?? msg;
+        } catch {
+          /* corpo não-JSON */
+        }
+        toast.error(typeof msg === 'string' ? msg : 'Falha ao gerar o romaneio.');
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `romaneio-separacao.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setSelected(new Set());
+    } catch {
+      toast.error('Falha de rede ao baixar o romaneio.');
+    } finally {
+      setRomaneioBusy(false);
+    }
+  }
+
   const [labelBusy, setLabelBusy] = useState(false);
   async function downloadLabels(numbers: string[]) {
     if (!numbers.length) return;
@@ -649,6 +688,15 @@ function PedidosPageInner() {
             onClick={() => void downloadSupplierXlsx(selectedList)}
           >
             <IconPrinter width={14} height={14} /> Baixar xlsx
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="!gap-1.5 !px-2.5 !text-xs"
+            loading={romaneioBusy}
+            onClick={() => void downloadRomaneio(selectedList)}
+          >
+            <IconPrinter width={14} height={14} /> Romaneio de Separação
           </Button>
           <Button
             size="sm"
