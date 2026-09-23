@@ -272,6 +272,16 @@ async def melhor_envio_label(
     return _pdf_response(pdf, f"etiqueta-{number}.pdf")
 
 
+@router.post("/labels-buffer/clear")
+async def clear_labels_buffer(_: AdminDep) -> dict:
+    """Apaga o buffer local de etiquetas já geradas (força re-render na
+    próxima vez, em vez de esperar o cache de 1h expirar sozinho)."""
+    from app.modules.shipping.label_buffer import clear_buffer
+
+    removed = clear_buffer()
+    return {"ok": True, "removed": removed}
+
+
 @router.get("/{number}/etiqueta-nfe")
 async def etiqueta_nfe_single(
     number: str,

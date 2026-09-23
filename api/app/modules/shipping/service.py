@@ -1083,17 +1083,31 @@ async def _mark_labels_printed(db: AsyncSession, order_numbers: list[str]) -> No
 async def melhor_envio_labels_pdf(db: AsyncSession, order_numbers: list[str]) -> bytes:
     """PDF das etiquetas dos pedidos, pronto para baixar no painel da loja
     (sem abrir o site do Melhor Envio). Respeita o formato e a opção de
-    Declaração de Conteúdo definidos no menu Frete."""
-    url = await melhor_envio_print_url(db, order_numbers)
+    Declaração de Conteúdo definidos no menu Frete.
+
+    Buffer local de 1h (mesmo conjunto de pedidos + formato + declaração) --
+    um "cache hit" nem chega a chamar a API do Melhor Envio (não só evita o
+    Playwright, evita a dependência da etiqueta ainda existir lá)."""
+    from app.modules.shipping import label_buffer
+
     cfg = await load_config(db)
     fmt = cfg.label_format or "termica_10x15"
+    want_declaration = bool(cfg.print_declaration)
+    buf_key = label_buffer.compute_key(order_numbers, fmt, want_declaration)
+    cached = label_buffer.read_buffer(buf_key)
+    if cached is not None:
+        await _mark_labels_printed(db, order_numbers)
+        return cached
+
+    url = await melhor_envio_print_url(db, order_numbers)
     pdf = await _render_url_to_pdf(
         url,
         postal_card=(fmt != "a4_4up"),
-        want_declaration=bool(cfg.print_declaration),
+        want_declaration=want_declaration,
     )
     if fmt == "a4_4up":
         pdf = _labels_a4_4up(pdf)
+    label_buffer.write_buffer(buf_key, pdf)
     await _mark_labels_printed(db, order_numbers)
     return pdf
 

@@ -600,6 +600,28 @@ function PedidosPageInner() {
     reload();
   }
 
+  const [bufferBusy, setBufferBusy] = useState(false);
+  async function clearLabelsBuffer() {
+    setBufferBusy(true);
+    const t = getSession()?.accessToken ?? '';
+    try {
+      const r = await fetch(`${ADMIN_API_BASE_URL}/api/admin/orders/labels-buffer/clear`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${t}` },
+      });
+      if (!r.ok) {
+        toast.error('Não foi possível limpar o buffer de etiquetas.');
+        return;
+      }
+      const data = await r.json();
+      toast.success(`Buffer de etiquetas limpo (${data.removed ?? 0} arquivo(s)).`);
+    } catch {
+      toast.error('Falha de rede ao limpar o buffer de etiquetas.');
+    } finally {
+      setBufferBusy(false);
+    }
+  }
+
   const fmtMin = (secs: number | null | undefined): string => {
     if (secs == null) return '—';
     if (secs < 60) return `${secs}s`;
@@ -623,9 +645,14 @@ function PedidosPageInner() {
         description="Todos os pedidos da loja."
         actions={
           <div className="flex flex-col items-end gap-1">
-            <Button size="sm" variant="outline" loading={syncBusy} onClick={() => void syncTracking()}>
-              Sincronizar rastreio (ME)
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" loading={syncBusy} onClick={() => void syncTracking()}>
+                Sincronizar rastreio (ME)
+              </Button>
+              <Button size="sm" variant="ghost" loading={bufferBusy} onClick={() => void clearLabelsBuffer()}>
+                Limpar buffer de etiquetas
+              </Button>
+            </div>
             {syncStatusText && (
               <span className="text-right text-xs text-text-muted">{syncStatusText}</span>
             )}
