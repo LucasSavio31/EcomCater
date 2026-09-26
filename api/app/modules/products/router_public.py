@@ -115,6 +115,13 @@ async def google_merchant_feed(db: DbDep) -> Response:
     return Response(content=xml, media_type="application/xml")
 
 
+@router.get("/slug-redirects")
+async def slug_redirects(db: DbDep) -> dict[str, str]:
+    """Mapa slug antigo -> slug atual (produtos renomeados, só ativos). A loja
+    usa no middleware pra responder 308 ANTES de começar a renderizar a PDP."""
+    return await cached_json(NS_PRODUCT, ("products:slug-redirects",), 300, lambda: service.slug_redirects(db))
+
+
 @router.get("/{slug}", response_model=ProductDetail)
 async def get_product(slug: str, db: DbDep) -> dict:
     return await cached_json(

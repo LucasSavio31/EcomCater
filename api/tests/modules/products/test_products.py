@@ -404,3 +404,15 @@ async def test_renamed_product_old_slug_resolves_to_current(client, admin_token,
     assert back.json()["slug"] == "tenis-2085-ferrari"
     fwd = await client.get("/api/products/tenis-2085-vermelho")
     assert fwd.json()["slug"] == "tenis-2085-ferrari"
+
+
+@pytest.mark.asyncio
+async def test_slug_redirects_map(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    cat = await _mk_category(client, h)
+    p = await _mk_product(client, h, cat["id"], name="Bota Road Cafe")
+    await client.patch(f"/api/admin/products/{p['id']}", json={"name": "Bota 3020 Cafe"}, headers=h)
+
+    r = await client.get("/api/products/slug-redirects")
+    assert r.status_code == 200
+    assert r.json() == {"bota-road-cafe": "bota-3020-cafe"}
