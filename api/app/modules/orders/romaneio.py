@@ -147,7 +147,8 @@ def build_romaneio_pdf(orders: list[dict], *, store) -> bytes:
                     "number": o["number"],
                     "placed_at": _fmt_dt(o.get("placed_at")),
                     "customer_name": o.get("customer_name") or "—",
-                    "name": it.get("name", ""),
+                    "name": it.get("name", "")
+                    + (f" ({it['supplier_model']})" if it.get("supplier_model") else ""),
                     "cor": cor,
                     "numero": numero,
                     "quantity": it.get("quantity") or 0,

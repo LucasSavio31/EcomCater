@@ -148,7 +148,9 @@ def build_supplier_xlsx(
                 obs = "Pedido com mais de um item" if multi_item[num] else ""
                 # número do pedido na MESMA linha do item (repete a cada item
                 # do mesmo pedido) — nada de linha separada só com o número.
-                ws.append([num, int(it.get("quantity") or 0), it.get("name", ""), numero, cor, obs])
+                # modelo como o fornecedor conhece (ex.: "BOTA 3010 CAFE (FAIRBANKS)")
+                nome = it.get("name", "") + (f" ({it['supplier_model']})" if it.get("supplier_model") else "")
+                ws.append([num, int(it.get("quantity") or 0), nome, numero, cor, obs])
                 row = ws.max_row
                 for c in ws[row]:
                     c.border = border

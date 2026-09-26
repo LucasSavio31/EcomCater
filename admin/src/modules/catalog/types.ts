@@ -151,6 +151,7 @@ export interface ProductDetail {
   size_chart_id?: string | null;
   brand: string | null;
   supplier?: string | null;
+  supplier_model?: string | null;
   short_description: string | null;
   description: string | null;
   price_cents: number;
@@ -203,6 +204,7 @@ export interface ProductInput {
   installments_max?: number | null;
   brand?: string | null;
   supplier?: string | null;
+  supplier_model?: string | null;
   short_description?: string | null;
   description?: string | null;
   weight_grams: number;

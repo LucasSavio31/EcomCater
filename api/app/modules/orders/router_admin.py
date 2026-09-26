@@ -234,7 +234,7 @@ async def change_status(
         db, order, body.status, actor_type="admin", actor_id=str(admin.id), message=body.message,
         background=background,
     )
-    return service.to_out(await service._load(db, order.id))
+    return await service.attach_variation_options(db, service.to_out(await service._load(db, order.id)))
 
 
 def _pdf_response(pdf: bytes, filename: str) -> Response:
@@ -373,4 +373,4 @@ async def bulk_status(
 async def add_note(number: str, body: NoteIn, db: DbDep, admin: EditorDep) -> dict:
     order = await service.get_by_number(db, number)
     await service.add_note(db, order, body.message, str(admin.id))
-    return service.to_out(await service._load(db, order.id))
+    return await service.attach_variation_options(db, service.to_out(await service._load(db, order.id)))

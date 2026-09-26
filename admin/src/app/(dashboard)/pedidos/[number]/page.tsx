@@ -480,7 +480,14 @@ export default function PedidoDetalhePage() {
                         )}
                       </span>
                       <div className="flex flex-1 flex-col">
-                        <span className="text-sm font-medium">{it.name}</span>
+                        <span className="text-sm font-medium">
+                          {it.name}
+                          {it.supplier_model && (
+                            <span className="ml-1.5 rounded-full bg-blue-600/10 px-2 py-0.5 text-xs font-medium text-blue-600">
+                              Mod. forn.: {it.supplier_model}
+                            </span>
+                          )}
+                        </span>
                         <span className="text-xs text-text-muted">
                           {it.sku}
                           {it.supplier ? ` · Forn.: ${it.supplier}` : ''}

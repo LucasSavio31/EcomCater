@@ -37,6 +37,7 @@ class CheckoutIn(BaseModel):
 
 class OrderItemOut(BaseModel):
     supplier: str | None = None
+    supplier_model: str | None = None  # só preenchido nas rotas admin
     sku: str
     name: str
     variant_label: str | None

@@ -24,6 +24,7 @@ interface GeneralState {
   name: string;
   brand: string;
   supplier: string;
+  supplier_model: string;
   category_id: string;
   extra_category_ids: string[];
   size_chart_id: string;
@@ -54,6 +55,7 @@ function toState(p: ProductDetail | null): GeneralState {
     name: p?.name ?? '',
     brand: p?.brand ?? '',
     supplier: p?.supplier ?? '',
+    supplier_model: p?.supplier_model ?? '',
     category_id: p?.category_id ?? '',
     extra_category_ids: p?.extra_category_ids ?? [],
     size_chart_id: p?.size_chart_id ?? '',
@@ -85,6 +87,7 @@ function buildPayload(s: GeneralState, status: ProductStatus): ProductInput {
     name: s.name.trim(),
     brand: s.brand.trim() || null,
     supplier: s.supplier.trim() || null,
+    supplier_model: s.supplier_model.trim() || null,
     category_id: s.category_id || null,
     extra_category_ids: [...new Set(s.extra_category_ids)].filter((id) => id && id !== s.category_id),
     size_chart_id: s.size_chart_id || null,
@@ -283,6 +286,7 @@ export function ProductForm({ product, categories, onSaved }: ProductFormProps) 
             <div className="grid gap-4 sm:grid-cols-2">
               <Input label="Marca" value={state.brand} onChange={(e) => set('brand', e.target.value)} />
               <Input label="Fornecedor (uso interno)" hint="Não aparece na loja. Usado para separar PDFs e etiquetas." value={state.supplier} onChange={(e) => set('supplier', e.target.value)} />
+              <Input label="Modelo no fornecedor (uso interno)" hint="Nome como o fornecedor conhece a peça (ex.: FAIRBANKS). Aparece no pedido, romaneio e planilha — nunca na loja." value={state.supplier_model} onChange={(e) => set('supplier_model', e.target.value)} />
               <Select
                 label="Categoria principal"
                 value={state.category_id}

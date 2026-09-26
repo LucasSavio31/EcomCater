@@ -274,3 +274,39 @@ async def test_romaneio_pdf_requires_selection(client, admin_token, auth_headers
 async def test_romaneio_pdf_requires_auth(client):
     r = await client.get("/api/admin/orders/romaneio.pdf", params={"numbers": "2026-000001"})
     assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_supplier_model_only_in_admin_views(client, variant, admin_token, auth_headers):
+    """"Modelo no fornecedor" (ex.: FAIRBANKS) aparece no pedido do admin, na
+    impressão (bulk) e na planilha de fornecedor -- nunca na loja nem pro cliente."""
+    import io
+
+    from openpyxl import load_workbook
+
+    h = auth_headers(admin_token)
+    o = await _order(client, variant, email="forn@test.example")
+    assert "supplier_model" not in o["items"][0]
+
+    detail = (await client.get(f"/api/admin/orders/{o['number']}", headers=h)).json()
+    pid = detail["items"][0]["product_id"]
+    r = await client.patch(f"/api/admin/products/{pid}", json={"supplier_model": "FAIRBANKS"}, headers=h)
+    assert r.status_code == 200, r.text
+
+    detail = (await client.get(f"/api/admin/orders/{o['number']}", headers=h)).json()
+    assert detail["items"][0]["supplier_model"] == "FAIRBANKS"
+    assert detail["items"][0]["name"] == "Item"  # nome do pedido intacto
+
+    bulk = (await client.post("/api/admin/orders/bulk", json={"numbers": [o["number"]]}, headers=h)).json()
+    assert bulk[0]["items"][0]["supplier_model"] == "FAIRBANKS"
+
+    r = await client.get("/api/admin/orders/export/suppliers.xlsx", params={"numbers": o["number"]}, headers=h)
+    assert r.status_code == 200, r.text
+    wb = load_workbook(io.BytesIO(r.content))
+    cells = [str(c.value) for ws in wb.worksheets for row in ws.iter_rows() for c in row if c.value]
+    assert "Item (FAIRBANKS)" in cells
+
+    public = (await client.get("/api/products/item")).json()
+    assert public.get("supplier_model") is None  # loja nunca recebe o valor
+    admin_prod = (await client.get(f"/api/admin/products/{pid}", headers=h)).json()
+    assert admin_prod["supplier_model"] == "FAIRBANKS"

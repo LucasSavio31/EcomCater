@@ -102,6 +102,15 @@ async def _remember_old_slug(db: AsyncSession, product: Product, old_slug: str) 
     db.add(ProductSlugRedirect(old_slug=old_slug, product_id=product.id))
 
 
+async def slug_redirects(db: AsyncSession) -> dict[str, str]:
+    rows = await db.execute(
+        select(ProductSlugRedirect.old_slug, Product.slug)
+        .join(Product, Product.id == ProductSlugRedirect.product_id)
+        .where(Product.status == "active", Product.slug != ProductSlugRedirect.old_slug)
+    )
+    return dict(rows.all())
+
+
 # --------------------------------------------------------------------- serialização
 def _img_out(img: ProductImage) -> dict:
     return {
@@ -332,7 +341,8 @@ async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished
            if include_unpublished else {}),
         # fornecedor + custo + fiscal + vínculos de categoria: só no contexto admin (nunca na loja)
         **({
-            "supplier": product.supplier, "cost_cents": product.cost_cents,
+            "supplier": product.supplier, "supplier_model": product.supplier_model,
+            "cost_cents": product.cost_cents,
             "ncm": product.ncm, "cfop": product.cfop, "cest": product.cest,
             "csosn_cst": product.csosn_cst, "origem": product.origem, "unidade": product.unidade,
         } if include_unpublished else {}),
@@ -846,7 +856,7 @@ async def set_color_group(
 
 
 _PRODUCT_COPY_FIELDS = (
-    "short_description", "description", "brand", "supplier", "category_id",
+    "short_description", "description", "brand", "supplier", "supplier_model", "category_id",
     "price_cents", "compare_at_price_cents", "cost_cents", "pix_discount_pct", "installments_max",
     "weight_grams", "length_mm", "width_mm", "height_mm",
     "seo_title", "seo_description",

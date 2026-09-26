@@ -564,6 +564,19 @@ def to_out(order: Order) -> dict:
     }
 
 
+async def _supplier_models(db: AsyncSession, product_ids) -> dict:
+    """product_id -> modelo no fornecedor (cadastro ATUAL do produto; uso interno)."""
+    from app.modules.products.models import Product
+
+    ids = [p if isinstance(p, uuid.UUID) else uuid.UUID(str(p)) for p in product_ids if p]
+    if not ids:
+        return {}
+    rows = await db.execute(
+        select(Product.id, Product.supplier_model).where(Product.id.in_(ids), Product.supplier_model.is_not(None))
+    )
+    return dict(rows.all())
+
+
 async def attach_variation_options(db: AsyncSession, out: dict) -> dict:
     """Enriquece cada item do pedido com as opções de Cor / Número cadastradas
     no produto correspondente (dropdowns da edição) e completa a miniatura
@@ -627,10 +640,12 @@ async def attach_variation_options(db: AsyncSession, out: dict) -> dict:
         if cur is None or (im.is_primary and not cur.is_primary) or im.position < cur.position:
             img_by_pid[pid] = im
 
+    models = await _supplier_models(db, pid_uuids)
     for item in out.get("items", []):
         pid = item.get("product_id")
         if not pid:
             continue
+        item["supplier_model"] = models.get(uuid.UUID(pid))
         cor_opts = cor_by_pid.get(pid, [])
         num_opts = num_by_pid.get(pid, [])
         item["cor_options"] = cor_opts
@@ -855,13 +870,21 @@ async def delete_order(db: AsyncSession, number: str) -> None:
 
 async def admin_bulk(db: AsyncSession, numbers: list[str]) -> list[dict]:
     """Carrega vários pedidos completos (para PDF/etiquetas)."""
-    rows = await db.scalars(
-        select(Order)
-        .where(Order.number.in_(numbers))
-        .options(selectinload(Order.items), selectinload(Order.events))
-        .order_by(Order.number)
+    rows = list(
+        await db.scalars(
+            select(Order)
+            .where(Order.number.in_(numbers))
+            .options(selectinload(Order.items), selectinload(Order.events))
+            .order_by(Order.number)
+        )
     )
-    return [to_out(o) for o in rows]
+    models = await _supplier_models(db, {i.product_id for o in rows for i in o.items if i.product_id})
+    out = [to_out(o) for o in rows]
+    for o in out:
+        for item in o["items"]:
+            pid = item.get("product_id")
+            item["supplier_model"] = models.get(uuid.UUID(pid)) if pid else None
+    return out
 
 
 async def romaneio_rows(db: AsyncSession, numbers: list[str]) -> list[dict]:
@@ -887,6 +910,7 @@ async def romaneio_rows(db: AsyncSession, numbers: list[str]) -> list[dict]:
             )
         ).all():
             colors[pid] = cname
+    models = await _supplier_models(db, prod_ids)
     return [
         {
             "number": o.number,
@@ -899,6 +923,7 @@ async def romaneio_rows(db: AsyncSession, numbers: list[str]) -> list[dict]:
                     "variant_attrs": i.variant_attrs,
                     "quantity": i.quantity,
                     "product_color": colors.get(i.product_id),
+                    "supplier_model": models.get(i.product_id),
                 }
                 for i in o.items
             ],
@@ -929,6 +954,7 @@ async def supplier_export_rows(db: AsyncSession, numbers: list[str]) -> list[dic
             )
         ).all():
             colors[pid] = cname
+    models = await _supplier_models(db, prod_ids)
     return [
         {
             "number": o.number,
@@ -942,6 +968,7 @@ async def supplier_export_rows(db: AsyncSession, numbers: list[str]) -> list[dic
                     "supplier": i.supplier,
                     "quantity": i.quantity,
                     "product_color": colors.get(i.product_id),
+                    "supplier_model": models.get(i.product_id),
                 }
                 for i in o.items
             ],

@@ -28,7 +28,7 @@ function agruparPorFornecedor(orders: OrderDetail[]): Map<string, Linha[]> {
         pedido: o.number,
         data: o.placed_at,
         cliente: o.shipping_address?.recipient_name || o.email,
-        item: it.name,
+        item: it.supplier_model ? `${it.name} (${it.supplier_model})` : it.name,
         variacao: it.variant_label,
         sku: it.sku,
         qtd: it.quantity,

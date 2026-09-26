@@ -136,6 +136,7 @@ class ProductBase(BaseModel):
     description: str | None = None
     brand: str | None = None
     supplier: str | None = None
+    supplier_model: str | None = None
     category_id: str | None = None
     extra_category_ids: list[str] = []
     size_chart_id: str | None = None
@@ -173,6 +174,7 @@ class ProductUpdateIn(BaseModel):
     description: str | None = None
     brand: str | None = None
     supplier: str | None = None
+    supplier_model: str | None = None
     category_id: str | None = None
     extra_category_ids: list[str] | None = None
     size_chart_id: str | None = None
@@ -251,6 +253,7 @@ class ProductDetail(BaseModel):
     size_chart: dict | None = None
     size_chart_id: str | None = None
     supplier: str | None = None
+    supplier_model: str | None = None
     ncm: str | None = None
     cfop: str | None = None
     cest: str | None = None

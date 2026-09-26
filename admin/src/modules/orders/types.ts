@@ -61,6 +61,8 @@ export interface OrderItem {
   cor_options: string[];
   numero_options: string[];
   supplier: string | null;
+  /** modelo como o fornecedor conhece (uso interno), ex.: "FAIRBANKS" */
+  supplier_model?: string | null;
   image_url: string | null;
   unit_price_cents: number;
   quantity: number;
