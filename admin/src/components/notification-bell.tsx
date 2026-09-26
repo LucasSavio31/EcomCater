@@ -49,10 +49,13 @@ export function NotificationBell() {
   const seenIdsRef = useRef<Set<string> | null>(null);
   const soundFlagsRef = useRef({ sale: true, return: true });
 
+  // chave = id + tipo: o mesmo aviso pode EVOLUIR ("Nova venda" -> "Venda
+  // paga", mesmo id) e aí o som de venda tem que tocar.
+  const seenKey = (item: NotificationItem) => `${item.id}:${item.type}`;
   const playIfNew = useCallback((item: NotificationItem) => {
     const seen = seenIdsRef.current;
-    if (!seen || seen.has(item.id)) return;
-    seen.add(item.id);
+    if (!seen || seen.has(seenKey(item))) return;
+    seen.add(seenKey(item));
     if (item.type === 'order_paid' && soundFlagsRef.current.sale) playSaleSound();
     if (item.type === 'order_returned' && soundFlagsRef.current.return) playReturnSound();
   }, []);
@@ -68,7 +71,7 @@ export function NotificationBell() {
     if (seenIdsRef.current === null) {
       // Primeiro carregamento: só registra os ids existentes -- nunca toca
       // som pra notificação que já estava na fila antes de abrir o painel.
-      seenIdsRef.current = new Set(res.data.items.map((i) => i.id));
+      seenIdsRef.current = new Set(res.data.items.map(seenKey));
       return;
     }
     for (const item of res.data.items) playIfNew(item);
@@ -104,15 +107,18 @@ export function NotificationBell() {
         } catch {
           return;
         }
-        setData((prev) =>
-          prev
-            ? {
-                ...prev,
-                items: [item, ...prev.items.filter((i) => i.id !== item.id)],
-                unread_count: prev.unread_count + (item.read_at ? 0 : 1),
-              }
-            : prev,
-        );
+        setData((prev) => {
+          if (!prev) return prev;
+          // aviso que já estava na lista (atualizado, mesmo id) não conta de novo
+          const before = prev.items.find((i) => i.id === item.id);
+          const wasUnread = !!before && !before.read_at;
+          const isUnread = !item.read_at;
+          return {
+            ...prev,
+            items: [item, ...prev.items.filter((i) => i.id !== item.id)],
+            unread_count: Math.max(0, prev.unread_count + (isUnread ? 1 : 0) - (wasUnread ? 1 : 0)),
+          };
+        });
         playIfNew(item);
       };
       socket.onclose = () => {

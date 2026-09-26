@@ -87,10 +87,11 @@ async def test_order_shipped_generates_notification(client, admin_token, auth_he
 
     data = (await client.get("/api/admin/notifications", headers=h)).json()
     types = [i["type"] for i in data["items"]]
-    assert "order_created" in types
+    # "Nova venda" virou "Venda paga" (um aviso por etapa, sem repetir o pedido)
+    assert "order_created" not in types
     assert "order_paid" in types
     assert "order_shipped" in types
-    assert data["unread_count"] == 3
+    assert data["unread_count"] == 2
 
 
 @pytest.mark.asyncio
@@ -205,3 +206,47 @@ async def test_delete_one_and_delete_all(client, admin_token, auth_headers, vari
     data3 = (await client.get("/api/admin/notifications", headers=h)).json()
     assert data3["items"] == []
     assert data3["unread_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_new_sale_then_paid_is_one_notification(client, admin_token, auth_headers, variant):
+    """Pedido criado e pago: UM aviso só ("Nova venda" vira "Venda paga")."""
+    h = auth_headers(admin_token)
+    order = await _order(client, variant)
+    await client.post(f"/api/admin/orders/{order['number']}/status", json={"status": "paid"}, headers=h)
+
+    items = (await client.get("/api/admin/notifications", headers=h)).json()["items"]
+    mine = [i for i in items if i["link_path"] == f"/pedidos/{order['number']}"]
+    assert [i["type"] for i in mine] == ["order_paid"]
+    assert mine[0]["title"] == f"Venda paga: pedido {order['number']}"
+    assert mine[0]["read_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_repeated_events_do_not_duplicate(client, admin_token, auth_headers, variant, db):
+    """Evento repetido (webhook que chega 2x): nem aviso nem e-mail em dobro."""
+    from sqlalchemy import func, select
+
+    from app.core.events import emit
+    from app.modules.admin.models import EmailLog
+
+    h = auth_headers(admin_token)
+    order = await _order(client, variant)
+    await client.post(f"/api/admin/orders/{order['number']}/status", json={"status": "paid"}, headers=h)
+    payload = {"order_id": order["id"], "number": order["number"]}
+    await emit("order.paid", payload)
+    await emit("order.created", payload)  # "Nova venda" atrasada não volta
+    await emit("order.status_changed", {"order_id": order["id"], "status": "in_transit"})
+    await emit("order.status_changed", {"order_id": order["id"], "status": "in_transit"})
+
+    items = (await client.get("/api/admin/notifications", headers=h)).json()["items"]
+    mine = [i["type"] for i in items if i["link_path"] == f"/pedidos/{order['number']}"]
+    assert mine == ["order_paid"]
+
+    for template in ("payment_confirmed", "order_in_transit", "order_created"):
+        n = await db.scalar(
+            select(func.count()).select_from(EmailLog).where(
+                EmailLog.order_id == order["id"], EmailLog.template == template
+            )
+        )
+        assert n == 1, (template, n)

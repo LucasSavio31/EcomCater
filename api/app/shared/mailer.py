@@ -551,12 +551,36 @@ async def send(
     context: dict,
     order_id: str | None = None,
     attachments: list[tuple[str, bytes, str, str]] | None = None,
+    once: bool = False,
 ) -> bool:
     """`attachments`: lista de (filename, data, maintype, subtype), ex.:
-    ("fatura.pdf", b"...", "application", "pdf")."""
+    ("fatura.pdf", b"...", "application", "pdf").
+
+    `once=True` (e-mails automáticos de pedido): não reenvia o MESMO modelo
+    pro MESMO pedido e destinatário se já saiu (ou está na fila) -- evento
+    repetido (webhook de pagamento/rastreio chegando de novo) não vira
+    e-mail em dobro pro cliente."""
     if not (to or "").strip():
         logger.info("e-mail '%s' ignorado: sem destinatário", template)
         return False
+    if once and order_id:
+        from sqlalchemy import select
+
+        from app.modules.admin.models import EmailLog
+
+        already = await db.scalar(
+            select(EmailLog.id)
+            .where(
+                EmailLog.order_id == order_id,
+                EmailLog.template == template,
+                EmailLog.to_email == to,
+                EmailLog.status.in_(("sent", "queued")),
+            )
+            .limit(1)
+        )
+        if already:
+            logger.info("e-mail '%s' do pedido %s já enviado -- não repete", template, order_id)
+            return True
     conf = await _smtp_conf(db)
     et = await _email_theme(db)
 

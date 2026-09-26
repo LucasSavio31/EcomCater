@@ -164,7 +164,7 @@ async def _on_created(payload: dict) -> None:
         async def _confirm_email() -> None:
             ok = await mailer.send(
                 db, to=order.email, template="order_created",
-                order_id=str(order.id), context=ctx,
+                order_id=str(order.id), context=ctx, once=True,
             )
             if not ok:
                 raise RuntimeError("mailer retornou status != sent")
@@ -186,7 +186,7 @@ async def _on_created(payload: dict) -> None:
         async def _admin_email() -> None:
             admin_to = await mailer.order_notify_email(db)
             await mailer.send(
-                db, to=admin_to, template="admin_order_created", order_id=str(order.id),
+                db, to=admin_to, template="admin_order_created", order_id=str(order.id), once=True,
                 context={
                     **ctx,
                     "email": order.email,
@@ -266,7 +266,7 @@ async def _on_paid(payload: dict) -> None:
 
         await mailer.send(
             db, to=order.email, template="payment_confirmed",
-            order_id=str(order.id), context=ctx, attachments=attachments,
+            order_id=str(order.id), context=ctx, attachments=attachments, once=True,
         )
         await db.commit()
 
@@ -334,7 +334,7 @@ async def _on_status(payload: dict) -> None:
             status_label=_STATUS_LABELS.get(status, status),
         )
         await mailer.send(
-            db, to=order.email, template=template, order_id=str(order.id), context=ctx
+            db, to=order.email, template=template, order_id=str(order.id), context=ctx, once=True
         )
 
         if status == "returned":
@@ -344,7 +344,7 @@ async def _on_status(payload: dict) -> None:
 
             admin_to = await mailer.order_notify_email(db)
             await mailer.send(
-                db, to=admin_to, template="admin_order_returned", order_id=str(order.id),
+                db, to=admin_to, template="admin_order_returned", order_id=str(order.id), once=True,
                 context={
                     **ctx,
                     "customer_name": _customer_name(order),
@@ -384,6 +384,6 @@ async def _on_reverse_label_ready(payload: dict) -> None:
 
         await mailer.send(
             db, to=order.email, template="reverse_label_ready",
-            order_id=str(order.id), context=ctx, attachments=attachments,
+            order_id=str(order.id), context=ctx, attachments=attachments, once=True,
         )
         await db.commit()

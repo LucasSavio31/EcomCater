@@ -11,10 +11,53 @@ from app.modules.notifications.models import Notification
 
 
 async def create(
-    db: AsyncSession, *, type: str, title: str, message: str | None = None, link_path: str | None = None
-) -> Notification:
+    db: AsyncSession,
+    *,
+    type: str,
+    title: str,
+    message: str | None = None,
+    link_path: str | None = None,
+    unless_types: tuple[str, ...] = (),
+) -> Notification | None:
+    """Cria o aviso -- UMA vez por (tipo, item): se o mesmo evento chegar de
+    novo (webhook repetido, retry), devolve None e não duplica. `unless_types`:
+    também não cria se o item já tem aviso de um desses tipos (ex.: "Nova
+    venda" que chegou DEPOIS do "Venda paga" do mesmo pedido)."""
+    if link_path:
+        dup = await db.scalar(
+            select(Notification.id)
+            .where(Notification.type.in_((type, *unless_types)), Notification.link_path == link_path)
+            .limit(1)
+        )
+        if dup:
+            return None
     row = Notification(type=type, title=title, message=message, link_path=link_path)
     db.add(row)
+    await db.flush()
+    return row
+
+
+async def upgrade_or_create(
+    db: AsyncSession, *, from_type: str, type: str, title: str, message: str | None = None, link_path: str
+) -> Notification | None:
+    """Evolui o aviso anterior do mesmo item em vez de criar outro (ex.: "Nova
+    venda" -> "Venda paga" do mesmo pedido): vira o tipo novo, volta a ficar
+    não lido e sobe pro topo. Sem aviso anterior, cria normal."""
+    if await db.scalar(
+        select(Notification.id).where(Notification.type == type, Notification.link_path == link_path).limit(1)
+    ):
+        return None
+    row = await db.scalar(
+        select(Notification)
+        .where(Notification.type == from_type, Notification.link_path == link_path)
+        .order_by(Notification.created_at.desc())
+        .limit(1)
+    )
+    if row is None:
+        return await create(db, type=type, title=title, message=message, link_path=link_path)
+    row.type, row.title, row.message = type, title, message
+    row.read_at = None
+    row.created_at = datetime.now(UTC)
     await db.flush()
     return row
 

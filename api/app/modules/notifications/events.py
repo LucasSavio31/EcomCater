@@ -42,9 +42,12 @@ async def _on_order_created(payload: dict) -> None:
                 db,
                 type="order_created",
                 title=f"Nova venda: pedido {number}",
+                unless_types=("order_paid",),
                 message=f"{who} · {_brl(order.grand_total_cents)}",
                 link_path=f"/pedidos/{number}",
             )
+            if row is None:  # já avisado (evento repetido)
+                return
             out = service.notification_out(row)
             await db.commit()
             stream.publish(out)
@@ -78,6 +81,8 @@ async def _on_order_status_changed(payload: dict) -> None:
                 message=f"{who}" + (f" · rastreio {tracking}" if tracking else ""),
                 link_path=f"/pedidos/{order.number}",
             )
+            if row is None:  # já avisado (evento repetido)
+                return
             out = service.notification_out(row)
             await db.commit()
             stream.publish(out)
@@ -101,13 +106,18 @@ async def _on_order_paid(payload: dict) -> None:
                 return
             addr = order.shipping_address_json or {}
             who = addr.get("recipient_name") or order.email
-            row = await service.create(
+            # pedido pago logo após criado: o "Nova venda" vira "Venda paga"
+            # (um aviso só por pedido, não dois)
+            row = await service.upgrade_or_create(
                 db,
+                from_type="order_created",
                 type="order_paid",
                 title=f"Venda paga: pedido {number}",
                 message=f"{who} · {_brl(order.grand_total_cents)}",
                 link_path=f"/pedidos/{number}",
             )
+            if row is None:  # já avisado (evento repetido)
+                return
             out = service.notification_out(row)
             await db.commit()
             stream.publish(out)
@@ -139,6 +149,8 @@ async def _on_order_returned(payload: dict) -> None:
                 message=who,
                 link_path=f"/pedidos/{order.number}",
             )
+            if row is None:  # já avisado (evento repetido)
+                return
             out = service.notification_out(row)
             await db.commit()
             stream.publish(out)
