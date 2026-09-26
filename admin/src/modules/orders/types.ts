@@ -139,6 +139,8 @@ export interface OrderDetail {
   payment?: OrderPayment | null;
   /** PNG (data URI) do QR com o número do pedido — só no GET individual. */
   qr_data_uri?: string;
+  /** domínio (loja) em que o pedido foi feito — informativo, só no GET individual */
+  domain_name?: string | null;
 }
 
 /** Transições válidas por status atual (espelha o backend). */

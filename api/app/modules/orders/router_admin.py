@@ -192,6 +192,7 @@ async def get_order(number: str, db: DbDep, _: AdminDep) -> dict:
     order = await service.get_by_number(db, number)
     out = {**service.to_out(order), "payment": await _payment_out(db, order)}
     out["qr_data_uri"] = _order_code_data_uri(order.number)
+    out["domain_name"] = order.domain_name  # de qual domínio veio (informativo)
     return await service.attach_variation_options(db, out)
 
 

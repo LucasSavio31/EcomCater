@@ -14,13 +14,13 @@ mimetypes.add_type("image/avif", ".avif")
 mimetypes.add_type("image/svg+xml", ".svg")
 
 from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.bootstrap import discover_modules
 from app.core.cache_bust import CacheBust
 from app.core.cache_headers import PublicCacheHeaders
 from app.core.config import settings
+from app.core.cors import SitesCORSMiddleware
 from app.core.errors import register_error_handlers
 from app.core.module_registry import register_all
 
@@ -102,7 +102,7 @@ def create_app() -> FastAPI:
         )
     )
     app.add_middleware(
-        CORSMiddleware,
+        SitesCORSMiddleware,  # + domínios ativos em Infraestrutura → Domínios
         allow_origins=settings.cors_origin_list,
         allow_origin_regex=dev_lan_regex,
         allow_credentials=True,

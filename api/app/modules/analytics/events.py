@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import SessionLocal
 from app.core.events import on
 from app.modules.analytics import capi, ga4_mp, service
+from app.modules.domains import sites
 from app.modules.orders.models import Order
 
 logger = logging.getLogger("analytics.events")
@@ -27,13 +28,15 @@ async def _capi_purchase(payload: dict) -> None:
     if not order_id:
         return
     async with SessionLocal() as db:
-        cfg = await service.get_settings(db)
-        if not (cfg.meta_capi_enabled and cfg.meta_capi_access_token and cfg.meta_pixel_id):
-            return
         order = await db.scalar(
             select(Order).where(Order.id == order_id).options(selectinload(Order.items))
         )
         if not order:
+            return
+        # pixel do domínio onde a compra aconteceu (multi-domínio)
+        await sites.refresh()
+        cfg = await service.get_for_site(db, order.domain_name)
+        if not (cfg.meta_capi_enabled and cfg.meta_capi_access_token and cfg.meta_pixel_id):
             return
         mkt = order.marketing_json or {}
         await capi.send_purchase(
@@ -46,6 +49,7 @@ async def _capi_purchase(payload: dict) -> None:
             client_ua=mkt.get("client_user_agent"),
             fbp=mkt.get("fbp"),
             fbc=mkt.get("fbc"),
+            site_url=sites.site_url(order.domain_name),
         )
 
 
@@ -62,13 +66,14 @@ async def _ga4_refund(payload: dict) -> None:
     if not order_id:
         return
     async with SessionLocal() as db:
-        cfg = await service.get_settings(db)
-        if not (cfg.ga4_enabled and cfg.ga4_measurement_id and cfg.ga4_api_secret):
-            return
         order = await db.scalar(
             select(Order).where(Order.id == order_id).options(selectinload(Order.items))
         )
         if not order:
+            return
+        await sites.refresh()
+        cfg = await service.get_for_site(db, order.domain_name)
+        if not (cfg.ga4_enabled and cfg.ga4_measurement_id and cfg.ga4_api_secret):
             return
         mkt = order.marketing_json or {}
         # client_id do GA4 capturado no checkout; senão um id determinístico

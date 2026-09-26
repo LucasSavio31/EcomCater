@@ -23,6 +23,11 @@ class AnalyticsPublicConfig(BaseModel):
     merchant_center_enabled: bool
     merchant_center_verification_code: str | None
 
+    # SEO do site neste domínio
+    seo_title: str | None = None
+    seo_description: str | None = None
+    seo_noindex: bool = False
+
 
 class AnalyticsAdminConfig(AnalyticsPublicConfig):
     meta_capi_enabled: bool
@@ -54,3 +59,7 @@ class AnalyticsUpdateIn(BaseModel):
 
     merchant_center_enabled: bool | None = None
     merchant_center_verification_code: str | None = None
+
+    seo_title: str | None = None
+    seo_description: str | None = None
+    seo_noindex: bool | None = None

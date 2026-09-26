@@ -310,3 +310,31 @@ async def test_supplier_model_only_in_admin_views(client, variant, admin_token, 
     assert public.get("supplier_model") is None  # loja nunca recebe o valor
     admin_prod = (await client.get(f"/api/admin/products/{pid}", headers=h)).json()
     assert admin_prod["supplier_model"] == "FAIRBANKS"
+
+
+@pytest.mark.asyncio
+async def test_order_records_domain_name(client, variant, admin_token, auth_headers, db):
+    """Só informativo: o pedido guarda de qual domínio veio; o fluxo é o mesmo."""
+    from app.modules.domains import sites
+    from app.modules.domains.models import STATUS_ACTIVE, Domain
+
+    db.add(Domain(hostname="loja-b.com.br", status=STATUS_ACTIVE))
+    await db.commit()
+    sites.invalidate()
+    try:
+        await client.post("/api/cart/items", json={"variant_id": variant, "quantity": 1})
+        r = await client.post(
+            "/api/orders/checkout",
+            json={"email": "dom@test.example", "shipping_address": ADDRESS},
+            headers={"Origin": "https://loja-b.com.br"},
+        )
+        assert r.status_code == 201, r.text
+        number = r.json()["number"]
+        o2 = await _order(client, variant, email="dom2@test.example")  # sem Origin -> principal
+    finally:
+        sites.invalidate()
+
+    h = auth_headers(admin_token)
+    assert (await client.get(f"/api/admin/orders/{number}", headers=h)).json()["domain_name"] == "loja-b.com.br"
+    other = (await client.get(f"/api/admin/orders/{o2['number']}", headers=h)).json()
+    assert other["domain_name"] == sites.default_host()

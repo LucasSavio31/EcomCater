@@ -10,6 +10,7 @@ import { InfiniteProductGrid } from '@/components/catalog/infinite-product-grid'
 import { PlpSort } from '@/components/catalog/plp-sort';
 import { PlpFilters, PlpFiltersDrawer } from '@/components/catalog/plp-filters';
 import { buildMetadata, breadcrumbJsonLd, jsonLdScript } from '@/lib/seo';
+import { siteOrigin } from '@/lib/site';
 import { TrackOnMount } from '@/components/analytics/track-on-mount';
 import { itemFromListItem } from '@/modules/analytics';
 import { Spinner } from '@ecom/ui';
@@ -23,7 +24,7 @@ export const dynamic = 'force-dynamic';
 type RawSearchParams = Record<string, string | string[] | undefined>;
 
 interface PageProps {
-  params: Promise<{ slug: string[] }>;
+  params: Promise<{ site: string; slug: string[] }>;
   searchParams: Promise<RawSearchParams>;
 }
 
@@ -102,7 +103,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
 }
 
 export default async function CategoriaPage({ params, searchParams }: PageProps) {
-  const { slug } = await params;
+  const { site, slug } = await params;
   const path = slug.join('/');
   const search = parseSearch(await searchParams);
 
@@ -154,7 +155,10 @@ export default async function CategoriaPage({ params, searchParams }: PageProps)
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: jsonLdScript(
-            breadcrumbJsonLd(crumbs.map((c) => ({ name: c.name, path: c.url ?? '/' }))),
+            breadcrumbJsonLd(
+              crumbs.map((c) => ({ name: c.name, path: c.url ?? '/' })),
+              siteOrigin(site),
+            ),
           ),
         }}
       />

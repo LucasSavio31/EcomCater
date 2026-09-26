@@ -15,6 +15,10 @@ export interface AnalyticsConfig {
 
   merchant_center_enabled: boolean;
   merchant_center_verification_code: string | null;
+  /** SEO do site neste domínio (multi-domínio) */
+  seo_title: string | null;
+  seo_description: string | null;
+  seo_noindex: boolean;
 }
 
 export const DISABLED_ANALYTICS: AnalyticsConfig = {
@@ -29,6 +33,9 @@ export const DISABLED_ANALYTICS: AnalyticsConfig = {
   meta_pixel_id: null,
   merchant_center_enabled: false,
   merchant_center_verification_code: null,
+  seo_title: null,
+  seo_description: null,
+  seo_noindex: false,
 };
 
 /**

@@ -151,7 +151,10 @@ def _is_shoe(name: str, paths: list[str]) -> bool:
     return bool((words | _segments(paths)) & _SHOE_WORDS)
 
 
-async def build_feed_xml(db: AsyncSession) -> bytes:
+async def build_feed_xml(db: AsyncSession, site_url: str | None = None) -> bytes:
+    """`site_url`: loja do domínio que pediu o feed (multi-domínio -- cada
+    domínio tem o próprio feed, com links pro próprio site)."""
+    site_url = (site_url or settings.site_url).rstrip("/")
     from app.modules.admin.models import StoreSettings
 
     store = await db.get(StoreSettings, 1)
@@ -187,7 +190,7 @@ async def build_feed_xml(db: AsyncSession) -> bytes:
     rss = Element("rss", attrib={"version": "2.0"})
     channel = SubElement(rss, "channel")
     SubElement(channel, "title").text = store_name
-    SubElement(channel, "link").text = settings.site_url
+    SubElement(channel, "link").text = site_url
     SubElement(channel, "description").text = f"Feed de produtos — {store_name}"
 
     for product in products:
@@ -197,7 +200,7 @@ async def build_feed_xml(db: AsyncSession) -> bytes:
             continue  # Merchant Center recusa item sem imagem -- pula o produto
         extra_images = [storage.url(i.zoom_key) for i in images[1:11]]
 
-        link = f"{settings.site_url}/produto/{product.slug}"
+        link = f"{site_url}/produto/{product.slug}"
         description = _strip_html(product.description) or (product.short_description or product.name)
 
         cat_ids = [product.category_id, *extra_cats.get(product.id, [])]

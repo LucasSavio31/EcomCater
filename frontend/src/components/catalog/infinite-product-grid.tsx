@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { API_BASE_URL } from '@/lib/api-client';
+import { effectiveBase } from '@/lib/api-client';
 import type { PagedProducts, ProductListItem } from '@/modules/catalog/types';
 import { ProductGrid } from './product-grid';
 
@@ -35,7 +35,7 @@ function buildUrl(q: InfiniteQuery, page: number): string {
   for (const c of q.colors ?? []) s.append('color', c);
   s.set('page', String(page));
   s.set('page_size', String(q.page_size));
-  return `${API_BASE_URL}/api/products?${s.toString()}`;
+  return `${effectiveBase()}/api/products?${s.toString()}`;
 }
 
 /** Grade com rolagem infinita: carrega a próxima página ao chegar perto do fim. */

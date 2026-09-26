@@ -7,13 +7,13 @@ import { customerApi } from '@/modules/customer/api';
 import type { Order, OrderEvent } from '@/modules/checkout/types';
 import { formatBRL } from '@/lib/format';
 import { resolveMediaUrl } from '@/lib/media';
-import { API_BASE_URL } from '@/lib/api-client';
+import { effectiveBase } from '@/lib/api-client';
 import { getCustomerSession } from '@/lib/customer-auth-storage';
 
 async function downloadOrderPdf(path: string): Promise<void> {
   const token = getCustomerSession()?.accessToken ?? '';
   try {
-    const r = await fetch(`${API_BASE_URL}${path}`, {
+    const r = await fetch(`${effectiveBase()}${path}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     if (!r.ok) return;

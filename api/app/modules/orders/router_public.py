@@ -20,6 +20,7 @@ from app.core.deps import get_current_customer_optional
 from app.core.ratelimit import rate_limit
 from app.modules.cart import service as cart_service
 from app.modules.customers.models import User
+from app.modules.domains import sites
 from app.modules.orders import service
 from app.modules.orders.schemas import CheckoutIn, OrderOut
 
@@ -69,6 +70,8 @@ async def checkout(
         idempotency_key=body.idempotency_key,
         marketing=marketing or None,
     )
+    # só registra de qual domínio veio (informativo; o pedido segue igual)
+    order.domain_name = sites.request_site(request) or sites.default_host()
 
     # comprador vira usuário do sistema e já sai logado (para ir a "minhas compras")
     from app.modules.customers.service import (

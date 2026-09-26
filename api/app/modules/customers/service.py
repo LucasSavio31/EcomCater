@@ -350,9 +350,12 @@ async def recover_email_by_cpf(db: AsyncSession, cpf: str) -> dict:
 
 
 async def request_password_reset(
-    db: AsyncSession, *, email: str | None, cpf: str | None, ip: str | None = None
+    db: AsyncSession, *, email: str | None, cpf: str | None, ip: str | None = None,
+    site_url: str | None = None,
 ) -> None:
-    """Cria o token e envia o e-mail. Silencioso — nunca revela se a conta existe."""
+    """Cria o token e envia o e-mail. Silencioso — nunca revela se a conta existe.
+    `site_url`: loja do domínio de onde o pedido veio (já validado contra os
+    domínios ativos -- nunca um Host arbitrário); None = domínio principal."""
     from app.core.config import settings
     from app.shared import mailer
     from app.shared.cpf import only_digits
@@ -381,7 +384,7 @@ async def request_password_reset(
             "email": user.email,
             "is_admin": False,
             "ttl_min": 30,
-            "reset_url": f"{settings.site_url.rstrip('/')}/redefinir-senha?token={raw}",
+            "reset_url": f"{(site_url or settings.site_url).rstrip('/')}/redefinir-senha?token={raw}",
         },
     )
 

@@ -12,15 +12,23 @@ import { NewsletterForm } from '@/components/layout/newsletter-form';
 import { TrackOnMount } from '@/components/analytics/track-on-mount';
 import { itemFromListItem } from '@/modules/analytics';
 import { buildMetadata } from '@/lib/seo';
+import { getAnalyticsConfig } from '@/modules/analytics/get-config';
 
 export const revalidate = 120; // ISR — invalidação por tag no /api/revalidate
 
-export async function generateMetadata(): Promise<Metadata> {
-  const theme = await getTheme();
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ site: string }>;
+}): Promise<Metadata> {
+  const { site } = await params;
+  // SEO do site é por domínio (Rastreamento → acordeão do domínio)
+  const [theme, cfg] = await Promise.all([getTheme(), getAnalyticsConfig(site)]);
   return buildMetadata({
-    description: 'Novidades, ofertas e os produtos mais buscados da loja.',
+    description: cfg.seo_description || 'Novidades, ofertas e os produtos mais buscados da loja.',
     path: '/',
     siteName: theme.store_name,
+    absoluteTitle: cfg.seo_title,
   });
 }
 

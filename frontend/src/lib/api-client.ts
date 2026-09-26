@@ -8,6 +8,8 @@
  * - Suporta `next: { tags, revalidate }` para cache/revalidação por tag no SSR.
  */
 
+import { DEFAULT_SITE, normalizeHost, siteApiOrigin } from '@/lib/site';
+
 export const API_BASE_URL: string =
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
@@ -31,9 +33,14 @@ const LOCALISH_HOST =
  * à API vira "cross-site" e o cookie `cart_token` (SameSite=Lax) deixa de ser
  * enviado — o carrinho "some" no F5. Então, só quando o host configurado é
  * local/LAN privada, reescrevemos o hostname (e o protocolo) para os da página,
- * mantendo a porta. Em produção (host público) nunca mexe.
+ * mantendo a porta.
+ *
+ * Multi-domínio (produção): a loja aberta num domínio EXTRA fala com a API
+ * desse mesmo domínio (`api.<dominio>`, criada em Infraestrutura → Domínios)
+ * — mesmo site pro navegador (cookie do carrinho/sessão funciona) e a API
+ * sabe de qual domínio veio a chamada (CORS, feed, pedido.domain_name).
  */
-function effectiveBase(): string {
+export function effectiveBase(): string {
   if (typeof window === 'undefined') return SERVER_API_BASE;
   try {
     const cfg = new URL(API_BASE_URL);
@@ -42,6 +49,10 @@ function effectiveBase(): string {
       cfg.hostname = here;
       cfg.protocol = window.location.protocol;
       return cfg.origin;
+    }
+    const site = normalizeHost(here);
+    if (site && site !== DEFAULT_SITE && !LOCALISH_HOST.test(site) && !/^\d+(\.\d+){3}$/.test(site)) {
+      return siteApiOrigin(site, API_BASE_URL);
     }
   } catch {
     /* URL inválida — usa a base como está */

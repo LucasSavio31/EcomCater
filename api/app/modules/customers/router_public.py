@@ -21,6 +21,7 @@ from app.modules.customers.schemas import (
     RegisterIn,
     TokenOut,
 )
+from app.modules.domains import sites
 
 router = APIRouter()
 
@@ -79,6 +80,7 @@ async def forgot_password(
     await service.request_password_reset(
         db, email=str(body.get("email") or "").strip() or None,
         cpf=str(body.get("cpf") or "").strip() or None, ip=ip,
+        site_url=sites.request_site_url(request),
     )
     return {"ok": True}
 

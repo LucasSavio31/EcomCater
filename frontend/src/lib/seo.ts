@@ -1,46 +1,36 @@
 /**
- * Helpers de SEO — esqueleto tipado (Fase 1).
- * A implementação real (metadata por rota, canonical, OG) entra na Fase 3 (F3.9).
+ * Helpers de SEO.
+ *
+ * Multi-domínio: canonical/og:url saem RELATIVOS aqui e o `metadataBase` vem
+ * do layout de cada domínio (`app/[site]/layout.tsx`) — o Next resolve pra
+ * URL absoluta do domínio certo, sem a página precisar saber em qual está.
  */
 import type { Metadata } from 'next';
 
-export const SITE_URL: string =
-  process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+import { DEFAULT_SITE, normalizeHost, SITE_URL, siteOrigin } from '@/lib/site';
+
+export { SITE_URL };
 
 /**
- * URL do site a partir do `Host` real da requisição, em vez do
- * `NEXT_PUBLIC_SITE_URL` fixo (definido uma vez no build/deploy). Usado só
- * por `robots.ts`/`sitemap.ts`/`llms.txt` — arquivos que precisam refletir
- * o domínio de verdade que bateu na loja (o mesmo cadastrado em
- * Infraestrutura → Domínio no admin, sem precisar redeploy se ele mudar).
- * Chamar `headers()` marca a rota como dinâmica (só essas 3 pagam esse
- * custo) — o resto do site (canonical/OG por página) continua estático
- * com `SITE_URL`, sem esse trade-off de cache.
+ * Domínio (site) da requisição atual — o middleware resolve e manda no
+ * header `x-site` (hostname sem www, ou o domínio padrão pra IP/localhost/
+ * host desconhecido). Usado por `robots.ts`/`sitemap.ts`/`llms.txt`, que
+ * ficam fora do segmento `[site]`. Chamar `headers()` torna a rota dinâmica
+ * (só essas pagam esse custo).
  */
-/** `X-Forwarded-*` pode chegar com mais de um valor (cada proxy da cadeia —
- * Cloudflare, LiteSpeed — concatena o seu em vez de substituir), separados
- * por vírgula. O primeiro é o mais próximo do cliente/borda, que é o que
- * interessa aqui. */
-function firstForwardedValue(raw: string | null): string | null {
-  if (!raw) return null;
-  return raw.split(',')[0]?.trim() || null;
-}
-
-export async function resolveSiteUrl(): Promise<string> {
+export async function resolveSite(): Promise<string> {
   try {
     const { headers } = await import('next/headers');
     const h = await headers();
-    const host = firstForwardedValue(h.get('x-forwarded-host')) ?? h.get('host');
-    if (host) {
-      const proto =
-        firstForwardedValue(h.get('x-forwarded-proto')) ??
-        (host.startsWith('localhost') ? 'http' : 'https');
-      return `${proto}://${host}`;
-    }
+    return normalizeHost(h.get('x-site')) || DEFAULT_SITE;
   } catch {
-    /* fora de uma requisição (build estático) — cai pro env var. */
+    /* fora de uma requisição (build estático) — domínio padrão. */
+    return DEFAULT_SITE;
   }
-  return SITE_URL;
+}
+
+export async function resolveSiteUrl(): Promise<string> {
+  return siteOrigin(await resolveSite());
 }
 
 /** Fallback genérico — o nome real vem de `theme.store_name` (admin). */
@@ -56,17 +46,19 @@ export interface BuildMetadataInput {
   noindex?: boolean;
   /** Nome da loja (do tema). Sem ele, usa o genérico. */
   siteName?: string | null;
+  /** Título exato (sem " · loja") — ex.: título do site configurado por domínio. */
+  absoluteTitle?: string | null;
 }
 
 export function buildMetadata(input: BuildMetadataInput = {}): Metadata {
   const { title, description, path = '/', images, noindex } = input;
-  const canonical = new URL(path, SITE_URL).toString();
+  // relativo: resolvido contra o `metadataBase` do domínio (layout [site])
+  const canonical = path;
   const name = input.siteName?.trim() || SITE_NAME;
-  const fullTitle = title ? `${title} · ${name}` : name;
+  const fullTitle = input.absoluteTitle?.trim() || (title ? `${title} · ${name}` : name);
 
   return {
-    metadataBase: new URL(SITE_URL),
-    title: fullTitle,
+    title: { absolute: fullTitle },
     description,
     alternates: { canonical },
     robots: noindex ? { index: false, follow: false } : undefined,
@@ -91,25 +83,27 @@ export function buildMetadata(input: BuildMetadataInput = {}): Metadata {
 
 export type JsonLd = Record<string, unknown> & { '@context': 'https://schema.org' };
 
-export function organizationJsonLd(input: { logoUrl?: string; name?: string | null } = {}): JsonLd {
+export function organizationJsonLd(
+  input: { logoUrl?: string; name?: string | null; url?: string } = {},
+): JsonLd {
   return {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: input.name?.trim() || SITE_NAME,
-    url: SITE_URL,
+    url: input.url ?? SITE_URL,
     ...(input.logoUrl ? { logo: input.logoUrl } : {}),
   };
 }
 
-export function webSiteJsonLd(name?: string | null): JsonLd {
+export function webSiteJsonLd(name?: string | null, url: string = SITE_URL): JsonLd {
   return {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: name?.trim() || SITE_NAME,
-    url: SITE_URL,
+    url,
     potentialAction: {
       '@type': 'SearchAction',
-      target: `${SITE_URL}/busca?q={search_term_string}`,
+      target: `${url}/busca?q={search_term_string}`,
       'query-input': 'required name=search_term_string',
     },
   };
@@ -120,7 +114,7 @@ export interface BreadcrumbEntry {
   path: string;
 }
 
-export function breadcrumbJsonLd(entries: BreadcrumbEntry[]): JsonLd {
+export function breadcrumbJsonLd(entries: BreadcrumbEntry[], base: string = SITE_URL): JsonLd {
   return {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -128,7 +122,7 @@ export function breadcrumbJsonLd(entries: BreadcrumbEntry[]): JsonLd {
       '@type': 'ListItem',
       position: index + 1,
       name: entry.name,
-      item: new URL(entry.path, SITE_URL).toString(),
+      item: new URL(entry.path, base).toString(),
     })),
   };
 }

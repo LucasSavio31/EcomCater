@@ -7,6 +7,36 @@
 > apareceram — não é mais só a intenção de design) e o que ainda precisa ser
 > feito à mão.
 
+## Vários domínios ao mesmo tempo (multi-domínio)
+
+A mesma loja (catálogo, carrinho, clientes, pedidos, admin) responde em
+**todos os domínios ativos** de Infraestrutura → Domínios — cada um
+funcionando como um site independente:
+
+- **Conectar**: cadastrar o domínio em Infraestrutura → Domínios. O
+  provisionamento (abaixo) cria sozinho as rotas do LiteSpeed pros
+  containers (`<dominio>` → loja, `admin.` → admin, `api.` → API) + SSL.
+  Assim que ele fica **ativo**, a loja já atende nele — sem `.env`, sem
+  rebuild (só o domínio *principal* mexe no `.env`).
+- **Páginas/cache próprios**: o middleware da loja reescreve `/<rota>` pra
+  `/<dominio>/<rota>` (`frontend/src/app/[site]`), então cada domínio tem o
+  próprio cache (ISR), canonical, `og:url`, JSON-LD, sitemap e robots.
+  Host desconhecido/IP cai no domínio padrão (o do build).
+- **API própria**: no navegador a loja fala com `api.<dominio>` (carrinho e
+  login funcionam por domínio); a API libera CORS pra todo domínio ativo
+  (lido do banco, sem reiniciar).
+- **Rastreamento, verificação e SEO por domínio**: Rastreamento e anúncios
+  mostra um acordeão por domínio — GTM/GA4/Ads/Pixel/CAPI/Merchant +
+  título/descrição do site + "não indexar" + as URLs de SEO (sitemap,
+  robots, llms.txt, feed do Merchant). Cada domínio carrega só as próprias
+  tags; domínio extra nasce com tudo desligado (nunca herda o pixel do
+  principal). CAPI/GA4 server-side usam as tags do domínio do pedido.
+- **Feed do Merchant por domínio**:
+  `https://api.<dominio>/api/products/feed/google-merchant.xml` sai com os
+  links de `<dominio>`.
+- **Pedidos**: fluxo idêntico em todos os domínios; o pedido só guarda
+  `domain_name` (informativo, aparece no detalhe do pedido no admin).
+
 ## Como funciona (arquitetura atual)
 
 A VPS tem **aaPanel + OpenLiteSpeed** instalados, e ele é o **único** ponto de

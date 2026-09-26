@@ -90,7 +90,9 @@ async def send_purchase(
     client_ua: str | None = None,
     fbp: str | None = None,
     fbc: str | None = None,
+    site_url: str | None = None,
 ) -> bool:
+    """`site_url`: loja do domínio onde a compra aconteceu (multi-domínio)."""
     addr = order.shipping_address_json or {}
     name_parts = (addr.get("recipient_name") or "").split()
     first_name = name_parts[0] if name_parts else ""
@@ -128,7 +130,7 @@ async def send_purchase(
         access_token=access_token,
         event_name="Purchase",
         event_id=f"purchase.{order.number}",
-        event_source_url=f"{settings.site_url}/checkout/obrigado?pedido={order.number}",
+        event_source_url=f"{(site_url or settings.site_url).rstrip('/')}/checkout/obrigado?pedido={order.number}",
         user_data=user_data,
         custom_data=custom_data,
         test_event_code=test_event_code,

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_customer
 from app.core.ratelimit import rate_limit
 from app.modules.customers.models import User
+from app.modules.domains import sites
 from app.modules.products import feed, service
 from app.modules.products.schemas import ProductDetail, ReviewIn
 
@@ -107,11 +108,13 @@ async def search(
 
 
 @router.get("/feed/google-merchant.xml")
-async def google_merchant_feed(db: DbDep) -> Response:
+async def google_merchant_feed(db: DbDep, request: Request) -> Response:
     """Feed do catálogo pro Google Merchant Center (RSS 2.0 + namespace `g:`)
     -- é o link que se cola em "Inserir um link para o arquivo" na configuração
     da fonte de dados do Merchant Center."""
-    xml = await feed.build_feed_xml(db)
+    # cada domínio tem o próprio feed: api.<dominio>/.../google-merchant.xml
+    # sai com os links de <dominio> (Merchant Center separado por domínio)
+    xml = await feed.build_feed_xml(db, site_url=sites.request_site_url(request))
     return Response(content=xml, media_type="application/xml")
 
 

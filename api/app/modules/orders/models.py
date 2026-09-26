@@ -53,6 +53,9 @@ class Order(UUIDPKMixin, TimestampMixin, Base):
     billing_address_json: Mapped[dict | None] = mapped_column(JSONB)
 
     customer_note: Mapped[str | None] = mapped_column(Text)
+    # só INFORMATIVO: em qual domínio (loja) o pedido foi feito, quando a
+    # loja atende vários domínios. Não muda nada no fluxo do pedido.
+    domain_name: Mapped[str | None] = mapped_column(String(255))
     placed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # motivo, quando a finalização assíncrona (e-mails/registros pós-pedido)
     # falha — mostrado na conta do cliente e avisado por e-mail ao lojista.

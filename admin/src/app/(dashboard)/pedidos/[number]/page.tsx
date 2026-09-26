@@ -443,6 +443,11 @@ export default function PedidoDetalhePage() {
               <StatusBadge kind="order" value={data.status} />
               <StatusBadge kind="payment" value={data.payment_status} />
               <span className="text-text-muted">{formatDateTime(data.placed_at)}</span>
+              {data.domain_name && (
+                <span className="text-text-muted" title="Domínio em que o pedido foi feito">
+                  · via {data.domain_name}
+                </span>
+              )}
             </span>
           )
         }

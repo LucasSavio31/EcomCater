@@ -15,7 +15,7 @@ from app.core.database import get_db
 from app.core.deps import require_role
 from app.core.errors import NotFoundError
 from app.modules.admin.models import AdminUser
-from app.modules.domains import service
+from app.modules.domains import service, sites
 from app.modules.domains.cache_rules import CACHE_PAGE_DEFS
 from app.modules.domains.models import Domain
 from app.modules.domains.schemas import (
@@ -49,6 +49,8 @@ def _domain_out(d: Domain) -> DomainOut:
         cache_pages=d.cache_pages or [],
         cache_applied_at=d.cache_applied_at.isoformat() if d.cache_applied_at else None,
         switch_requested_at=d.switch_requested_at.isoformat() if d.switch_requested_at else None,
+        site_url=f"https://{d.hostname}",
+        feed_url=f"https://{service.api_hostname(d.hostname)}/api/products/feed/google-merchant.xml",
     )
 
 
@@ -91,6 +93,7 @@ async def test_credentials(body: DomainsConfigIn, db: DbDep, _: SuperDep) -> dic
 async def add_or_update_domain(body: DomainIn, db: DbDep, _: SuperDep) -> DomainOut:
     domain = await service.upsert_domain(db, body.hostname)
     await service.provision(db, domain)
+    sites.invalidate()
     return _domain_out(domain)
 
 
@@ -100,6 +103,7 @@ async def retry_domain(domain_id: str, db: DbDep, _: SuperDep) -> DomainOut:
     if not domain:
         raise NotFoundError("Domínio não encontrado.")
     await service.provision(db, domain)
+    sites.invalidate()
     return _domain_out(domain)
 
 
@@ -112,6 +116,7 @@ async def set_primary_domain(domain_id: str, db: DbDep, _: SuperDep) -> DomainOu
     if not domain:
         raise NotFoundError("Domínio não encontrado.")
     domain = await service.set_primary(db, domain)
+    sites.invalidate()
     return _domain_out(domain)
 
 
@@ -139,4 +144,5 @@ async def remove_domain(domain_id: str, db: DbDep, _: SuperDep) -> dict:
     if not domain:
         raise NotFoundError("Domínio não encontrado.")
     await service.delete_domain(db, domain)
+    sites.invalidate()
     return {"ok": True}

@@ -18,16 +18,22 @@ import {
   jsonLdScript,
   genderFromCategoryPath,
   productJsonLd,
-  SITE_URL,
 } from '@/lib/seo';
+import { DEFAULT_SITE, siteOrigin } from '@/lib/site';
 
 export const revalidate = 120; // ISR — invalidação por tag no /api/revalidate
 
 // Habilita ISR na rota /produto/[slug]: sem generateStaticParams o Next
 // renderiza a página a cada request. Aqui pré-buildamos os mais buscados
 // (o que der; se a API não responder no build, cai em [] e os produtos
-// entram no cache sob demanda no 1º acesso).
-export async function generateStaticParams(): Promise<{ slug: string }[]> {
+// entram no cache sob demanda no 1º acesso). Só no domínio padrão — os
+// outros domínios entram no cache (próprio) na 1ª visita.
+export async function generateStaticParams({
+  params,
+}: {
+  params: { site: string };
+}): Promise<{ slug: string }[]> {
+  if (params.site !== DEFAULT_SITE) return [];
   try {
     const page = await getProducts({ sort: 'relevancia', page: 1, page_size: 60 });
     return page.items.map((p) => ({ slug: p.slug }));
@@ -37,7 +43,7 @@ export async function generateStaticParams(): Promise<{ slug: string }[]> {
 }
 
 interface PageProps {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ site: string; slug: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -64,7 +70,8 @@ function buildCrumbs(items: { name: string; url: string }[]): Crumb[] {
 }
 
 export default async function ProdutoPage({ params }: PageProps) {
-  const { slug } = await params;
+  const { site, slug } = await params;
+  const origin = siteOrigin(site);
   const [product, theme] = await Promise.all([getProduct(slug), getTheme()]);
 
   if (!product) notFound();
@@ -159,13 +166,16 @@ export default async function ProdutoPage({ params }: PageProps) {
               images: primaryImageUrl ? [primaryImageUrl] : undefined,
               priceCents: product.price_cents,
               availability: inStock ? 'InStock' : 'OutOfStock',
-              url: `${SITE_URL}/produto/${product.slug}`,
+              url: `${origin}/produto/${product.slug}`,
               color: product.color_name ?? undefined,
               gender: genderFromCategoryPath(product.category?.path),
               ratingValue: product.rating_count > 0 ? product.rating_avg : undefined,
               ratingCount: product.rating_count > 0 ? product.rating_count : undefined,
             }),
-            breadcrumbJsonLd(crumbs.map((c) => ({ name: c.name, path: c.url ?? '/' }))),
+            breadcrumbJsonLd(
+              crumbs.map((c) => ({ name: c.name, path: c.url ?? '/' })),
+              origin,
+            ),
           ]),
         }}
       />

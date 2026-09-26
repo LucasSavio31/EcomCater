@@ -7,7 +7,10 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ValidationError
-from app.modules.analytics.models import AnalyticsSettings
+from app.modules.analytics.models import AnalyticsSettings, AnalyticsSiteSettings
+from app.modules.domains import sites
+
+TagRow = AnalyticsSettings | AnalyticsSiteSettings
 
 _ID_PATTERNS = {
     "gtm_container_id": re.compile(r"^GTM-[A-Z0-9]{4,10}$", re.I),
@@ -24,6 +27,8 @@ _STR_FIELDS = {
     "meta_pixel_id",
     "meta_test_event_code",
     "merchant_center_verification_code",
+    "seo_title",
+    "seo_description",
 }
 _BOOL_FIELDS = {
     "gtm_enabled",
@@ -32,6 +37,7 @@ _BOOL_FIELDS = {
     "meta_pixel_enabled",
     "meta_capi_enabled",
     "merchant_center_enabled",
+    "seo_noindex",
 }
 
 
@@ -41,6 +47,35 @@ async def get_settings(db: AsyncSession) -> AnalyticsSettings:
         row = AnalyticsSettings(id=1)
         db.add(row)
         await db.flush()
+    return row
+
+
+def is_primary_site(host: str | None) -> bool:
+    """None/host desconhecido/principal -> usa a configuração de sempre (id=1)."""
+    h = sites.site_of(host) if host else None
+    return h is None or h == sites.primary_host()
+
+
+def _empty_site_row(hostname: str) -> AnalyticsSiteSettings:
+    """Domínio extra ainda sem configuração: tudo DESLIGADO (nunca herda os
+    pixels do principal -- cada domínio é um site próprio pras ferramentas)."""
+    return AnalyticsSiteSettings(
+        hostname=hostname,
+        **{k: False for k in _BOOL_FIELDS},
+    )
+
+
+async def get_for_site(db: AsyncSession, host: str | None, *, create: bool = False) -> TagRow:
+    """Tags do domínio `host` (loja). Principal/desconhecido -> `get_settings`."""
+    if is_primary_site(host):
+        return await get_settings(db)
+    hostname = sites.site_of(host)
+    row = await db.get(AnalyticsSiteSettings, hostname)
+    if row is None:
+        row = _empty_site_row(hostname)
+        if create:
+            db.add(row)
+            await db.flush()
     return row
 
 
@@ -56,8 +91,8 @@ def _clean_id(field: str, value: str) -> str:
     return value
 
 
-async def update_settings(db: AsyncSession, data: dict) -> AnalyticsSettings:
-    row = await get_settings(db)
+async def update_settings(db: AsyncSession, data: dict, host: str | None = None) -> TagRow:
+    row = await get_for_site(db, host, create=True)
 
     for key in _BOOL_FIELDS:
         if data.get(key) is not None:
@@ -96,7 +131,7 @@ async def update_settings(db: AsyncSession, data: dict) -> AnalyticsSettings:
     return row
 
 
-def to_public(row: AnalyticsSettings) -> dict:
+def to_public(row: TagRow) -> dict:
     return {
         "gtm_enabled": row.gtm_enabled,
         "gtm_container_id": row.gtm_container_id,
@@ -109,10 +144,13 @@ def to_public(row: AnalyticsSettings) -> dict:
         "meta_pixel_id": row.meta_pixel_id,
         "merchant_center_enabled": row.merchant_center_enabled,
         "merchant_center_verification_code": row.merchant_center_verification_code,
+        "seo_title": row.seo_title,
+        "seo_description": row.seo_description,
+        "seo_noindex": bool(row.seo_noindex),
     }
 
 
-def to_admin(row: AnalyticsSettings) -> dict:
+def to_admin(row: TagRow) -> dict:
     return {
         **to_public(row),
         "meta_capi_enabled": row.meta_capi_enabled,

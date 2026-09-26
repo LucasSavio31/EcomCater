@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Suspense } from 'react';
-import './globals.css';
+import '../globals.css';
 import { getTheme, ThemeStyle } from '@/modules/theme';
 import { getMenu } from '@/modules/menus/api';
 import { getAnalyticsConfig } from '@/modules/analytics/get-config';
@@ -19,27 +19,35 @@ import { LeadPopupAuto } from '@/components/lead-popup-auto';
 import { CartProvider } from '@/modules/cart/cart-context';
 import { MiniCartDrawer } from '@/components/cart/mini-cart-drawer';
 import { AuthProvider } from '@/modules/customer/auth-context';
-import { SITE_NAME, SITE_URL, jsonLdScript, organizationJsonLd, webSiteJsonLd } from '@/lib/seo';
+import { SITE_NAME, jsonLdScript, organizationJsonLd, webSiteJsonLd } from '@/lib/seo';
 import { API_BASE_URL } from '@/lib/api-client';
+import { DEFAULT_SITE, siteApiOrigin, siteOrigin } from '@/lib/site';
 
-// Origem da API/mídia (porta diferente da loja = origem diferente): abrir a
-// conexão TLS cedo economiza o RTT do primeiro request de imagem/JSON.
-const API_ORIGIN = (() => {
-  try {
-    return new URL(API_BASE_URL).origin;
-  } catch {
-    return '';
-  }
-})();
+// Layout RAIZ de cada domínio (multi-domínio): o middleware reescreve
+// `/<rota>` pra `/<site>/<rota>`, então cada domínio tem o próprio cache de
+// página, `metadataBase` (canonical/OG absolutos), tags e SEO.
+interface LayoutParams {
+  params: Promise<{ site: string }>;
+}
 
-export async function generateMetadata(): Promise<Metadata> {
-  const theme = await getTheme();
+// Com o segmento dinâmico [site], sem isto o Next montaria TODA página a cada
+// request (sem ISR). O domínio padrão é pré-gerado no build; os outros entram
+// no cache na 1ª visita (dynamicParams).
+export function generateStaticParams(): { site: string }[] {
+  return [{ site: DEFAULT_SITE }];
+}
+
+export async function generateMetadata({ params }: LayoutParams): Promise<Metadata> {
+  const { site } = await params;
+  const [theme, cfg] = await Promise.all([getTheme(), getAnalyticsConfig(site)]);
   const favicon = theme.favicon_url || '/icons/icon-192.png';
   const name = theme.store_name?.trim() || SITE_NAME;
   return {
-    metadataBase: new URL(SITE_URL),
-    title: { default: name, template: `%s · ${name}` },
-    description: 'Loja online.',
+    metadataBase: new URL(siteOrigin(site)),
+    title: { default: cfg.seo_title?.trim() || name, template: `%s · ${name}` },
+    description: cfg.seo_description || 'Loja online.',
+    // domínio marcado "não indexar" (o middleware também manda X-Robots-Tag)
+    ...(cfg.seo_noindex ? { robots: { index: false, follow: false } } : {}),
     manifest: '/manifest.webmanifest',
     applicationName: name,
     icons: {
@@ -62,18 +70,31 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+  params,
+}: Readonly<{ children: React.ReactNode; params: Promise<{ site: string }> }>) {
+  const { site } = await params;
   const [theme, headerMenu, footerMenu, analytics] = await Promise.all([
     getTheme(),
     getMenu('header'),
     getMenu('footer'),
-    getAnalyticsConfig(),
+    // só as tags DESTE domínio (pixel/GTM/GA4/Ads/Merchant são por domínio)
+    getAnalyticsConfig(site),
   ]);
 
+  const origin = siteOrigin(site);
   const orgLd = jsonLdScript([
-    organizationJsonLd({ logoUrl: theme.logo_url ?? undefined, name: theme.store_name }),
-    webSiteJsonLd(theme.store_name),
+    organizationJsonLd({ logoUrl: theme.logo_url ?? undefined, name: theme.store_name, url: origin }),
+    webSiteJsonLd(theme.store_name, origin),
   ]);
+  // Origem da API do domínio (o navegador fala com api.<site>): abrir a
+  // conexão TLS cedo economiza o RTT do primeiro request de JSON.
+  const API_ORIGIN = (() => {
+    try {
+      return new URL(siteApiOrigin(site, API_BASE_URL)).origin;
+    } catch {
+      return '';
+    }
+  })();
 
   return (
     // suppressHydrationWarning: extensões (Google Tag Assistant etc.) injetam

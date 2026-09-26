@@ -25,11 +25,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.shared.models_base import Base
 
 
-class AnalyticsSettings(Base):
-    __tablename__ = "analytics_settings"
-    __table_args__ = (CheckConstraint("id = 1", name="singleton"),)
-
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, default=1)
+class TagFieldsMixin:
+    """Tags de marketing + verificação + SEO do site -- iguais no domínio
+    principal (`AnalyticsSettings`) e em cada domínio extra
+    (`AnalyticsSiteSettings`): cada domínio tem os próprios."""
 
     # Google Tag Manager
     gtm_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
@@ -61,6 +60,31 @@ class AnalyticsSettings(Base):
     merchant_center_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     merchant_center_verification_code: Mapped[str | None] = mapped_column(String(100))
 
+    # SEO do site neste domínio: título/descrição padrão (home e fallback das
+    # páginas sem SEO próprio) e opção de tirar o domínio do Google.
+    seo_title: Mapped[str | None] = mapped_column(String(200))
+    seo_description: Mapped[str | None] = mapped_column(String(320))
+    seo_noindex: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+class AnalyticsSettings(TagFieldsMixin, Base):
+    """Tags do domínio PRINCIPAL (linha única, id=1) -- a configuração de sempre."""
+
+    __tablename__ = "analytics_settings"
+    __table_args__ = (CheckConstraint("id = 1", name="singleton"),)
+
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, default=1)
+
+
+class AnalyticsSiteSettings(TagFieldsMixin, Base):
+    """Tags de um domínio EXTRA (multi-domínio): pixel/GTM/GA4/Ads/Merchant são
+    por domínio -- cada site carrega só as próprias tags e as ferramentas o
+    enxergam como um site único. Chave = hostname da loja (ex.: loja-b.com.br)."""
+
+    __tablename__ = "analytics_site_settings"
+
+    hostname: Mapped[str] = mapped_column(String(255), primary_key=True)
