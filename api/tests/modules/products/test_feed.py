@@ -159,7 +159,7 @@ async def test_feed_uses_gtin_when_barcode_present(client, admin_token, auth_hea
 
 
 @pytest.mark.asyncio
-async def test_feed_uses_mpn_and_identifier_exists_no_without_barcode(client, admin_token, auth_headers):
+async def test_feed_identifier_exists_no_without_barcode(client, admin_token, auth_headers):
     h = auth_headers(admin_token)
     cat = await _mk_category(client, h)
     p = await _mk_product(client, h, cat["id"])
@@ -169,5 +169,78 @@ async def test_feed_uses_mpn_and_identifier_exists_no_without_barcode(client, ad
     root = ET.fromstring(r.content)
     item = root.find("channel").find("item")
     assert item.find(_g("gtin")) is None
-    assert item.find(_g("mpn")).text
+    assert item.find(_g("mpn")) is None  # SKU interno não é MPN de fabricante
     assert item.find(_g("identifier_exists")).text == "no"
+
+
+@pytest.mark.asyncio
+async def test_feed_sends_color_size_gender_and_age_group(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    parent = await _mk_category(client, h, name="Masculino")
+    child = (
+        await client.post("/api/admin/categories", json={"name": "Botas", "parent_id": parent["id"]}, headers=h)
+    ).json()
+    p = await _mk_product(
+        client, h, child["id"], name="BOTA COTURNO 2019 LATEGO",
+        description="<p>Bota casual.</p><ul><li>Solado de borracha</li><li>Palmilha removível</li></ul>",
+    )
+    await _upload_image(client, h, p["id"])
+    r = await client.put(f"/api/admin/products/{p['id']}/color-group", json={"color_name": "MARINHO"}, headers=h)
+    assert r.status_code == 200, r.text
+
+    await client.put(
+        f"/api/admin/products/{p['id']}/option-types",
+        json=[{"name": "Numeração", "is_size": True, "values": [{"value": "40"}]}],
+        headers=h,
+    )
+    detail = (await client.get(f"/api/products/{p['slug']}")).json()
+    v40 = detail["option_types"][0]["values"][0]["id"]
+    await client.post(
+        f"/api/admin/products/{p['id']}/variants",
+        json={"sku": "FEED-ATTR-40", "option_value_ids": [v40], "stock_qty": 1},
+        headers=h,
+    )
+
+    r = await client.get("/api/products/feed/google-merchant.xml")
+    item = ET.fromstring(r.content).find("channel").find("item")
+    assert item.find(_g("color")).text == "Marinho"
+    assert item.find(_g("size")).text == "40"
+    assert item.find(_g("gender")).text == "male"
+    assert item.find(_g("age_group")).text == "adult"
+    assert item.find("title").text == "Bota Coturno 2019 Latego Masculina - 40"
+    assert item.find(_g("google_product_category")).text == "187"
+    assert item.find(_g("product_type")).text == "Masculino > Botas"
+    assert item.find("description").text == "Bota casual.\nSolado de borracha\nPalmilha removível"
+    assert item.find(_g("sale_price")) is None
+
+
+@pytest.mark.asyncio
+async def test_feed_gender_unisex_and_kids_from_category(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    cat = await _mk_category(client, h, name="Infantil")
+    p = await _mk_product(client, h, cat["id"])
+    await _upload_image(client, h, p["id"])
+
+    r = await client.get("/api/products/feed/google-merchant.xml")
+    item = ET.fromstring(r.content).find("channel").find("item")
+    assert item.find(_g("gender")).text == "unisex"
+    assert item.find(_g("age_group")).text == "kids"
+    assert item.find(_g("color")) is None
+    assert item.find(_g("size")) is None
+
+
+@pytest.mark.asyncio
+async def test_feed_color_falls_back_to_description(client, admin_token, auth_headers):
+    h = auth_headers(admin_token)
+    cat = await _mk_category(client, h, name="Feminino")
+    p = await _mk_product(
+        client, h, cat["id"], name="TENIS 2085",
+        description="<ul><li>Tipo: tênis</li><li>Cor: nude rosa</li></ul>",
+    )
+    await _upload_image(client, h, p["id"])
+
+    r = await client.get("/api/products/feed/google-merchant.xml")
+    item = ET.fromstring(r.content).find("channel").find("item")
+    assert item.find(_g("color")).text == "Nude Rosa"
+    assert item.find(_g("gender")).text == "female"
+    assert item.find("title").text == "Tênis 2085 Feminino"

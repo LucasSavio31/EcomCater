@@ -143,6 +143,9 @@ export interface ProductJsonLdInput {
   currency?: string;
   availability?: 'InStock' | 'OutOfStock' | 'PreOrder';
   url: string;
+  color?: string;
+  /** schema.org PeopleAudience -- mesmo gênero que vai no feed do Merchant Center */
+  gender?: 'male' | 'female' | 'unisex';
   ratingValue?: number;
   ratingCount?: number;
 }
@@ -157,11 +160,16 @@ export function productJsonLd(input: ProductJsonLdInput): JsonLd {
     sku: input.sku,
     ...(input.brand ? { brand: { '@type': 'Brand', name: input.brand } } : {}),
     image: input.images,
+    ...(input.color ? { color: input.color } : {}),
+    ...(input.gender
+      ? { audience: { '@type': 'PeopleAudience', suggestedGender: input.gender } }
+      : {}),
     offers: {
       '@type': 'Offer',
       priceCurrency: currency,
       price: (input.priceCents / 100).toFixed(2),
       availability: `https://schema.org/${input.availability ?? 'InStock'}`,
+      itemCondition: 'https://schema.org/NewCondition',
       url: input.url,
     },
     ...(input.ratingValue && input.ratingCount
@@ -174,6 +182,16 @@ export function productJsonLd(input: ProductJsonLdInput): JsonLd {
         }
       : {}),
   };
+}
+
+/** Gênero pelo caminho da categoria ("masculino/botas") -- mesma regra do feed. */
+export function genderFromCategoryPath(path?: string | null): 'male' | 'female' | undefined {
+  const segs = (path ?? '').toLowerCase().split('/');
+  const fem = segs.some((s) => ['feminino', 'feminina', 'mulher'].includes(s));
+  const masc = segs.some((s) => ['masculino', 'masculina', 'homem'].includes(s));
+  if (fem && !masc) return 'female';
+  if (masc && !fem) return 'male';
+  return undefined;
 }
 
 /** String pronta para `<script type="application/ld+json">`. */
