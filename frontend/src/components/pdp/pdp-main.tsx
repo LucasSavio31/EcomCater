@@ -43,9 +43,6 @@ export function PdpMain({ product, redirectAfterAdd, miniCart, theme }: PdpMainP
         <h1 className="text-2xl font-bold leading-tight sm:text-3xl">{product.name}</h1>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Stars value={product.rating_avg} count={product.rating_count} size="md" />
-          {product.sku_root && (
-            <span className="text-xs text-text-muted">Referência: {product.sku_root}</span>
-          )}
         </div>
 
         <div id="pdp-buybox">

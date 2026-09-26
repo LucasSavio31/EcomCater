@@ -377,3 +377,30 @@ async def test_review_flow(client, admin_token, auth_headers):
     detail = (await client.get(f"/api/products/{p['slug']}")).json()
     assert detail["rating_count"] == 1
     assert detail["rating_avg"] == 5.0
+
+
+@pytest.mark.asyncio
+async def test_renamed_product_old_slug_resolves_to_current(client, admin_token, auth_headers):
+    """Renomear muda o slug; o link antigo continua achando o produto (a loja
+    faz 301 pro slug novo) -- não quebra link indexado no Google."""
+    h = auth_headers(admin_token)
+    cat = await _mk_category(client, h)
+    p = await _mk_product(client, h, cat["id"], name="Tenis 2085 Ferrari")
+    assert p["slug"] == "tenis-2085-ferrari"
+
+    r = await client.patch(f"/api/admin/products/{p['id']}", json={"name": "Tenis 2085 Vermelho"}, headers=h)
+    assert r.status_code == 200, r.text
+
+    new = await client.get("/api/products/tenis-2085-vermelho")
+    assert new.status_code == 200
+    old = await client.get("/api/products/tenis-2085-ferrari")
+    assert old.status_code == 200
+    assert old.json()["slug"] == "tenis-2085-vermelho"
+
+    # voltar ao nome antigo não pode criar laço de redirecionamento
+    r = await client.patch(f"/api/admin/products/{p['id']}", json={"name": "Tenis 2085 Ferrari"}, headers=h)
+    assert r.status_code == 200, r.text
+    back = await client.get("/api/products/tenis-2085-ferrari")
+    assert back.json()["slug"] == "tenis-2085-ferrari"
+    fwd = await client.get("/api/products/tenis-2085-vermelho")
+    assert fwd.json()["slug"] == "tenis-2085-ferrari"

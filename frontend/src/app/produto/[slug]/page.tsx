@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { Accordion } from '@ecom/ui';
 import { getProduct, getProducts } from '@/modules/catalog/api';
 import { getTheme } from '@/modules/theme';
@@ -16,6 +16,7 @@ import {
   breadcrumbJsonLd,
   buildMetadata,
   jsonLdScript,
+  genderFromCategoryPath,
   productJsonLd,
   SITE_URL,
 } from '@/lib/seo';
@@ -67,6 +68,8 @@ export default async function ProdutoPage({ params }: PageProps) {
   const [product, theme] = await Promise.all([getProduct(slug), getTheme()]);
 
   if (!product) notFound();
+  // slug antigo (produto renomeado) -> 308 permanente pro endereço atual
+  if (product.slug !== decodeURIComponent(slug)) permanentRedirect(`/produto/${product.slug}`);
 
   const crumbs = buildCrumbs(product.breadcrumb ?? []);
   const primaryImage = product.images.find((i) => i.is_primary) ?? product.images[0];
@@ -152,12 +155,13 @@ export default async function ProdutoPage({ params }: PageProps) {
             productJsonLd({
               name: product.name,
               description: product.short_description ?? undefined,
-              sku: product.sku_root ?? undefined,
               brand: product.brand ?? undefined,
               images: primaryImageUrl ? [primaryImageUrl] : undefined,
               priceCents: product.price_cents,
               availability: inStock ? 'InStock' : 'OutOfStock',
               url: `${SITE_URL}/produto/${product.slug}`,
+              color: product.color_name ?? undefined,
+              gender: genderFromCategoryPath(product.category?.path),
               ratingValue: product.rating_count > 0 ? product.rating_avg : undefined,
               ratingCount: product.rating_count > 0 ? product.rating_count : undefined,
             }),

@@ -17,6 +17,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -232,6 +233,19 @@ class ProductSpec(UUIDPKMixin, Base):
     position: Mapped[int] = mapped_column(Integer, default=0)
 
     product: Mapped[Product] = relationship(back_populates="specs")
+
+
+class ProductSlugRedirect(Base):
+    """Slug antigo de um produto renomeado -> redireciona (301) pro atual, pra
+    não quebrar link indexado no Google/Merchant Center nem link compartilhado."""
+
+    __tablename__ = "product_slug_redirects"
+
+    old_slug: Mapped[str] = mapped_column(String(260), primary_key=True)
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class ProductRelated(Base):

@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -19,6 +20,7 @@ from app.modules.products.models import (
     ProductImage,
     ProductRelated,
     ProductReview,
+    ProductSlugRedirect,
     ProductSpec,
     ProductVariant,
     VariantOptionType,
@@ -90,6 +92,14 @@ async def _unique_slug(db: AsyncSession, name: str, exclude: uuid.UUID | None = 
             return cand
         cand = f"{base}-{i}"
         i += 1
+
+
+async def _remember_old_slug(db: AsyncSession, product: Product, old_slug: str) -> None:
+    """Guarda o slug anterior pra redirecionar (301) o link antigo pro novo."""
+    if not old_slug or old_slug == product.slug:
+        return
+    await db.execute(sa_delete(ProductSlugRedirect).where(ProductSlugRedirect.old_slug.in_([old_slug, product.slug])))
+    db.add(ProductSlugRedirect(old_slug=old_slug, product_id=product.id))
 
 
 # --------------------------------------------------------------------- serialização
@@ -205,6 +215,11 @@ async def _color_siblings(
 async def get_detail_by_slug(db: AsyncSession, slug: str, *, include_unpublished: bool = False) -> dict:
     stmt = _detail_loader(select(Product).where(Product.slug == slug))
     product = await db.scalar(stmt)
+    if not product:
+        # slug antigo de produto renomeado -> devolve o atual (a loja faz o 301)
+        pid = await db.scalar(select(ProductSlugRedirect.product_id).where(ProductSlugRedirect.old_slug == slug))
+        if pid:
+            product = await db.scalar(_detail_loader(select(Product).where(Product.id == pid)))
     if not product or (not include_unpublished and product.status != "active"):
         raise NotFoundError("Produto não encontrado.")
 
@@ -970,7 +985,9 @@ async def update(db: AsyncSession, product_id: str, data: dict) -> Product:
     product = await get_admin(db, product_id)
     if "name" in data and data["name"] and data["name"] != product.name:
         product.name = data["name"]
+        old_slug = product.slug
         product.slug = await _unique_slug(db, data["name"], exclude=product.id)
+        await _remember_old_slug(db, product, old_slug)
     related = data.pop("related_product_ids", None)
     extra = data.pop("extra_category_ids", None)
     # size_chart_id / category_id: aceitam null explícito para DESVINCULAR
