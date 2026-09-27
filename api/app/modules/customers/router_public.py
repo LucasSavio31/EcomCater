@@ -81,6 +81,7 @@ async def forgot_password(
         db, email=str(body.get("email") or "").strip() or None,
         cpf=str(body.get("cpf") or "").strip() or None, ip=ip,
         site_url=sites.request_site_url(request),
+        site=sites.request_site(request),
     )
     return {"ok": True}
 

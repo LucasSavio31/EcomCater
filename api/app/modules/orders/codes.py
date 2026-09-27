@@ -5,24 +5,25 @@ Sem login → cai na tela de login e, ao entrar, abre o pedido
 """
 from __future__ import annotations
 
-from app.core.config import settings
+from app.modules.domains.sites import url_for
 
 
-def order_store_url(number: str) -> str:
-    return f"{settings.site_url.rstrip('/')}/minha-conta/pedidos?pedido={number}"
+def order_store_url(number: str, site: str | None = None) -> str:
+    """Link do pedido na loja do domínio em que ele foi feito (multi-domínio)."""
+    return f"{url_for(site)}/minha-conta/pedidos?pedido={number}"
 
 
-def order_qr_svg(number: str) -> str:
+def order_qr_svg(number: str, site: str | None = None) -> str:
     import segno
 
-    return segno.make(order_store_url(number), error="m").svg_inline(scale=4, border=2, dark="#111111")
+    return segno.make(order_store_url(number, site), error="m").svg_inline(scale=4, border=2, dark="#111111")
 
 
-def order_qr_data_uri(number: str) -> str | None:
+def order_qr_data_uri(number: str, site: str | None = None) -> str | None:
     try:
         import segno
 
-        return segno.make(order_store_url(number), error="m").png_data_uri(
+        return segno.make(order_store_url(number, site), error="m").png_data_uri(
             scale=4, border=2, dark="#111111"
         )
     except Exception:  # noqa: BLE001

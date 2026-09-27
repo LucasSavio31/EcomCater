@@ -162,12 +162,12 @@ async def order_pulse(number: str, db: DbDep, _: AdminDep) -> dict:
     return await service.order_pulse(db, number)
 
 
-def _order_code_data_uri(number: str) -> str | None:
+def _order_code_data_uri(number: str, site: str | None = None) -> str | None:
     """QR Code (PNG data URI) que aponta para o pedido na loja. Embutido direto
     na resposta para não depender de outra requisição na hora de imprimir."""
     from app.modules.orders.codes import order_qr_data_uri
 
-    return order_qr_data_uri(number)
+    return order_qr_data_uri(number, site)
 
 
 @router.get("/{number}/qr.svg")
@@ -181,7 +181,7 @@ async def order_qr(
 
     order = await service.get_by_number(db, number)  # 404 se não existe
     return Response(
-        content=order_qr_svg(order.number),
+        content=order_qr_svg(order.number, order.domain_name),
         media_type="image/svg+xml",
         headers={"Cache-Control": "private, max-age=300"},
     )
@@ -191,7 +191,7 @@ async def order_qr(
 async def get_order(number: str, db: DbDep, _: AdminDep) -> dict:
     order = await service.get_by_number(db, number)
     out = {**service.to_out(order), "payment": await _payment_out(db, order)}
-    out["qr_data_uri"] = _order_code_data_uri(order.number)
+    out["qr_data_uri"] = _order_code_data_uri(order.number, order.domain_name)
     out["domain_name"] = order.domain_name  # de qual domínio veio (informativo)
     return await service.attach_variation_options(db, out)
 

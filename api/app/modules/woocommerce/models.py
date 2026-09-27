@@ -29,6 +29,9 @@ class WooKey(UUIDPKMixin, TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(String(160))
     permission: Mapped[str] = mapped_column(String(12), default="read_write")
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # multi-domínio: a chave é de UM domínio (None = principal) -- o ERP
+    # conectado com ela só enxerga/atualiza os pedidos feitos nesse domínio.
+    hostname: Mapped[str | None] = mapped_column(String(255))
 
 
 class WooWebhook(Base):
@@ -40,6 +43,9 @@ class WooWebhook(Base):
     delivery_url: Mapped[str] = mapped_column(String(500))
     secret: Mapped[str] = mapped_column(String(200))
     status: Mapped[str] = mapped_column(String(12), default="active")
+    # domínio da chave que criou o webhook (None = principal): só recebe os
+    # eventos dos pedidos desse domínio.
+    hostname: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

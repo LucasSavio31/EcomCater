@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from app.core.errors import NotFoundError, ValidationError
 from app.core.security import hash_password
 from app.modules.categories.models import Category
+from app.modules.domains import sites
 from app.modules.orders import service as orders_service
 from app.modules.orders.models import Order
 from app.modules.products.models import Product, ProductImage, ProductVariant, VariantOptionValue
@@ -40,7 +41,29 @@ def _clamp_per_page(per_page: int | None) -> int:
 
 # --------------------------------------------------------------------- keys
 
-async def generate_key(db: AsyncSession, *, description: str | None, permission: str) -> tuple[WooKey, str, str]:
+# ------------------------------------------------------------- multi-domínio
+def scope_of(hostname: str | None) -> str | None:
+    """Escopo de domínio de uma chave/webhook/pedido: None = domínio principal
+    (inclui pedidos antigos, sem domínio gravado)."""
+    h = (hostname or "").strip().lower() or None
+    return None if h is None or h == sites.primary_host() else h
+
+
+def _order_scope_cond(scope: str | None):
+    if scope is not None:
+        return Order.domain_name == scope
+    primary = sites.primary_host()
+    cond = Order.domain_name.is_(None)
+    return cond | (Order.domain_name == primary) if primary else cond
+
+
+def order_in_scope(order: Order, key: WooKey) -> bool:
+    return scope_of(order.domain_name) == scope_of(key.hostname)
+
+
+async def generate_key(
+    db: AsyncSession, *, description: str | None, permission: str, hostname: str | None = None
+) -> tuple[WooKey, str, str]:
     consumer_key = "ck_" + secrets.token_hex(20)
     consumer_secret = "cs_" + secrets.token_hex(20)
     row = WooKey(
@@ -48,6 +71,7 @@ async def generate_key(db: AsyncSession, *, description: str | None, permission:
         consumer_secret_hash=hash_password(consumer_secret),
         description=description,
         permission=permission,
+        hostname=scope_of(hostname),
     )
     db.add(row)
     await db.flush()
@@ -83,10 +107,17 @@ async def _order_out(db: AsyncSession, order: Order) -> dict:
 
 async def list_orders(
     db: AsyncSession, *, page: int | None, per_page: int | None, status: str | None,
+    scope: str | None = None,
 ) -> tuple[list[dict], int]:
+    """`scope`: domínio da chave -- só os pedidos feitos nele (multi-domínio)."""
     page = _clamp_page(page)
     per_page = _clamp_per_page(per_page)
-    stmt = select(Order).options(selectinload(Order.items)).order_by(Order.created_at.desc())
+    stmt = (
+        select(Order)
+        .where(_order_scope_cond(scope))
+        .options(selectinload(Order.items))
+        .order_by(Order.created_at.desc())
+    )
     if status:
         our_status = mapping.WC_STATUS_TO_ORDER.get(status)
         if our_status:
@@ -291,7 +322,7 @@ async def update_variant(db: AsyncSession, variant: ProductVariant, patch: dict)
 
 # --------------------------------------------------------------- webhooks
 
-async def create_webhook(db: AsyncSession, payload: dict) -> WooWebhook:
+async def create_webhook(db: AsyncSession, payload: dict, hostname: str | None = None) -> WooWebhook:
     topic = payload.get("topic")
     if topic not in WEBHOOK_TOPICS:
         raise ValidationError(
@@ -306,25 +337,33 @@ async def create_webhook(db: AsyncSession, payload: dict) -> WooWebhook:
         delivery_url=delivery_url,
         secret=payload.get("secret") or secrets.token_urlsafe(24),
         status=payload.get("status") or "active",
+        hostname=scope_of(hostname),
     )
     db.add(row)
     await db.flush()
     return row
 
 
-async def list_webhooks(db: AsyncSession) -> list[WooWebhook]:
-    return list(await db.scalars(select(WooWebhook).order_by(WooWebhook.id)))
+_ALL = object()
 
 
-async def get_webhook(db: AsyncSession, webhook_id: int) -> WooWebhook:
+async def list_webhooks(db: AsyncSession, hostname=_ALL) -> list[WooWebhook]:
+    """`hostname`: só os webhooks desse domínio (a chave do ERP só vê os dela)."""
+    rows = list(await db.scalars(select(WooWebhook).order_by(WooWebhook.id)))
+    if hostname is _ALL:
+        return rows
+    return [r for r in rows if scope_of(r.hostname) == scope_of(hostname)]
+
+
+async def get_webhook(db: AsyncSession, webhook_id: int, hostname=_ALL) -> WooWebhook:
     row = await db.get(WooWebhook, webhook_id)
-    if not row:
+    if not row or (hostname is not _ALL and scope_of(row.hostname) != scope_of(hostname)):
         raise NotFoundError("Webhook não encontrado.")
     return row
 
 
-async def update_webhook(db: AsyncSession, webhook_id: int, patch: dict) -> WooWebhook:
-    row = await get_webhook(db, webhook_id)
+async def update_webhook(db: AsyncSession, webhook_id: int, patch: dict, hostname=_ALL) -> WooWebhook:
+    row = await get_webhook(db, webhook_id, hostname)
     for field in ("name", "delivery_url", "status", "secret"):
         if patch.get(field):
             setattr(row, field, patch[field])
@@ -333,8 +372,8 @@ async def update_webhook(db: AsyncSession, webhook_id: int, patch: dict) -> WooW
     return row
 
 
-async def delete_webhook(db: AsyncSession, webhook_id: int) -> None:
-    row = await get_webhook(db, webhook_id)
+async def delete_webhook(db: AsyncSession, webhook_id: int, hostname=_ALL) -> None:
+    row = await get_webhook(db, webhook_id, hostname)
     await db.delete(row)
     await db.flush()
 
@@ -360,11 +399,16 @@ async def deliver(db: AsyncSession, *, topic: str, order: Order) -> None:
     """Dispara o webhook pros assinantes ativos daquele tópico -- é a
     direção "loja -> ERP" da integração, no formato de verdade do
     WooCommerce (headers `X-WC-Webhook-*` + assinatura HMAC)."""
-    hooks = list(
-        await db.scalars(
+    await sites.refresh()
+    order_scope = scope_of(order.domain_name)
+    hooks = [
+        h
+        for h in await db.scalars(
             select(WooWebhook).where(WooWebhook.topic == topic, WooWebhook.status == "active")
         )
-    )
+        # multi-domínio: só o ERP do domínio onde o pedido foi feito recebe
+        if scope_of(h.hostname) == order_scope
+    ]
     if not hooks:
         return
     payload = await _order_out(db, order)

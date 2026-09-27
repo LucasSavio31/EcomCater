@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_admin, require_role
-from app.core.errors import ValidationError
+from app.core.errors import NotFoundError, ValidationError
 from app.core.module_registry import all_specs
 from app.core.ratelimit import rate_limit
 from app.modules.admin import service
@@ -538,8 +538,102 @@ async def test_smtp(
     to = payload.get("to")
     if not to:
         raise ValidationError("Informe o e-mail de destino.")
-    res = await mailer.send_test(db, to)
+    # `site`: testa o SMTP vinculado a esse domínio (multi-domínio)
+    res = await mailer.send_test(db, to, site=(payload.get("site") or None))
     await db.commit()
     if not res["ok"]:
         raise ValidationError(f"SMTP recusou o envio: {res['error']}")
     return {"sent": True}
+
+
+# ------------------------------------------------ SMTP por domínio (multi-domínio)
+_SMTP_FIELDS = ("host", "port", "username", "use_tls", "use_ssl", "from_email", "from_name", "order_bcc")
+
+
+def _smtp_out(row) -> dict:
+    if not row:
+        return {"host": None, "configured": False, "password_set": False}
+    return {
+        **{k: getattr(row, k) for k in _SMTP_FIELDS},
+        "configured": bool(row.host),
+        "password_set": bool(row.password_enc),
+    }
+
+
+@router.get("/smtp/domains")
+async def list_smtp_domains(db: DbDep, _: Annotated[AdminUser, Depends(require_role("admin"))]) -> list[dict]:
+    """Um bloco por domínio (principal primeiro): qual SMTP os e-mails das
+    vendas daquele domínio usam. Domínio sem SMTP próprio usa o principal."""
+    from app.modules.admin.models import SmtpDomainSettings, SmtpSettings
+    from app.modules.domains import sites
+    from app.modules.domains.models import Domain
+
+    await sites.refresh(force=True)
+    primary = sites.primary_host()
+    out = [{
+        "hostname": primary, "is_primary": True, "status": "active",
+        "smtp": _smtp_out(await db.get(SmtpSettings, 1)), "uses_primary": False,
+    }]
+    for d in await db.scalars(select(Domain).order_by(Domain.created_at)):
+        host = d.hostname.lower()
+        if host == primary:
+            continue
+        row = await db.get(SmtpDomainSettings, host)
+        out.append({
+            "hostname": host, "is_primary": False, "status": d.status,
+            "smtp": _smtp_out(row), "uses_primary": not (row and row.host),
+        })
+    return out
+
+
+async def _registered_extra_domain(db, hostname: str) -> str:
+    from app.modules.domains import sites
+    from app.modules.domains.models import Domain
+
+    host = hostname.strip().lower()
+    await sites.refresh(force=True)
+    if host == sites.primary_host():
+        raise ValidationError("O domínio principal usa o SMTP principal (primeiro bloco).")
+    if not await db.scalar(select(Domain.id).where(Domain.hostname == host)):
+        raise NotFoundError("Domínio não cadastrado em Infraestrutura → Domínios.")
+    return host
+
+
+@router.put("/smtp/domains/{hostname}")
+async def update_smtp_domain(
+    hostname: str, payload: dict, db: DbDep, _: Annotated[AdminUser, Depends(require_role("admin"))]
+) -> dict:
+    """Vincula/atualiza o SMTP de um domínio extra -- as vendas feitas nele
+    mandam e-mail por este SMTP."""
+    from datetime import UTC, datetime
+
+    from app.modules.admin.models import SmtpDomainSettings
+
+    host = await _registered_extra_domain(db, hostname)
+    row = await db.get(SmtpDomainSettings, host)
+    if not row:
+        row = SmtpDomainSettings(hostname=host)
+        db.add(row)
+    for k in _SMTP_FIELDS:
+        if k in payload:
+            setattr(row, k, (payload[k] or None) if k == "order_bcc" else payload[k])
+    pwd = payload.get("password")
+    if pwd and pwd.strip() and set(pwd) != {"•"}:
+        row.password_enc = pwd
+    row.updated_at = datetime.now(UTC)
+    await db.flush()
+    return _smtp_out(row)
+
+
+@router.delete("/smtp/domains/{hostname}")
+async def remove_smtp_domain(
+    hostname: str, db: DbDep, _: Annotated[AdminUser, Depends(require_role("admin"))]
+) -> dict:
+    """Desvincula o SMTP do domínio -- os e-mails dele voltam a sair pelo principal."""
+    from app.modules.admin.models import SmtpDomainSettings
+
+    host = await _registered_extra_domain(db, hostname)
+    row = await db.get(SmtpDomainSettings, host)
+    if row:
+        await db.delete(row)
+    return {"ok": True}

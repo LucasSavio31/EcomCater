@@ -14,7 +14,7 @@ import {
   type WooPermission,
 } from '@/modules/woocommerce/api';
 
-const STORE_URL = ADMIN_API_BASE_URL.replace(/\/$/, '');
+const PRIMARY_STORE_URL = ADMIN_API_BASE_URL.replace(/\/$/, '');
 
 function CopyRow({ label, value }: { label: string; value: string }) {
   const toast = useToast();
@@ -45,10 +45,13 @@ function CopyRow({ label, value }: { label: string; value: string }) {
  * (Bling, SoftUp, e por aí vai) conecta aqui direto, sem nada sob medida:
  * só a URL da loja + uma chave gerada abaixo. Uma chave por ferramenta
  * (revogar uma não afeta as outras). */
-export function WooCommerceCard() {
+export function WooCommerceCard({ hostname = null }: { hostname?: string | null } = {}) {
+  // multi-domínio: cada domínio tem as próprias chaves -- o ERP conectado com
+  // a chave do domínio X só vê/atualiza os pedidos feitos em X.
+  const STORE_URL = hostname ? `https://api.${hostname}` : PRIMARY_STORE_URL;
   const toast = useToast();
-  const keysRes = useResource(() => woocommerceApi.listKeys());
-  const webhooksRes = useResource(() => woocommerceApi.listWebhooks());
+  const keysRes = useResource(() => woocommerceApi.listKeys(hostname), [hostname]);
+  const webhooksRes = useResource(() => woocommerceApi.listWebhooks(hostname), [hostname]);
   const [description, setDescription] = useState('');
   const [permission, setPermission] = useState<WooPermission>('read_write');
   const [creating, setCreating] = useState(false);
@@ -62,7 +65,7 @@ export function WooCommerceCard() {
       return;
     }
     setCreating(true);
-    const res = await woocommerceApi.createKey({ description: description.trim(), permission });
+    const res = await woocommerceApi.createKey({ description: description.trim(), permission, hostname });
     setCreating(false);
     if (!res.ok) {
       toast.error(res.error.message);

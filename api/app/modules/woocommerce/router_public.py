@@ -84,7 +84,9 @@ async def list_orders(
     per_page: int = Query(default=10),
     status: str | None = Query(default=None),
 ) -> JSONResponse:
-    items, total = await service.list_orders(db, page=page, per_page=per_page, status=status)
+    items, total = await service.list_orders(
+        db, page=page, per_page=per_page, status=status, scope=service.scope_of(_key.hostname)
+    )
     return _paged({}, items, total, per_page or 10)
 
 
@@ -92,7 +94,7 @@ async def list_orders(
 @router.get("/wc/v2/orders/{wc_id}")
 async def get_order(wc_id: int, db: DbDep, _key: WcAuthDep) -> dict:
     order = await service.get_order_by_wc_id(db, wc_id)
-    if not order:
+    if not order or not service.order_in_scope(order, _key):
         raise NotFoundError("Pedido não encontrado.")
     return await service.order_out(db, order)
 
@@ -101,7 +103,7 @@ async def get_order(wc_id: int, db: DbDep, _key: WcAuthDep) -> dict:
 @router.put("/wc/v2/orders/{wc_id}")
 async def update_order(wc_id: int, patch: dict, db: DbDep, _key: WcAuthDep) -> dict:
     order = await service.get_order_by_wc_id(db, wc_id)
-    if not order:
+    if not order or not service.order_in_scope(order, _key):
         raise NotFoundError("Pedido não encontrado.")
     await service.update_order(db, order, patch)
     await db.commit()
@@ -188,7 +190,7 @@ async def update_variation(
 @router.post("/wc/v3/webhooks")
 @router.post("/wc/v2/webhooks")
 async def create_webhook(payload: dict, db: DbDep, _key: WcAuthDep) -> dict:
-    row = await service.create_webhook(db, payload)
+    row = await service.create_webhook(db, payload, hostname=_key.hostname)
     await db.commit()
     return service.webhook_out(row)
 
@@ -196,21 +198,21 @@ async def create_webhook(payload: dict, db: DbDep, _key: WcAuthDep) -> dict:
 @router.get("/wc/v3/webhooks")
 @router.get("/wc/v2/webhooks")
 async def list_webhooks(db: DbDep, _key: WcAuthDep) -> list[dict]:
-    rows = await service.list_webhooks(db)
+    rows = await service.list_webhooks(db, _key.hostname)
     return [service.webhook_out(r) for r in rows]
 
 
 @router.get("/wc/v3/webhooks/{webhook_id}")
 @router.get("/wc/v2/webhooks/{webhook_id}")
 async def get_webhook(webhook_id: int, db: DbDep, _key: WcAuthDep) -> dict:
-    row = await service.get_webhook(db, webhook_id)
+    row = await service.get_webhook(db, webhook_id, _key.hostname)
     return service.webhook_out(row)
 
 
 @router.put("/wc/v3/webhooks/{webhook_id}")
 @router.put("/wc/v2/webhooks/{webhook_id}")
 async def update_webhook(webhook_id: int, patch: dict, db: DbDep, _key: WcAuthDep) -> dict:
-    row = await service.update_webhook(db, webhook_id, patch)
+    row = await service.update_webhook(db, webhook_id, patch, _key.hostname)
     await db.commit()
     return service.webhook_out(row)
 
@@ -218,8 +220,8 @@ async def update_webhook(webhook_id: int, patch: dict, db: DbDep, _key: WcAuthDe
 @router.delete("/wc/v3/webhooks/{webhook_id}")
 @router.delete("/wc/v2/webhooks/{webhook_id}")
 async def delete_webhook(webhook_id: int, db: DbDep, _key: WcAuthDep) -> dict:
-    row = await service.get_webhook(db, webhook_id)
+    row = await service.get_webhook(db, webhook_id, _key.hostname)
     out = service.webhook_out(row)
-    await service.delete_webhook(db, webhook_id)
+    await service.delete_webhook(db, webhook_id, _key.hostname)
     await db.commit()
     return out

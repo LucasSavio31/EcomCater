@@ -396,3 +396,88 @@ async def test_key_secret_shown_once(client, wc_key, admin_token, auth_headers):
     assert len(listed) == 1
     assert "consumer_secret" not in listed[0]
     assert listed[0]["consumer_key"] == wc_key["consumer_key"]
+
+
+# ------------------------------------------------------------ multi-domínio
+
+@pytest.mark.asyncio
+async def test_keys_and_webhooks_are_per_domain(client, variant, admin_token, auth_headers, db, monkeypatch):
+    """ERP conectado com a chave do domínio B só vê/recebe os pedidos de B;
+    a chave do principal segue vendo os do principal (inclusive antigos)."""
+    from app.modules.domains import sites
+    from app.modules.domains.models import STATUS_ACTIVE, Domain
+
+    db.add(Domain(hostname="loja-b.com.br", status=STATUS_ACTIVE))
+    await db.commit()
+    sites.invalidate()
+    h = auth_headers(admin_token)
+    try:
+        key_a = (await client.post("/api/admin/woocommerce/keys", json={"description": "ERP A"}, headers=h)).json()
+        key_b = (await client.post(
+            "/api/admin/woocommerce/keys", json={"description": "ERP B", "hostname": "loja-b.com.br"}, headers=h,
+        )).json()
+        assert key_b["hostname"] == "loja-b.com.br" and key_a["hostname"] is None
+        keys_b = (await client.get(
+            "/api/admin/woocommerce/keys", params={"hostname": "loja-b.com.br"}, headers=h,
+        )).json()
+        assert [k["description"] for k in keys_b] == ["ERP B"]
+
+        auth_a = (key_a["consumer_key"], key_a["consumer_secret"])
+        auth_b = (key_b["consumer_key"], key_b["consumer_secret"])
+        for auth, url in ((auth_a, "https://erp-a/hook"), (auth_b, "https://erp-b/hook")):
+            await client.post(
+                "/wp-json/wc/v3/webhooks", json={"topic": "order.created", "delivery_url": url}, auth=auth,
+            )
+
+        delivered: list[str] = []
+
+        class _Resp:
+            status_code = 200
+
+        class _Client:
+            def __init__(self, *a, **kw):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def post(self, url, *, content, headers):
+                delivered.append(url)
+                return _Resp()
+
+        monkeypatch.setattr(woo_service.httpx, "AsyncClient", _Client)
+
+        order_a = await _order(client, variant["variant_id"], email="a@test.example")
+        await client.post("/api/cart/items", json={"variant_id": variant["variant_id"], "quantity": 1})
+        r = await client.post(
+            "/api/orders/checkout",
+            json={"email": "b@test.example", "shipping_address": ADDRESS},
+            headers={"Origin": "https://loja-b.com.br"},
+        )
+        order_b = r.json()
+
+        from app.core.events import emit
+
+        delivered.clear()
+        await emit("order.created", {"order_id": order_b["id"], "number": order_b["number"]})
+        assert delivered == ["https://erp-b/hook"]
+        delivered.clear()
+        await emit("order.created", {"order_id": order_a["id"], "number": order_a["number"]})
+        assert delivered == ["https://erp-a/hook"]
+
+        emails_a = {o["billing"]["email"] for o in (await client.get("/wp-json/wc/v3/orders", auth=auth_a)).json()}
+        emails_b = {o["billing"]["email"] for o in (await client.get("/wp-json/wc/v3/orders", auth=auth_b)).json()}
+        assert emails_a == {"a@test.example"} and emails_b == {"b@test.example"}
+
+        # pedido de outro domínio: 404 pra chave errada
+        wc_id_b = (await client.get("/wp-json/wc/v3/orders", auth=auth_b)).json()[0]["id"]
+        assert (await client.get(f"/wp-json/wc/v3/orders/{wc_id_b}", auth=auth_a)).status_code == 404
+        assert (await client.get(f"/wp-json/wc/v3/orders/{wc_id_b}", auth=auth_b)).status_code == 200
+
+        hooks_b = (await client.get("/wp-json/wc/v3/webhooks", auth=auth_b)).json()
+        assert [w["delivery_url"] for w in hooks_b] == ["https://erp-b/hook"]
+    finally:
+        sites.invalidate()

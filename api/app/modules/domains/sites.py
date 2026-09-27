@@ -55,6 +55,16 @@ def site_url(host: str | None) -> str:
     return f"https://{site}" if site else settings.site_url.rstrip("/")
 
 
+def url_for(site_host: str | None) -> str:
+    """URL da loja de um domínio JÁ validado (ex.: `Order.domain_name`,
+    gravado no checkout só se era domínio ativo) -- não depende do cache em
+    memória (tarefas de fundo). None = domínio principal (`SITE_URL`)."""
+    h = _norm(site_host)
+    if not h or h == default_host():
+        return settings.site_url.rstrip("/")
+    return f"https://{h}"
+
+
 def default_host() -> str | None:
     """Host do domínio principal (o do `.env`, `SITE_URL`)."""
     return _norm(settings.site_url)

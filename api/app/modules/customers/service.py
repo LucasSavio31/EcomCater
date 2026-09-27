@@ -352,6 +352,7 @@ async def recover_email_by_cpf(db: AsyncSession, cpf: str) -> dict:
 async def request_password_reset(
     db: AsyncSession, *, email: str | None, cpf: str | None, ip: str | None = None,
     site_url: str | None = None,
+    site: str | None = None,
 ) -> None:
     """Cria o token e envia o e-mail. Silencioso — nunca revela se a conta existe.
     `site_url`: loja do domínio de onde o pedido veio (já validado contra os
@@ -379,6 +380,7 @@ async def request_password_reset(
         db,
         to=user.email,
         template="password_reset",
+        site=site,
         context={
             "store_name": (srow.store_name if srow else None) or "nossa loja",
             "email": user.email,

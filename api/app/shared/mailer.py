@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.modules.admin.models import EmailLog, SmtpSettings
+from app.modules.admin.models import EmailLog, SmtpDomainSettings, SmtpSettings
 
 logger = logging.getLogger("mailer")
 
@@ -397,21 +397,32 @@ async def order_notify_email(db: AsyncSession) -> str:
     return await admin_notify_email(db)
 
 
-async def _smtp_conf(db: AsyncSession) -> dict:
+def _conf_from_row(row, *, order_bcc: str | None) -> dict:
+    return {
+        "host": row.host,
+        "port": row.port or 587,
+        "username": row.username,
+        "password": row.password_enc,
+        "use_tls": row.use_tls,
+        "use_ssl": row.use_ssl,
+        "from_email": row.from_email or settings.smtp_from_email,
+        "from_name": row.from_name or settings.smtp_from_name,
+        "order_bcc": order_bcc,
+    }
+
+
+async def _smtp_conf(db: AsyncSession, site: str | None = None) -> dict:
+    """SMTP a usar. `site` = domínio da venda/pedido (multi-domínio): se ele
+    tem SMTP próprio (Infraestrutura → E-mail), sai por ele; senão (ou
+    `site=None`) usa o SMTP principal -- nenhum e-mail deixa de sair."""
+    if site:
+        dom = await db.get(SmtpDomainSettings, site.strip().lower())
+        if dom and dom.host:
+            return _conf_from_row(dom, order_bcc=((dom.order_bcc or "").strip() or None))
     row = await db.get(SmtpSettings, 1)
     order_bcc = ((row.order_bcc or "").strip() if row else "") or None
     if row and row.host:
-        return {
-            "host": row.host,
-            "port": row.port or 587,
-            "username": row.username,
-            "password": row.password_enc,
-            "use_tls": row.use_tls,
-            "use_ssl": row.use_ssl,
-            "from_email": row.from_email or settings.smtp_from_email,
-            "from_name": row.from_name or settings.smtp_from_name,
-            "order_bcc": order_bcc,
-        }
+        return _conf_from_row(row, order_bcc=order_bcc)
     return {
         "host": settings.smtp_host,
         "port": settings.smtp_port,
@@ -552,6 +563,7 @@ async def send(
     order_id: str | None = None,
     attachments: list[tuple[str, bytes, str, str]] | None = None,
     once: bool = False,
+    site: str | None = None,
 ) -> bool:
     """`attachments`: lista de (filename, data, maintype, subtype), ex.:
     ("fatura.pdf", b"...", "application", "pdf").
@@ -559,7 +571,10 @@ async def send(
     `once=True` (e-mails automáticos de pedido): não reenvia o MESMO modelo
     pro MESMO pedido e destinatário se já saiu (ou está na fila) -- evento
     repetido (webhook de pagamento/rastreio chegando de novo) não vira
-    e-mail em dobro pro cliente."""
+    e-mail em dobro pro cliente.
+
+    `site`: domínio (loja) da venda -- sai pelo SMTP vinculado a ele
+    (multi-domínio); sem SMTP próprio, pelo principal."""
     if not (to or "").strip():
         logger.info("e-mail '%s' ignorado: sem destinatário", template)
         return False
@@ -577,7 +592,7 @@ async def send(
         if already:
             logger.info("e-mail '%s' do pedido %s já enviado -- não repete", template, order_id)
             return True
-    conf = await _smtp_conf(db)
+    conf = await _smtp_conf(db, site)
     et = await _email_theme(db)
 
     subj_tpl, body_tpl = TEMPLATES.get(template, ("Notificação", "<p>{{ message|default('') }}</p>"))
@@ -645,6 +660,7 @@ async def send(
             attempts=1 if status != "sent" else 0,
             next_attempt_at=(now + timedelta(seconds=90)) if status == "queued" else None,
             raw_message=msg.as_bytes() if status == "queued" else None,
+            site_host=site,
         )
     )
     return status in ("sent", "queued")
@@ -692,9 +708,13 @@ async def retry_queued(db: AsyncSession, limit: int = 25) -> dict:
     if not rows:
         return {"sent": 0, "still_queued": 0, "failed": 0}
 
-    conf = await _smtp_conf(db)
+    confs: dict[str | None, dict] = {}
     sent = failed = 0
     for row in rows:
+        # reenvia pelo SMTP do MESMO domínio de onde o e-mail saiu
+        if row.site_host not in confs:
+            confs[row.site_host] = await _smtp_conf(db, row.site_host)
+        conf = confs[row.site_host]
         if not row.raw_message:
             row.status, row.error = "failed", "sem corpo para reenviar"
             failed += 1
@@ -726,11 +746,11 @@ async def retry_queued(db: AsyncSession, limit: int = 25) -> dict:
     return {"sent": sent, "still_queued": still, "failed": failed}
 
 
-async def send_test(db: AsyncSession, to: str) -> dict:
+async def send_test(db: AsyncSession, to: str, site: str | None = None) -> dict:
     """Envia o e-mail de teste e devolve {ok, error} — o `error` traz a
     mensagem real do servidor SMTP (ex.: '535 BadCredentials') pra aparecer
     no painel."""
-    await send(db, to=to, template="__test__", context={"message": "Teste de SMTP OK."})
+    await send(db, to=to, template="__test__", context={"message": "Teste de SMTP OK."}, site=site)
     await db.flush()
     row = await db.scalar(
         select(EmailLog)

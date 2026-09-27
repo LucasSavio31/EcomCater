@@ -126,6 +126,27 @@ class SmtpSettings(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class SmtpDomainSettings(Base):
+    """SMTP de um domínio EXTRA (multi-domínio): e-mails de uma venda feita no
+    domínio X saem pelo SMTP vinculado a X. O domínio principal usa o
+    `SmtpSettings` (id=1) de sempre -- que também é o fallback de qualquer
+    domínio sem SMTP próprio."""
+
+    __tablename__ = "smtp_domain_settings"
+
+    hostname: Mapped[str] = mapped_column(String(255), primary_key=True)
+    host: Mapped[str | None] = mapped_column(String(200))
+    port: Mapped[int | None] = mapped_column(Integer)
+    username: Mapped[str | None] = mapped_column(String(200))
+    password_enc: Mapped[str | None] = mapped_column(Text)
+    use_tls: Mapped[bool] = mapped_column(Boolean, default=True)
+    use_ssl: Mapped[bool] = mapped_column(Boolean, default=False)
+    from_email: Mapped[str | None] = mapped_column(String(200))
+    from_name: Mapped[str | None] = mapped_column(String(160))
+    order_bcc: Mapped[str | None] = mapped_column(String(200))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class EmailLog(UUIDPKMixin, Base):
     __tablename__ = "email_log"
 
@@ -142,6 +163,9 @@ class EmailLog(UUIDPKMixin, Base):
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     raw_message: Mapped[bytes | None] = mapped_column(LargeBinary)
+    # domínio (loja) de onde o e-mail saiu -- o reenvio da fila usa o SMTP
+    # desse domínio. None = domínio principal.
+    site_host: Mapped[str | None] = mapped_column(String(255))
 
 
 class PasswordReset(UUIDPKMixin, Base):

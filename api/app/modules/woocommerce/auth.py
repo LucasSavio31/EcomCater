@@ -56,6 +56,10 @@ async def require_wc_auth(request: Request, db: Annotated[AsyncSession, Depends(
 
     key_row.last_used_at = datetime.now(UTC)
     await db.flush()
+    # multi-domínio: o escopo da chave depende de qual é o domínio principal
+    from app.modules.domains import sites
+
+    await sites.refresh()
     return key_row
 
 

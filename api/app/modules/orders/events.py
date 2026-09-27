@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.events import on
 from app.modules.admin.models import StoreSettings
+from app.modules.domains.sites import url_for
 from app.modules.orders.models import Order
 from app.modules.payment.models import Payment
 from app.shared import mailer
@@ -75,7 +76,7 @@ def _order_ctx(order: Order, pay: Payment | None) -> dict:
     return {
         # sempre presente -- todo e-mail de pedido do cliente tem o botão
         # "Ir para Minha Conta" (_ACCOUNT_CTA, em app/shared/mailer.py).
-        "account_url": f"{settings.site_url.rstrip('/')}/minha-conta/pedidos",
+        "account_url": f"{url_for(order.domain_name)}/minha-conta/pedidos",
         "number": order.number,
         "items": [
             {
@@ -133,11 +134,12 @@ async def _send_account_access(db, order: Order) -> None:
         db,
         to=user.email,
         template="account_access",
+        site=order.domain_name,
         context={
             "store_name": (store.store_name if store else None) or "nossa loja",
             "email": user.email,
             "cpf_masked": masked,
-            "login_url": f"{settings.site_url.rstrip('/')}/minha-conta",
+            "login_url": f"{url_for(order.domain_name)}/minha-conta",
         },
     )
 
@@ -164,7 +166,7 @@ async def _on_created(payload: dict) -> None:
         async def _confirm_email() -> None:
             ok = await mailer.send(
                 db, to=order.email, template="order_created",
-                order_id=str(order.id), context=ctx, once=True,
+                order_id=str(order.id), context=ctx, once=True, site=order.domain_name,
             )
             if not ok:
                 raise RuntimeError("mailer retornou status != sent")
@@ -267,6 +269,7 @@ async def _on_paid(payload: dict) -> None:
         await mailer.send(
             db, to=order.email, template="payment_confirmed",
             order_id=str(order.id), context=ctx, attachments=attachments, once=True,
+            site=order.domain_name,
         )
         await db.commit()
 
@@ -330,11 +333,12 @@ async def _on_status(payload: dict) -> None:
             ctx.update(tracking=_tracking(order), tracking_url=_tracking_url(order))
         ctx.update(
             store_name=await _store_name(db),
-            review_url=f"{settings.site_url.rstrip('/')}/minha-conta/pedidos",
+            review_url=f"{url_for(order.domain_name)}/minha-conta/pedidos",
             status_label=_STATUS_LABELS.get(status, status),
         )
         await mailer.send(
-            db, to=order.email, template=template, order_id=str(order.id), context=ctx, once=True
+            db, to=order.email, template=template, order_id=str(order.id), context=ctx, once=True,
+            site=order.domain_name,
         )
 
         if status == "returned":
@@ -368,7 +372,7 @@ async def _on_reverse_label_ready(payload: dict) -> None:
         ctx.update(
             tracking_code=svc.get("tracking_code"),
             store_name=await _store_name(db),
-            account_url=f"{settings.site_url.rstrip('/')}/minha-conta/pedidos",
+            account_url=f"{url_for(order.domain_name)}/minha-conta/pedidos",
         )
 
         attachments = None
@@ -385,5 +389,6 @@ async def _on_reverse_label_ready(payload: dict) -> None:
         await mailer.send(
             db, to=order.email, template="reverse_label_ready",
             order_id=str(order.id), context=ctx, attachments=attachments, once=True,
+            site=order.domain_name,
         )
         await db.commit()

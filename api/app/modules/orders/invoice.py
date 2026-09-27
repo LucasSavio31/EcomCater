@@ -247,7 +247,7 @@ async def build_invoice_pdf(db: AsyncSession, order: Order) -> bytes:
 
     from app.modules.orders.codes import order_qr_data_uri
 
-    qr = order_qr_data_uri(order.number)
+    qr = order_qr_data_uri(order.number, order.domain_name)
 
     loja_nome = (store.legal_name or store.store_name) if store else "Loja"
     html = _TEMPLATE.render(
