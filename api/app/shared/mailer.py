@@ -564,10 +564,6 @@ async def send(
         logger.info("e-mail '%s' ignorado: sem destinatário", template)
         return False
     if once and order_id:
-        from sqlalchemy import select
-
-        from app.modules.admin.models import EmailLog
-
         already = await db.scalar(
             select(EmailLog.id)
             .where(
