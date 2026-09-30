@@ -294,7 +294,8 @@ function CategoryResultsSkeleton({ anyFilter }: { anyFilter: boolean }) {
   return (
     <div className={anyFilter ? 'grid gap-6 lg:grid-cols-[220px_1fr]' : 'flex flex-col gap-4'}>
       {anyFilter && <aside className="hidden lg:block" aria-hidden="true" />}
-      <div className="flex min-h-[40vh] items-center justify-center">
+      {/* tela cheia: mantém o rodapé abaixo da dobra até a grade chegar (CLS) */}
+      <div className="flex min-h-dvh items-start justify-center pt-20">
         <Spinner size="lg" label="Carregando produtos…" />
       </div>
     </div>
