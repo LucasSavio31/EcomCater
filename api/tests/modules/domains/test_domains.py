@@ -424,8 +424,8 @@ async def test_apply_cache_pages_builds_bypass_and_cache_rules(
 
     assert captured["zone_id"] == "zone-abc"
     rules = captured["rules"]
-    # no máximo 7 regras (2 bypass + até 5 de cache) -- teto de 10 do plano Free
-    assert len(rules) <= 7
+    # no máximo 8 regras (2 bypass + mídia da api + até 5 de cache) -- teto de 10 do plano Free
+    assert len(rules) <= 8
     descriptions = [rule["description"] for rule in rules]
     bypass_rule = next(r for r in rules if "carrinho" in r["expression"])
     # bypass consolidado numa regra só (com "or"), não uma por caminho
@@ -433,6 +433,13 @@ async def test_apply_cache_pages_builds_bypass_and_cache_rules(
         assert path in bypass_rule["expression"]
     sub_rule = next(r for r in rules if "admin.cacheteste.com.br" in r["expression"])
     assert "api.cacheteste.com.br" in sub_rule["expression"]
+    # mídia imutável da api. é cacheada na borda, e vem DEPOIS do bypass
+    # de api. (na Cloudflare a última regra que bate vence)
+    media_rule = next(r for r in rules if r["description"].startswith("cache: api."))
+    assert 'http.host eq "api.cacheteste.com.br"' in media_rule["expression"]
+    assert '"/media/"' in media_rule["expression"] and '"/static/"' in media_rule["expression"]
+    assert media_rule["action_parameters"]["cache"] is True
+    assert rules.index(media_rule) > rules.index(sub_rule)
     # só as páginas selecionadas viram regra de cache
     assert "cache: home" in descriptions
     assert "cache: produto" in descriptions

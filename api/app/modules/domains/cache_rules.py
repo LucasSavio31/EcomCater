@@ -1,7 +1,8 @@
 """Definições de cache da Cloudflare por tipo de página da loja.
 
-Só se aplica ao domínio **raiz** (a loja) — `admin.` e `api.` nunca entram
-nessas regras, ficam sempre em bypass explícito.
+Só se aplica ao domínio **raiz** (a loja) — `admin.` e `api.` ficam sempre
+em bypass explícito, com uma única exceção: a mídia imutável da API
+(`api.<dominio>/media/`, `/static/`).
 """
 from __future__ import annotations
 
@@ -69,6 +70,10 @@ _ALWAYS_BYPASS_PATHS = [
 ]
 
 
+# Na API, só estes prefixos são cacheados na borda (arquivos imutáveis).
+_API_IMMUTABLE_PREFIXES = ["/media/", "/static/"]
+
+
 def _path_cond(path: str, *, is_prefix: bool) -> str:
     if path == "/":
         return 'http.request.uri.path eq "/"'
@@ -87,8 +92,8 @@ def build_rules(hostname: str, selected_pages: list[str]) -> list[dict]:
     Contas Free da Cloudflare têm **teto de 10 regras** nessa fase — por
     isso os bypass (carrinho/checkout/conta/etc. e admin./api.) vão cada um
     numa ÚNICA regra com `or`, em vez de uma regra por caminho. No máximo
-    2 (bypass) + 5 (uma por tipo de página) = 7 regras, sempre dentro do
-    teto mesmo marcando tudo.
+    2 (bypass) + 1 (mídia da API) + 5 (uma por tipo de página) = 8 regras,
+    sempre dentro do teto mesmo marcando tudo.
     """
     rules: list[dict] = []
 
@@ -115,6 +120,27 @@ def build_rules(hostname: str, selected_pages: list[str]) -> list[dict]:
             "description": "bypass: admin./api.",
             "action": "set_cache_settings",
             "action_parameters": {"cache": False},
+        }
+    )
+
+    # Exceção ao bypass acima: mídia da API (fotos de produto, banners, logo)
+    # é imutável -- cada upload ganha um caminho novo (uuid) e a origem já
+    # manda `max-age=1 ano, immutable`. Sem isto, toda foto atravessava até a
+    # VPS na Europa (~0,5-0,7s cada). Vem DEPOIS do bypass: na Cloudflare,
+    # quando várias regras batem, a última vence.
+    media_paths = " or ".join(
+        _path_cond(p, is_prefix=True) for p in _API_IMMUTABLE_PREFIXES
+    )
+    rules.append(
+        {
+            "expression": f'(http.host eq "api.{hostname}" and ({media_paths}))',
+            "description": "cache: api. mídia (imutável)",
+            "action": "set_cache_settings",
+            "action_parameters": {
+                "cache": True,
+                "edge_ttl": {"mode": "respect_origin"},
+                "browser_ttl": {"mode": "respect_origin"},
+            },
         }
     )
 
