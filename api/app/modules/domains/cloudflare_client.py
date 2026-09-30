@@ -83,6 +83,13 @@ class CloudflareClient:
             json={"rules": rules},
         )
 
+    async def set_zone_setting(self, *, zone_id: str, setting: str, value: str) -> None:
+        """Altera uma configuração da zona (ex.: `rocket_loader` = "off").
+        Requer a permissão `Zone / Zone Settings / Edit` no token."""
+        await self._request(
+            "PATCH", f"/zones/{zone_id}/settings/{setting}", json={"value": value}
+        )
+
     async def purge_cache(self, *, zone_id: str) -> None:
         """Limpa TUDO que está em cache na borda da Cloudflare pra essa zona --
         a próxima visita busca conteúdo fresco na origem. Requer a permissão

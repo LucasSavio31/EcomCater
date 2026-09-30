@@ -47,6 +47,9 @@ interface ProductCardProps {
    * triplica a lista pra rolar sem emenda, isso acontece bem na hora em que
    * o usuário cruza a borda do "salto" de reset, travando a rolagem no pior
    * momento possível. Carregar tudo de cara evita esse travamento.
+   * (Sem `priority`, o eager sai com `fetchPriority="low"`: senão o React
+   * gera um `<link rel=preload>` por card no <head> e eles disputam banda
+   * com a imagem principal da página — o LCP.)
    */
   loading?: 'eager' | 'lazy';
 }
@@ -98,7 +101,7 @@ export function ProductCard({
               fill
               sizes={CARD_SIZES}
               priority={priority}
-              fetchPriority={priority ? 'high' : undefined}
+              fetchPriority={priority ? 'high' : loading === 'eager' ? 'low' : undefined}
               {...(!priority && loading ? { loading } : {})}
               className={`ecom-card-img object-contain transition-opacity duration-300 ${hover ? 'group-hover:opacity-0' : ''}`}
             />
@@ -109,6 +112,7 @@ export function ProductCard({
                 aria-hidden="true"
                 fill
                 sizes={CARD_SIZES}
+                fetchPriority="low"
                 {...(!priority && loading ? { loading } : {})}
                 className="ecom-card-img object-contain opacity-0 transition-opacity duration-300 group-hover:opacity-100"
               />

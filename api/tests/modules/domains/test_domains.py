@@ -392,9 +392,13 @@ async def test_apply_cache_pages_builds_bypass_and_cache_rules(
         captured["zone_id"] = zone_id
         captured["rules"] = rules
 
+    async def fake_set_zone_setting(self, *, zone_id, setting, value):
+        captured.setdefault("settings", {})[setting] = value
+
     monkeypatch.setattr(CFClient, "find_zone", fake_find_zone)
     monkeypatch.setattr(CFClient, "upsert_dns_record", fake_upsert)
     monkeypatch.setattr(CFClient, "set_cache_rules", fake_set_cache_rules)
+    monkeypatch.setattr(CFClient, "set_zone_setting", fake_set_zone_setting)
 
     h = auth_headers(admin_token)
     await client.put(
@@ -432,6 +436,8 @@ async def test_apply_cache_pages_builds_bypass_and_cache_rules(
     # só as páginas selecionadas viram regra de cache
     assert "cache: home" in descriptions
     assert "cache: produto" in descriptions
+    # Rocket Loader atrasa a hidratação do Next -- sempre desligado
+    assert captured["settings"] == {"rocket_loader": "off"}
 
 
 # ------------------------------------------------ limpar cache (purge)

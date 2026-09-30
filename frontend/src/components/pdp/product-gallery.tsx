@@ -213,6 +213,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
               fill
               sizes="(min-width: 1024px) 40vw, 60vw"
               priority
+              fetchPriority="high"
               className={zoom ? 'opacity-0' : 'object-cover'}
             />
             {zoom && (
@@ -274,6 +275,9 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
               fill
               sizes="100vw"
               loading="eager"
+              // só a 1ª foto é o LCP; as outras carregam já (swipe instantâneo),
+              // mas em prioridade baixa e sem virar <link rel=preload> no <head>
+              fetchPriority={i === 0 ? 'high' : 'low'}
               className="object-cover"
               draggable={false}
             />

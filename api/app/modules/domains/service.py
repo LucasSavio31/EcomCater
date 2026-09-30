@@ -383,6 +383,17 @@ async def apply_cache_pages(db: AsyncSession, domain: Domain, pages: list[str]) 
     except CloudflareError as exc:
         raise ValidationError(f"Cloudflare: {exc}") from exc
 
+    # Rocket Loader reescreve o `type` de todos os <script> do Next e só os
+    # executa depois do `onload` (ou seja, depois de TODAS as imagens): a loja
+    # fica pintada mas sem reagir a clique por segundos. Sempre desligado.
+    # Best-effort: token sem `Zone Settings / Edit` não impede o cache.
+    try:
+        await client.set_zone_setting(
+            zone_id=domain.cloudflare_zone_id, setting="rocket_loader", value="off"
+        )
+    except CloudflareError as exc:
+        logger.warning("Cloudflare: não desligou o Rocket Loader de %s: %s", domain.hostname, exc)
+
     domain.cache_pages = valid
     domain.cache_applied_at = datetime.now(UTC)
     await db.flush()

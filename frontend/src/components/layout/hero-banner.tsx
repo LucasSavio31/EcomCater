@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { preload } from 'react-dom';
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Banner } from '@/modules/banners/types';
@@ -76,6 +77,21 @@ export function HeroBanner({ banners, mode, autoplaySeconds, viewport = 'desktop
 
   if (count === 0) return null;
 
+  // A home monta DUAS instâncias (desktop `hidden sm:block` e mobile
+  // `sm:hidden`). Com `priority`, as duas imagens viravam preload sem `media`
+  // e todo aparelho baixava as duas antes de pintar o LCP. Aqui o preload só
+  // vale no breakpoint desta instância, e o <img> fica `lazy` — o navegador
+  // não busca imagem lazy dentro de `display:none`, então a da outra
+  // instância nunca é baixada; a visível já veio pelo preload.
+  const firstSrc = resolveMediaUrl(bannerSrc(slides[0]!, viewport));
+  if (firstSrc) {
+    preload(firstSrc, {
+      as: 'image',
+      fetchPriority: 'high',
+      media: viewport === 'mobile' ? '(max-width: 639px)' : '(min-width: 640px)',
+    });
+  }
+
   return (
     <section
       aria-label="Destaques"
@@ -109,7 +125,7 @@ export function HeroBanner({ banners, mode, autoplaySeconds, viewport = 'desktop
                     alt={alt}
                     fill
                     sizes="100vw"
-                    priority={i === 0}
+                    loading="lazy"
                     fetchPriority={i === 0 ? 'high' : undefined}
                     unoptimized={/\.gif($|\?)/i.test(src)}
                     className="object-cover"

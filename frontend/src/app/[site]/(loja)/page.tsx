@@ -180,7 +180,8 @@ export default async function HomePage() {
         title="Mais buscados"
         products={sections.mais_buscados}
         theme={theme}
-        priorityCount={4}
+        // com hero, o LCP é o banner — cards com `priority` só disputariam banda
+        priorityCount={showHero ? 0 : 4}
       />
 
       {showcase.length > 0 && (
