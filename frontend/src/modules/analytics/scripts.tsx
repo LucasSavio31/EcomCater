@@ -2,14 +2,18 @@ import Script from 'next/script';
 import type { AnalyticsConfig } from './types';
 
 /**
- * Tags de marketing (GTM/gtag/Pixel). `strategy="afterInteractive"` (não
- * `beforeInteractive`) — são scripts de terceiro que não precisam bloquear
- * a hidratação da página; `beforeInteractive` entrava na contagem de tempo
- * de execução de JS / trabalho da thread principal do LCP à toa (achado do
- * PageSpeed). `dataLayer.push`/`fbq.queue` já são resilientes a carregar
- * um pouco depois — é o padrão recomendado pela própria doc do Next.js
- * pra GTM.
+ * Tags de marketing (GTM/gtag/Pixel) em duas partes, pra nunca travar a loja:
  *
+ * 1. Fila (`dataLayer`, `gtag()`, `fbq()`) — snippet inline minúsculo, sem
+ *    rede, `afterInteractive`. O tracker já pode empurrar eventos desde a
+ *    hidratação; nada se perde.
+ * 2. Biblioteca do fornecedor (`gtm.js`, `gtag/js`, `fbevents.js`, ~100 KB+
+ *    cada, com execução pesada) — `lazyOnload`: só baixa depois do `onload`,
+ *    com o navegador ocioso. Ao carregar, processa a fila acumulada. Assim
+ *    ela não disputa banda com a imagem principal (LCP) nem trava a thread
+ *    principal nos primeiros toques do cliente (INP).
+ *
+ * Nunca `beforeInteractive` (bloqueia a hidratação — achado do PageSpeed).
  * Nada é renderizado quando a integração está desligada no admin.
  */
 export function AnalyticsHeadScripts({ config }: { config: AnalyticsConfig }) {
@@ -38,16 +42,23 @@ export function AnalyticsHeadScripts({ config }: { config: AnalyticsConfig }) {
       </Script>
 
       {gtm && (
-        <Script id="gtm" strategy="afterInteractive">
-          {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${gtm}');`}
-        </Script>
+        <>
+          <Script id="gtm" strategy="afterInteractive">
+            {`window.dataLayer=window.dataLayer||[];window.dataLayer.push({'gtm.start':new Date().getTime(),event:'gtm.js'});`}
+          </Script>
+          <Script
+            id="gtm-src"
+            strategy="lazyOnload"
+            src={`https://www.googletagmanager.com/gtm.js?id=${gtm}`}
+          />
+        </>
       )}
 
       {gtagPrimary && (
         <>
           <Script
             id="gtag-src"
-            strategy="afterInteractive"
+            strategy="lazyOnload"
             src={`https://www.googletagmanager.com/gtag/js?id=${gtagPrimary}`}
           />
           <Script id="gtag-init" strategy="afterInteractive">
@@ -59,9 +70,17 @@ export function AnalyticsHeadScripts({ config }: { config: AnalyticsConfig }) {
       )}
 
       {pixel && (
-        <Script id="meta-pixel" strategy="afterInteractive">
-          {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${pixel}');fbq('track','PageView');`}
-        </Script>
+        <>
+          {/* snippet oficial do Pixel sem o trecho que injeta o fbevents.js */}
+          <Script id="meta-pixel" strategy="afterInteractive">
+            {`!function(f){if(f.fbq)return;var n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[]}(window);fbq('init','${pixel}');fbq('track','PageView');`}
+          </Script>
+          <Script
+            id="meta-pixel-src"
+            strategy="lazyOnload"
+            src="https://connect.facebook.net/en_US/fbevents.js"
+          />
+        </>
       )}
     </>
   );
