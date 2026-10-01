@@ -20,8 +20,13 @@ Tudo abaixo foi **confirmado contra a instância real** (não é mais chute):
   ligado** (mensagem literal: "Sites that have reverse proxy turned on
   cannot request SSL!"). Usando só o arquivo (sem passar pela ação/])
   "oficial" de proxy reverso do painel), esse bloqueio não é acionado.
-- SSL usa `CreateLet` (não existe `ApplyCertApi`) — `domains` é uma lista
-  JSON, não string separada por vírgula.
+- SSL usa o emissor **`acme_v2`** do aaPanel (`/acme?action=apply_cert_api`
+  + `/site?action=SetSSL`) — o mesmo da tela de SSL do painel, que também
+  registra o pedido pra renovação automática. NÃO usar `/site?action=CreateLet`:
+  ele passa pelo módulo antigo `panelLets` → `sewer`, que chama
+  `X509Req.set_version(2)` sem tratar erro e quebra com qualquer pyOpenSSL
+  recente ("Invalid version. The only valid version for X509Req is 0.").
+  `domains` é uma lista JSON, não string separada por vírgula.
 - A validação HTTP-01 do Let's Encrypt bate em
   `http://<host>/.well-known/acme-challenge/<token>` — como o contexto `/`
   vira proxy reverso (tudo vai pro container), essa validação cairia no
@@ -71,13 +76,15 @@ class AaPanelClient:
         ).hexdigest()
         return {"request_time": request_time, "request_token": token}
 
-    async def _post(self, path: str, data: dict, *, ignore_existing: bool = False) -> dict:
+    async def _post(
+        self, path: str, data: dict, *, ignore_existing: bool = False, timeout: float = 60
+    ) -> dict:
         if not self.base_url or not self.api_key:
             raise AaPanelError("aaPanel não configurado: informe URL e API key no admin.")
         url = f"{self.base_url}{path}"
         body = {**self._auth(), **data}
         try:
-            async with httpx.AsyncClient(timeout=60, verify=False) as c:  # noqa: S501 — painel próprio, IP interno
+            async with httpx.AsyncClient(timeout=timeout, verify=False) as c:  # noqa: S501 — painel próprio, IP interno
                 resp = await c.post(url, data=body)
             result = resp.json()
         except httpx.HTTPError as exc:
@@ -163,22 +170,64 @@ class AaPanelClient:
         # às vezes pega o servidor ainda reiniciando.
         await asyncio.sleep(2)
 
+    async def site_id(self, hostname: str) -> str:
+        """Id do site no aaPanel (o emissor `acme_v2` exige)."""
+        result = await self._post(
+            "/data?action=getData",
+            {"table": "sites", "search": hostname, "limit": "20", "p": "1", "type": "-1"},
+        )
+        for row in result.get("data") or []:
+            if isinstance(row, dict) and row.get("name") == hostname:
+                return str(row["id"])
+        raise AaPanelError(f"Site {hostname} não encontrado no aaPanel.")
+
+    async def has_valid_ssl(self, hostname: str, *, min_days: int = 30) -> bool:
+        """SSL já ligado no vhost com certificado que cobre `hostname` e vale
+        por mais de `min_days` — aí não há por que pedir outro (e a renovação
+        fica com o próprio aaPanel)."""
+        try:
+            info = await self._post("/site?action=GetSSL", {"siteName": hostname})
+        except AaPanelError:
+            return False
+        cert = info.get("cert_data") or {}
+        if not info.get("status") or not isinstance(cert, dict):
+            return False
+        covered = hostname in (cert.get("dns") or []) or cert.get("subject") == hostname
+        try:
+            days_left = int(cert.get("endtime") or 0)
+        except (TypeError, ValueError):
+            days_left = 0
+        return covered and days_left > min_days
+
     async def issue_ssl(self, hostname: str, *, email: str = "") -> None:
-        """Emite (ou renova) o certificado Let's Encrypt via validação HTTP,
-        e liga o HTTPS no vhost. Só funciona se `set_reverse_proxy` já tiver
-        rodado (a exceção do acme-challenge precisa existir) — e só se o
-        site NÃO tiver sido marcado como "proxy reverso" pelo mecanismo
-        oficial do aaPanel (por isso `set_reverse_proxy` nunca usa a ação de
-        proxy reverso do painel, só escreve o arquivo por baixo)."""
-        await self._post(
-            "/site?action=CreateLet",
+        """Emite o certificado Let's Encrypt (validação HTTP) pelo emissor
+        `acme_v2` do aaPanel e liga o HTTPS no vhost. Se já houver um válido,
+        não faz nada. Só funciona se `set_reverse_proxy` já tiver rodado (a
+        exceção do acme-challenge precisa existir)."""
+        if await self.has_valid_ssl(hostname):
+            return
+        site_id = await self.site_id(hostname)
+        # a validação ACME espera até ~75 s (5 checagens x 15 s) — folga no timeout
+        cert = await self._post(
+            "/acme?action=apply_cert_api",
             {
                 "domains": f'["{hostname}"]',
-                "siteName": hostname,
-                "email": email or f"admin@{hostname}",
+                "id": site_id,
+                "auth_to": site_id,
                 "auth_type": "http",
-                "auth_to": "auto",
-                "id": "0",
+                "auto_wildcard": "0",
+            },
+            timeout=180,
+        )
+        if not cert.get("private_key") or not cert.get("cert"):
+            raise AaPanelError(str(cert.get("msg") or "aaPanel não devolveu o certificado."))
+        await self._post(
+            "/site?action=SetSSL",
+            {
+                "type": "1",
+                "siteName": hostname,
+                "key": cert["private_key"],
+                "csr": cert["cert"] + (cert.get("root") or ""),
             },
         )
         await self._post(

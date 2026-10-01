@@ -684,3 +684,86 @@ async def test_removing_non_primary_domain_does_not_touch_trigger(
     r = await client.delete(f"/api/admin/domains/{second['id']}", headers=h)
     assert r.status_code == 200, r.text
     assert not (tmp_path / "domain-switch.json").exists()
+
+
+# ------------------------------------------------ SSL pelo emissor acme_v2 do aaPanel
+
+def _fake_aapanel(monkeypatch, responses: dict):
+    """Troca `AaPanelClient._post` por um dublê que registra as chamadas e
+    devolve `responses[path]` (dict) -- nada sai pra rede."""
+    from app.modules.domains.aapanel_client import AaPanelClient
+
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_post(self, path, data, *, ignore_existing=False, timeout=60):
+        calls.append((path, data))
+        return responses.get(path, {"status": True})
+
+    monkeypatch.setattr(AaPanelClient, "_post", fake_post)
+    return AaPanelClient(base_url="http://painel", api_key="k"), calls
+
+
+@pytest.mark.asyncio
+async def test_issue_ssl_skips_when_valid_cert_already_installed(monkeypatch):
+    client, calls = _fake_aapanel(
+        monkeypatch,
+        {
+            "/site?action=GetSSL": {
+                "status": True,
+                "cert_data": {"subject": "loja.com.br", "dns": ["loja.com.br"], "endtime": 88},
+            }
+        },
+    )
+    await client.issue_ssl("loja.com.br")
+    assert [p for p, _ in calls] == ["/site?action=GetSSL"]
+
+
+@pytest.mark.asyncio
+async def test_issue_ssl_uses_acme_v2_not_createlet(monkeypatch):
+    client, calls = _fake_aapanel(
+        monkeypatch,
+        {
+            # certificado de outro host / perto de vencer -> emite de novo
+            "/site?action=GetSSL": {
+                "status": True,
+                "cert_data": {"subject": "outro.com.br", "dns": ["outro.com.br"], "endtime": 88},
+            },
+            "/data?action=getData": {"data": [{"id": 7, "name": "loja.com.br"}]},
+            "/acme?action=apply_cert_api": {
+                "status": True,
+                "private_key": "-----BEGIN PRIVATE KEY-----",
+                "cert": "-----BEGIN CERTIFICATE-----A",
+                "root": "-----BEGIN CERTIFICATE-----R",
+            },
+        },
+    )
+    await client.issue_ssl("loja.com.br")
+    paths = [p for p, _ in calls]
+    assert paths == [
+        "/site?action=GetSSL",
+        "/data?action=getData",
+        "/acme?action=apply_cert_api",
+        "/site?action=SetSSL",
+        "/site?action=SetSSLConf",
+    ]
+    assert "/site?action=CreateLet" not in paths  # quebra com pyOpenSSL novo
+    apply = dict(calls)["/acme?action=apply_cert_api"]
+    assert apply["id"] == "7" and apply["auth_type"] == "http"
+    set_ssl = dict(calls)["/site?action=SetSSL"]
+    assert set_ssl["csr"].endswith("R") and set_ssl["siteName"] == "loja.com.br"
+
+
+@pytest.mark.asyncio
+async def test_issue_ssl_raises_when_acme_returns_no_cert(monkeypatch):
+    from app.modules.domains.aapanel_client import AaPanelError
+
+    client, _ = _fake_aapanel(
+        monkeypatch,
+        {
+            "/site?action=GetSSL": {"status": False},
+            "/data?action=getData": {"data": [{"id": 7, "name": "loja.com.br"}]},
+            "/acme?action=apply_cert_api": {"msg": "falhou a validação"},
+        },
+    )
+    with pytest.raises(AaPanelError, match="falhou a validação"):
+        await client.issue_ssl("loja.com.br")
